@@ -5,7 +5,6 @@ import { useAppStore, type ModuleKey } from '@/lib/store'
 import { api } from '@/lib/api'
 import LoginPage from '@/components/erp/login-page'
 import AppShell from '@/components/erp/app-shell'
-import SetupWizard from '@/components/erp/setup-wizard'
 import DashboardModule from '@/components/erp/dashboard-module'
 import CustomerModule from '@/components/erp/customer-module'
 import ProductionModule from '@/components/erp/production-module'
@@ -17,6 +16,7 @@ import ExpenseModule from '@/components/erp/expense-module'
 import ReportModule from '@/components/erp/report-module'
 import SettingsModule from '@/components/erp/settings-module'
 import UserManagementModule from '@/components/erp/user-management-module'
+import AdminPanelModule from '@/components/erp/admin-panel-module'
 
 const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   dashboard: DashboardModule,
@@ -30,6 +30,7 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   reports: ReportModule,
   settings: SettingsModule,
   users: UserManagementModule,
+  admin: AdminPanelModule,
 }
 
 export default function Home() {
@@ -79,7 +80,6 @@ export default function Home() {
 
   return (
     <AppShell>
-      <SetupWizard />
       <ModuleRenderer />
     </AppShell>
   )

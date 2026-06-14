@@ -15,11 +15,13 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [companyName, setCompanyName] = useState('ERP System')
+  const [companyName, setCompanyName] = useState('Veda Enterprises')
+  const [logoUrl, setLogoUrl] = useState('')
 
   useEffect(() => {
     api.getCompany().then((data) => {
       if (data.company?.name) setCompanyName(data.company.name)
+      if (data.company?.logoUrl) setLogoUrl(data.company.logoUrl as string)
     }).catch(() => {})
   }, [])
 
@@ -55,11 +57,17 @@ export default function LoginPage() {
 
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center space-y-2">
-          <div className="mx-auto w-16 h-16 bg-emerald-600 rounded-2xl flex items-center justify-center mb-2">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          </div>
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="w-16 h-16 rounded-2xl object-cover mx-auto mb-2" />
+          ) : (
+            <div className="mx-auto w-16 h-16 bg-emerald-600 rounded-2xl flex items-center justify-center mb-2">
+              <svg className="w-9 h-9 text-white" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M32 4L8 20v8h8v28h12V40h8v16h12V28h8v-8L32 4z" fill="currentColor" opacity="0.9"/>
+                <rect x="26" y="28" width="12" height="8" rx="1" fill="currentColor" opacity="0.6"/>
+                <path d="M4 52h56v4a4 4 0 01-4 4H8a4 4 0 01-4-4v-4z" fill="currentColor" opacity="0.8"/>
+              </svg>
+            </div>
+          )}
           <CardTitle className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{companyName}</CardTitle>
           <CardDescription>ERP & Management System</CardDescription>
         </CardHeader>

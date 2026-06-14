@@ -22,10 +22,11 @@ import {
   Settings,
   UserCog,
   Building2,
+  ShieldCheck,
 } from 'lucide-react'
 
 const navItems: { key: ModuleKey; label: string; icon: React.ReactNode; roles: string[] }[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" />, roles: ['admin'] },
+  { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" />, roles: ['admin', 'operator', 'accountant'] },
   { key: 'customers', label: 'Customers', icon: <Users className="h-5 w-5" />, roles: ['admin'] },
   { key: 'production', label: 'Production', icon: <Factory className="h-5 w-5" />, roles: ['admin', 'operator'] },
   { key: 'stock', label: 'Stock', icon: <Package className="h-5 w-5" />, roles: ['admin', 'operator'] },
@@ -34,6 +35,7 @@ const navItems: { key: ModuleKey; label: string; icon: React.ReactNode; roles: s
   { key: 'payments', label: 'Payments', icon: <CreditCard className="h-5 w-5" />, roles: ['admin', 'accountant'] },
   { key: 'expenses', label: 'Expenses', icon: <Receipt className="h-5 w-5" />, roles: ['admin', 'accountant'] },
   { key: 'reports', label: 'Reports', icon: <FileBarChart className="h-5 w-5" />, roles: ['admin', 'accountant'] },
+  { key: 'admin', label: 'Admin Panel', icon: <ShieldCheck className="h-5 w-5" />, roles: ['admin'] },
   { key: 'users', label: 'Users', icon: <UserCog className="h-5 w-5" />, roles: ['admin'] },
   { key: 'settings', label: 'Settings', icon: <Settings className="h-5 w-5" />, roles: ['admin'] },
 ]

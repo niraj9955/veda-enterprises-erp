@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type ModuleKey = 'dashboard' | 'customers' | 'production' | 'stock' | 'orders' | 'dispatch' | 'payments' | 'expenses' | 'reports' | 'settings' | 'users'
+export type ModuleKey = 'dashboard' | 'customers' | 'production' | 'stock' | 'orders' | 'dispatch' | 'payments' | 'expenses' | 'reports' | 'settings' | 'users' | 'admin'
 
 interface User {
   id: string

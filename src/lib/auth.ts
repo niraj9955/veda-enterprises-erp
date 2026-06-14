@@ -38,9 +38,43 @@ export async function getSession(): Promise<JWTPayload | null> {
 
 export function hasAccess(role: string, module: string): boolean {
   const accessMap: Record<string, string[]> = {
-    admin: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports'],
-    operator: ['production', 'dispatch', 'stock'],
-    accountant: ['payments', 'expenses', 'reports'],
+    admin: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'settings', 'users', 'admin'],
+    operator: ['production', 'dispatch', 'stock', 'dashboard'],
+    accountant: ['payments', 'expenses', 'reports', 'dashboard'],
   }
   return accessMap[role]?.includes(module) || false
+}
+
+// Granular permission check: can user perform a specific action on a module?
+export function canPerform(role: string, module: string, action: 'create' | 'read' | 'update' | 'delete'): boolean {
+  const permissionMap: Record<string, Record<string, string[]>> = {
+    admin: {
+      dashboard: ['read'],
+      customers: ['create', 'read', 'update', 'delete'],
+      production: ['create', 'read', 'update', 'delete'],
+      stock: ['read'],
+      orders: ['create', 'read', 'update', 'delete'],
+      dispatch: ['create', 'read', 'update', 'delete'],
+      payments: ['create', 'read', 'update', 'delete'],
+      expenses: ['create', 'read', 'update', 'delete'],
+      reports: ['read'],
+      settings: ['create', 'read', 'update', 'delete'],
+      users: ['create', 'read', 'update', 'delete'],
+      admin: ['create', 'read', 'update', 'delete'],
+    },
+    operator: {
+      dashboard: ['read'],
+      production: ['create', 'read', 'update'],
+      dispatch: ['create', 'read', 'update'],
+      stock: ['read'],
+    },
+    accountant: {
+      dashboard: ['read'],
+      payments: ['create', 'read', 'update'],
+      expenses: ['create', 'read', 'update'],
+      reports: ['read'],
+    },
+  }
+
+  return permissionMap[role]?.[module]?.includes(action) || false
 }

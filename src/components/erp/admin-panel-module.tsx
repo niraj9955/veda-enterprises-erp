@@ -1,0 +1,1016 @@
+'use client'
+
+import * as React from 'react'
+import { api } from '@/lib/api'
+import { useAppStore } from '@/lib/store'
+import { toast } from '@/hooks/use-toast'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Separator } from '@/components/ui/separator'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  ShieldCheck,
+  Building2,
+  Upload,
+  ImagePlus,
+  Trash2,
+  Save,
+  Loader2,
+  Download,
+  Database,
+  Users,
+  Palette,
+  FileSpreadsheet,
+  Eye,
+  Power,
+  PowerOff,
+  Pencil,
+  AlertTriangle,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  Check,
+} from 'lucide-react'
+
+// ── Types ───────────────────────────────────────────────────────────────────
+
+interface CompanyForm {
+  name: string
+  tagline: string
+  phone: string
+  email: string
+  address: string
+  city: string
+  state: string
+  pincode: string
+  gstNumber: string
+  panNumber: string
+  bankName: string
+  bankAccount: string
+  bankIfsc: string
+  invoicePrefix: string
+  dispatchPrefix: string
+  orderPrefix: string
+  terms: string
+  signatureName: string
+  logoUrl: string
+  primaryColor: string
+}
+
+interface UserItem {
+  id: string
+  name: string
+  email: string
+  role: string
+  active: boolean
+  createdAt: string
+}
+
+interface UserFormData {
+  name: string
+  email: string
+  password: string
+  role: string
+}
+
+const ROLES = ['Admin', 'Operator', 'Accountant'] as const
+
+const ROLE_BADGE_STYLES: Record<string, string> = {
+  Admin: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800',
+  Operator: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800',
+  Accountant: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800',
+}
+
+const ROLE_PERMISSIONS: Record<string, { modules: string[]; description: string }> = {
+  Admin: {
+    modules: ['Dashboard', 'Customers', 'Production', 'Stock', 'Orders', 'Dispatch', 'Payments', 'Expenses', 'Reports', 'Users', 'Settings', 'Admin Panel'],
+    description: 'Full access to all modules and features. Can manage users, company settings, and data.',
+  },
+  Operator: {
+    modules: ['Dashboard', 'Production', 'Dispatch', 'Stock'],
+    description: 'Access to production, dispatch, and stock modules. Can create and update entries but cannot delete.',
+  },
+  Accountant: {
+    modules: ['Dashboard', 'Payments', 'Expenses', 'Reports'],
+    description: 'Access to payments, expenses, and reports. Can manage financial records and generate reports.',
+  },
+}
+
+const emptyCompanyForm: CompanyForm = {
+  name: '',
+  tagline: '',
+  phone: '',
+  email: '',
+  address: '',
+  city: '',
+  state: '',
+  pincode: '',
+  gstNumber: '',
+  panNumber: '',
+  bankName: '',
+  bankAccount: '',
+  bankIfsc: '',
+  invoicePrefix: 'INV',
+  dispatchPrefix: 'DSP',
+  orderPrefix: 'ORD',
+  terms: '',
+  signatureName: '',
+  logoUrl: '',
+  primaryColor: '#059669',
+}
+
+const emptyUserForm: UserFormData = {
+  name: '',
+  email: '',
+  password: '',
+  role: 'Operator',
+}
+
+// ── Component ───────────────────────────────────────────────────────────────
+
+export default function AdminPanelModule() {
+  const { company, setCompany, user: currentUser } = useAppStore()
+
+  // Company form state
+  const [companyForm, setCompanyForm] = React.useState<CompanyForm>(emptyCompanyForm)
+  const [savingCompany, setSavingCompany] = React.useState(false)
+  const [uploadingLogo, setUploadingLogo] = React.useState(false)
+
+  // User management state
+  const [users, setUsers] = React.useState<UserItem[]>([])
+  const [loadingUsers, setLoadingUsers] = React.useState(true)
+  const [formOpen, setFormOpen] = React.useState(false)
+  const [editingUser, setEditingUser] = React.useState<UserItem | null>(null)
+  const [formData, setFormData] = React.useState<UserFormData>(emptyUserForm)
+  const [formSubmitting, setFormSubmitting] = React.useState(false)
+  const [deleteTarget, setDeleteTarget] = React.useState<UserItem | null>(null)
+  const [deleting, setDeleting] = React.useState(false)
+  const [togglingId, setTogglingId] = React.useState<string | null>(null)
+
+  // Database management
+  const [dbAction, setDbAction] = React.useState<'clear' | null>(null)
+  const [dbLoading, setDbLoading] = React.useState(false)
+
+  // Load company data
+  React.useEffect(() => {
+    if (company) {
+      setCompanyForm({
+        name: company.name || '',
+        tagline: company.tagline || '',
+        phone: company.phone || '',
+        email: company.email || '',
+        address: company.address || '',
+        city: company.city || '',
+        state: company.state || '',
+        pincode: company.pincode || '',
+        gstNumber: company.gstNumber || '',
+        panNumber: company.panNumber || '',
+        bankName: company.bankName || '',
+        bankAccount: company.bankAccount || '',
+        bankIfsc: company.bankIfsc || '',
+        invoicePrefix: company.invoicePrefix || 'INV',
+        dispatchPrefix: company.dispatchPrefix || 'DSP',
+        orderPrefix: company.orderPrefix || 'ORD',
+        terms: company.terms || '',
+        signatureName: company.signatureName || '',
+        logoUrl: company.logoUrl || '',
+        primaryColor: company.primaryColor || '#059669',
+      })
+    }
+  }, [company])
+
+  // Fetch users
+  const fetchUsers = React.useCallback(async () => {
+    setLoadingUsers(true)
+    try {
+      const res = await api.getUsers()
+      setUsers(res.users as UserItem[])
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to fetch users', variant: 'destructive' })
+    } finally {
+      setLoadingUsers(false)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    fetchUsers()
+  }, [fetchUsers])
+
+  // ── Company save ─────────────────────────────────────────────────────────
+  const handleSaveCompany = async () => {
+    if (!companyForm.name.trim()) {
+      toast({ title: 'Error', description: 'Company name is required', variant: 'destructive' })
+      return
+    }
+    setSavingCompany(true)
+    try {
+      const result = await api.updateCompany({
+        ...companyForm,
+        setupComplete: true,
+      })
+      setCompany(result.company as Parameters<typeof setCompany>[0])
+      toast({ title: 'Success', description: 'Company settings saved successfully' })
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to save', variant: 'destructive' })
+    } finally {
+      setSavingCompany(false)
+    }
+  }
+
+  // ── Logo upload ──────────────────────────────────────────────────────────
+  const logoInputRef = React.useRef<HTMLInputElement>(null)
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Invalid file', description: 'Please upload an image file', variant: 'destructive' })
+      return
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: 'File too large', description: 'Logo must be under 2MB', variant: 'destructive' })
+      return
+    }
+
+    setUploadingLogo(true)
+    try {
+      const reader = new FileReader()
+      reader.onload = async () => {
+        const base64 = reader.result as string
+        const result = await api.updateCompany({ logoUrl: base64, setupComplete: true })
+        setCompany(result.company as Parameters<typeof setCompany>[0])
+        setCompanyForm((prev) => ({ ...prev, logoUrl: base64 }))
+        toast({ title: 'Logo updated', description: 'Company logo has been updated' })
+        setUploadingLogo(false)
+      }
+      reader.readAsDataURL(file)
+    } catch (err) {
+      toast({ title: 'Upload failed', description: 'Could not upload logo', variant: 'destructive' })
+      setUploadingLogo(false)
+    }
+  }
+
+  const handleRemoveLogo = async () => {
+    try {
+      const result = await api.updateCompany({ logoUrl: '', setupComplete: true })
+      setCompany(result.company as Parameters<typeof setCompany>[0])
+      setCompanyForm((prev) => ({ ...prev, logoUrl: '' }))
+      toast({ title: 'Logo removed', description: 'Company logo has been removed' })
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to remove logo', variant: 'destructive' })
+    }
+  }
+
+  // ── Use Veda default logo ────────────────────────────────────────────────
+  const handleUseVedaLogo = async () => {
+    try {
+      // Convert the SVG to a data URL
+      const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none"><rect width="200" height="200" rx="40" fill="#059669"/><path d="M100 30L40 75v15h20v55h30v-35h20v35h30V90h20V75L100 30z" fill="white" opacity="0.95"/><rect x="85" y="95" width="30" height="20" rx="2" fill="white" opacity="0.6"/><path d="M35 155h130v10a10 10 0 01-10 10H45a10 10 0 01-10-10v-10z" fill="white" opacity="0.8"/><text x="100" y="192" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" opacity="0.9">VEDA</text></svg>`
+      const dataUrl = `data:image/svg+xml;base64,${btoa(svgContent)}`
+      const result = await api.updateCompany({ logoUrl: dataUrl, setupComplete: true })
+      setCompany(result.company as Parameters<typeof setCompany>[0])
+      setCompanyForm((prev) => ({ ...prev, logoUrl: dataUrl }))
+      toast({ title: 'Veda logo applied', description: 'Default Veda Enterprises logo has been set' })
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to set Veda logo', variant: 'destructive' })
+    }
+  }
+
+  // ── User form handlers ──────────────────────────────────────────────────
+  const openAddDialog = () => {
+    setEditingUser(null)
+    setFormData(emptyUserForm)
+    setFormOpen(true)
+  }
+
+  const openEditDialog = (user: UserItem) => {
+    setEditingUser(user)
+    setFormData({ name: user.name, email: user.email, password: '', role: user.role })
+    setFormOpen(true)
+  }
+
+  const handleSubmitUser = async () => {
+    if (!formData.name.trim() || !formData.email.trim()) {
+      toast({ title: 'Error', description: 'Name and email are required', variant: 'destructive' })
+      return
+    }
+    if (!editingUser && !formData.password.trim()) {
+      toast({ title: 'Error', description: 'Password is required for new users', variant: 'destructive' })
+      return
+    }
+
+    setFormSubmitting(true)
+    try {
+      if (editingUser) {
+        const payload: Record<string, unknown> = {
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          role: formData.role,
+          active: editingUser.active,
+        }
+        if (formData.password.trim()) payload.password = formData.password.trim()
+        await api.updateUser(editingUser.id, payload)
+        toast({ title: 'Success', description: 'User updated' })
+      } else {
+        await api.createUser({
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          password: formData.password.trim(),
+          role: formData.role,
+        })
+        toast({ title: 'Success', description: 'User created' })
+      }
+      setFormOpen(false)
+      fetchUsers()
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed', variant: 'destructive' })
+    } finally {
+      setFormSubmitting(false)
+    }
+  }
+
+  const handleToggleActive = async (user: UserItem) => {
+    setTogglingId(user.id)
+    try {
+      await api.updateUser(user.id, { name: user.name, email: user.email, role: user.role, active: !user.active })
+      toast({ title: 'Success', description: `User ${!user.active ? 'activated' : 'deactivated'}` })
+      fetchUsers()
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to toggle user', variant: 'destructive' })
+    } finally {
+      setTogglingId(null)
+    }
+  }
+
+  const handleDeleteUser = async () => {
+    if (!deleteTarget) return
+    if (deleteTarget.id === currentUser?.id) {
+      toast({ title: 'Error', description: 'Cannot delete your own account', variant: 'destructive' })
+      setDeleteTarget(null)
+      return
+    }
+    setDeleting(true)
+    try {
+      await api.deleteUser(deleteTarget.id)
+      toast({ title: 'Success', description: 'User deleted' })
+      setDeleteTarget(null)
+      fetchUsers()
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to delete user', variant: 'destructive' })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  // ── Database management ─────────────────────────────────────────────────
+  const handleExportBackup = async () => {
+    setDbLoading(true)
+    try {
+      const data = await api.exportBackup()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `veda-erp-backup-${new Date().toISOString().split('T')[0]}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast({ title: 'Backup exported', description: 'Database backup has been downloaded' })
+    } catch (err) {
+      toast({ title: 'Export failed', description: 'Could not export backup', variant: 'destructive' })
+    } finally {
+      setDbLoading(false)
+    }
+  }
+
+  const handleClearData = async () => {
+    setDbLoading(true)
+    try {
+      await api.clearData()
+      toast({ title: 'Data cleared', description: 'All data has been cleared from the system' })
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to clear data', variant: 'destructive' })
+    } finally {
+      setDbLoading(false)
+      setDbAction(null)
+    }
+  }
+
+  const handleRestoreBackup = async () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      setDbLoading(true)
+      try {
+        const text = await file.text()
+        const data = JSON.parse(text)
+        await api.restoreBackup(data)
+        toast({ title: 'Backup restored', description: 'Database has been restored from backup' })
+      } catch (err) {
+        toast({ title: 'Restore failed', description: 'Could not restore backup', variant: 'destructive' })
+      } finally {
+        setDbLoading(false)
+      }
+    }
+    input.click()
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+          <ShieldCheck className="size-5" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Admin Panel</h2>
+          <p className="text-sm text-muted-foreground">
+            Full control over company settings, users, roles, and system data
+          </p>
+        </div>
+      </div>
+
+      {/* Main Tabs */}
+      <Tabs defaultValue="company" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="company" className="gap-2">
+            <Building2 className="h-4 w-4" /> Company
+          </TabsTrigger>
+          <TabsTrigger value="logo" className="gap-2">
+            <ImagePlus className="h-4 w-4" /> Logo & Branding
+          </TabsTrigger>
+          <TabsTrigger value="users" className="gap-2">
+            <Users className="h-4 w-4" /> Users & Access
+          </TabsTrigger>
+          <TabsTrigger value="database" className="gap-2">
+            <Database className="h-4 w-4" /> Database
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ── Company Settings Tab ──────────────────────────────────────── */}
+        <TabsContent value="company" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-emerald-600" />
+                Company Details
+              </CardTitle>
+              <CardDescription>
+                Update your company information. These details appear on invoices, reports, and documents.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Company Name <span className="text-destructive">*</span></Label>
+                  <Input value={companyForm.name} onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })} placeholder="Enter company name" />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Tagline</Label>
+                  <Input value={companyForm.tagline} onChange={(e) => setCompanyForm({ ...companyForm, tagline: e.target.value })} placeholder="e.g. Building the future, one brick at a time" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone <span className="text-destructive">*</span></Label>
+                  <Input value={companyForm.phone} onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })} placeholder="+91 98765 43210" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input type="email" value={companyForm.email} onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })} placeholder="info@company.com" />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Address</Label>
+                  <Input value={companyForm.address} onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })} placeholder="Enter full address" />
+                </div>
+                <div className="space-y-2">
+                  <Label>City</Label>
+                  <Input value={companyForm.city} onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })} placeholder="City" />
+                </div>
+                <div className="space-y-2">
+                  <Label>State</Label>
+                  <Input value={companyForm.state} onChange={(e) => setCompanyForm({ ...companyForm, state: e.target.value })} placeholder="State" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Pincode</Label>
+                  <Input value={companyForm.pincode} onChange={(e) => setCompanyForm({ ...companyForm, pincode: e.target.value })} placeholder="000000" />
+                </div>
+                <div className="space-y-2">
+                  <Label>GST Number</Label>
+                  <Input value={companyForm.gstNumber} onChange={(e) => setCompanyForm({ ...companyForm, gstNumber: e.target.value.toUpperCase() })} placeholder="22AAAAA0000A1Z5" />
+                </div>
+                <div className="space-y-2">
+                  <Label>PAN Number</Label>
+                  <Input value={companyForm.panNumber} onChange={(e) => setCompanyForm({ ...companyForm, panNumber: e.target.value.toUpperCase() })} placeholder="AAAAA0000A" />
+                </div>
+              </div>
+
+              <Separator />
+
+              <div>
+                <h4 className="font-medium mb-3 flex items-center gap-2">
+                  <Palette className="h-4 w-4" /> Business Settings
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Invoice Prefix</Label>
+                    <Input value={companyForm.invoicePrefix} onChange={(e) => setCompanyForm({ ...companyForm, invoicePrefix: e.target.value.toUpperCase() })} placeholder="INV" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Dispatch Prefix</Label>
+                    <Input value={companyForm.dispatchPrefix} onChange={(e) => setCompanyForm({ ...companyForm, dispatchPrefix: e.target.value.toUpperCase() })} placeholder="DSP" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Order Prefix</Label>
+                    <Input value={companyForm.orderPrefix} onChange={(e) => setCompanyForm({ ...companyForm, orderPrefix: e.target.value.toUpperCase() })} placeholder="ORD" />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div>
+                <h4 className="font-medium mb-3 flex items-center gap-2">
+                  Bank Details
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Bank Name</Label>
+                    <Input value={companyForm.bankName} onChange={(e) => setCompanyForm({ ...companyForm, bankName: e.target.value })} placeholder="Enter bank name" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Account Number</Label>
+                    <Input value={companyForm.bankAccount} onChange={(e) => setCompanyForm({ ...companyForm, bankAccount: e.target.value })} placeholder="Enter account number" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>IFSC Code</Label>
+                    <Input value={companyForm.bankIfsc} onChange={(e) => setCompanyForm({ ...companyForm, bankIfsc: e.target.value.toUpperCase() })} placeholder="Enter IFSC code" />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Terms & Conditions</Label>
+                  <Textarea value={companyForm.terms} onChange={(e) => setCompanyForm({ ...companyForm, terms: e.target.value })} placeholder="Default terms for invoices..." rows={3} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Authorized Signatory Name</Label>
+                  <Input value={companyForm.signatureName} onChange={(e) => setCompanyForm({ ...companyForm, signatureName: e.target.value })} placeholder="Name of authorized signatory" />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button onClick={handleSaveCompany} disabled={savingCompany} className="bg-emerald-600 hover:bg-emerald-700 min-w-[160px]">
+                  {savingCompany ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Saving...</> : <><Save className="h-4 w-4 mr-2" />Save Settings</>}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Logo & Branding Tab ───────────────────────────────────────── */}
+        <TabsContent value="logo" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ImagePlus className="h-5 w-5 text-emerald-600" />
+                Company Logo & Branding
+              </CardTitle>
+              <CardDescription>
+                Upload or change your company logo. This logo appears on the sidebar, login page, and all generated documents.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Current Logo Preview */}
+              <div className="flex flex-col items-center gap-4 p-6 border-2 border-dashed rounded-xl">
+                {companyForm.logoUrl ? (
+                  <div className="relative group">
+                    <img src={companyForm.logoUrl} alt="Company Logo" className="w-32 h-32 rounded-2xl object-cover border-2 border-emerald-200 dark:border-emerald-800 shadow-lg" />
+                    <button
+                      onClick={handleRemoveLogo}
+                      className="absolute -top-2 -right-2 w-7 h-7 bg-destructive text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-32 h-32 rounded-2xl bg-muted flex items-center justify-center border-2 border-dashed">
+                    <ImagePlus className="h-12 w-12 text-muted-foreground" />
+                  </div>
+                )}
+                <p className="text-sm text-muted-foreground text-center">
+                  {companyForm.logoUrl ? 'Current company logo' : 'No logo uploaded yet'}
+                </p>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex flex-wrap gap-3 justify-center">
+                <Button variant="outline" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}>
+                  {uploadingLogo ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Uploading...</> : <><Upload className="h-4 w-4 mr-2" />Upload Logo</>}
+                </Button>
+                <Button variant="outline" onClick={handleUseVedaLogo} className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/20">
+                  <Building2 className="h-4 w-4 mr-2" />
+                  Use Veda Logo
+                </Button>
+                {companyForm.logoUrl && (
+                  <Button variant="outline" onClick={handleRemoveLogo} className="text-destructive hover:bg-destructive/10">
+                    <Trash2 className="h-4 w-4 mr-2" />Remove Logo
+                  </Button>
+                )}
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleLogoUpload}
+                />
+              </div>
+
+              <p className="text-xs text-muted-foreground text-center">
+                Supported formats: PNG, JPG, SVG, WEBP. Maximum size: 2MB. Recommended: 200x200px square.
+              </p>
+
+              <Separator />
+
+              {/* Primary Color */}
+              <div className="space-y-3">
+                <Label className="text-base font-medium">Brand Color</Label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={companyForm.primaryColor}
+                    onChange={(e) => setCompanyForm({ ...companyForm, primaryColor: e.target.value })}
+                    className="w-12 h-12 rounded-lg border-2 border-border cursor-pointer"
+                  />
+                  <div className="flex-1">
+                    <Input
+                      value={companyForm.primaryColor}
+                      onChange={(e) => setCompanyForm({ ...companyForm, primaryColor: e.target.value })}
+                      placeholder="#059669"
+                      className="font-mono"
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setCompanyForm({ ...companyForm, primaryColor: '#059669' })
+                    }}
+                  >
+                    Reset to Emerald
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  This color is used for accents, buttons, and highlights across the ERP system.
+                </p>
+              </div>
+
+              <div className="flex justify-end">
+                <Button onClick={handleSaveCompany} disabled={savingCompany} className="bg-emerald-600 hover:bg-emerald-700">
+                  {savingCompany ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Saving...</> : <><Save className="h-4 w-4 mr-2" />Save Branding</>}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Users & Access Tab ────────────────────────────────────────── */}
+        <TabsContent value="users" className="space-y-6">
+          {/* Role Overview Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {ROLES.map((role) => (
+              <Card key={role} className="border-l-4" style={{ borderLeftColor: role === 'Admin' ? '#059669' : role === 'Operator' ? '#d97706' : '#0284c7' }}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Badge className={ROLE_BADGE_STYLES[role]}>{role}</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="text-xs text-muted-foreground">{ROLE_PERMISSIONS[role].description}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {ROLE_PERMISSIONS[role].modules.map((mod) => (
+                      <Badge key={mod} variant="outline" className="text-[10px]">{mod}</Badge>
+                    ))}
+                  </div>
+                  <p className="text-xs font-medium">
+                    {users.filter((u) => u.role === role).length} user{users.filter((u) => u.role === role).length !== 1 ? 's' : ''} with this role
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* User Management Table */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-emerald-600" />
+                  User Management
+                </CardTitle>
+                <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700">
+                  Add User
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Access</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loadingUsers ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <TableRow key={i}>
+                          <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                          <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                          <TableCell><Skeleton className="h-8 w-28" /></TableCell>
+                        </TableRow>
+                      ))
+                    ) : users.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                          No users yet. Click &quot;Add User&quot; to create one.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      users.map((u) => {
+                        const isSelf = u.id === currentUser?.id
+                        const perms = ROLE_PERMISSIONS[u.role]
+                        return (
+                          <TableRow key={u.id}>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                {u.name}
+                                {isSelf && <Badge variant="outline" className="text-[10px] px-1.5 py-0">You</Badge>}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">{u.email}</TableCell>
+                            <TableCell>
+                              <Badge className={ROLE_BADGE_STYLES[u.role] || ''}>{u.role}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={u.active ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' : 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800'}>
+                                {u.active ? 'Active' : 'Inactive'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-xs text-muted-foreground">{perms?.modules.length || 0} modules</span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button variant="ghost" size="icon" onClick={() => openEditDialog(u)} title="Edit User">
+                                  <Pencil className="size-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleToggleActive(u)}
+                                  disabled={togglingId === u.id}
+                                  title={u.active ? 'Deactivate' : 'Activate'}
+                                  className={u.active ? 'text-amber-600 hover:text-amber-700' : 'text-green-600 hover:text-green-700'}
+                                >
+                                  {togglingId === u.id ? <Loader2 className="size-4 animate-spin" /> : u.active ? <PowerOff className="size-4" /> : <Power className="size-4" />}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setDeleteTarget(u)}
+                                  title="Delete User"
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Database Tab ──────────────────────────────────────────────── */}
+        <TabsContent value="database" className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Download className="h-5 w-5 text-emerald-600" />
+                  Export Backup
+                </CardTitle>
+                <CardDescription>Download a complete backup of all your ERP data as a JSON file.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={handleExportBackup} disabled={dbLoading} className="w-full bg-emerald-600 hover:bg-emerald-700">
+                  {dbLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                  Export Backup
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Upload className="h-5 w-5 text-blue-600" />
+                  Restore Backup
+                </CardTitle>
+                <CardDescription>Restore data from a previously exported backup JSON file.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={handleRestoreBackup} disabled={dbLoading} variant="outline" className="w-full">
+                  {dbLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                  Restore Backup
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-destructive/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base text-destructive">
+                  <AlertTriangle className="h-5 w-5" />
+                  Clear All Data
+                </CardTitle>
+                <CardDescription>Permanently delete all data from the system. This cannot be undone.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={() => setDbAction('clear')} disabled={dbLoading} variant="destructive" className="w-full">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear All Data
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* ── User Form Dialog ──────────────────────────────────────────────── */}
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingUser ? 'Edit User' : 'Add User'}</DialogTitle>
+            <DialogDescription>
+              {editingUser ? 'Update user details and role assignment.' : 'Create a new user with appropriate role and access level.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label>Name <span className="text-destructive">*</span></Label>
+              <Input placeholder="Enter full name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+            </div>
+            <div className="grid gap-2">
+              <Label>Email <span className="text-destructive">*</span></Label>
+              <Input type="email" placeholder="Enter email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+            </div>
+            <div className="grid gap-2">
+              <Label>
+                Password{' '}
+                {editingUser ? <span className="text-muted-foreground font-normal">(leave blank to keep existing)</span> : <span className="text-destructive">*</span>}
+              </Label>
+              <Input type="password" placeholder={editingUser ? 'Leave blank to keep existing' : 'Enter password'} value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} />
+            </div>
+            <div className="grid gap-2">
+              <Label>Role</Label>
+              <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLES.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      <div className="flex flex-col">
+                        <span>{role}</span>
+                        <span className="text-xs text-muted-foreground">{ROLE_PERMISSIONS[role].description.slice(0, 60)}...</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Show access preview */}
+            {formData.role && ROLE_PERMISSIONS[formData.role] && (
+              <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                <p className="text-sm font-medium">Access Preview:</p>
+                <div className="flex flex-wrap gap-1">
+                  {ROLE_PERMISSIONS[formData.role].modules.map((mod) => (
+                    <Badge key={mod} variant="outline" className="text-xs">{mod}</Badge>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">{ROLE_PERMISSIONS[formData.role].description}</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFormOpen(false)} disabled={formSubmitting}>Cancel</Button>
+            <Button onClick={handleSubmitUser} disabled={formSubmitting} className="bg-emerald-600 hover:bg-emerald-700">
+              {formSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+              {editingUser ? 'Update User' : 'Create User'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete User Confirmation ──────────────────────────────────────── */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{deleteTarget?.name}</strong>? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteUser} disabled={deleting} className="bg-destructive text-white hover:bg-destructive/90">
+              {deleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Clear Data Confirmation ───────────────────────────────────────── */}
+      <AlertDialog open={dbAction === 'clear'} onOpenChange={(open) => !open && setDbAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Clear All Data
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all customers, productions, orders, dispatches, payments, expenses, and stock data.
+              <strong className="block mt-2">This action cannot be undone. Consider exporting a backup first.</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={dbLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearData} disabled={dbLoading} className="bg-destructive text-white hover:bg-destructive/90">
+              {dbLoading && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Clear All Data
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
