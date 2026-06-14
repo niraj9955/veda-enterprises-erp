@@ -1,0 +1,630 @@
+'use client'
+
+import * as React from 'react'
+import { api } from '@/lib/api'
+import { toast } from '@/hooks/use-toast'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  Users,
+  Plus,
+  Search,
+  Pencil,
+  Trash2,
+  BookOpen,
+  Loader2,
+  IndianRupee,
+} from 'lucide-react'
+
+// ── Types ───────────────────────────────────────────────────────────────────
+
+interface Customer {
+  id: string
+  name: string
+  mobile: string
+  gstNumber: string
+  address: string
+  creditLimit: number
+  createdAt: string
+  updatedAt: string
+}
+
+interface Payment {
+  id: string
+  customerId: string
+  paymentType: string
+  amount: number
+  date: string
+  remarks: string
+  customer: { name: string }
+}
+
+interface CustomerFormData {
+  name: string
+  mobile: string
+  gstNumber: string
+  address: string
+  creditLimit: number | string
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+const formatCurrency = (amount: number): string =>
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(amount)
+
+const formatDate = (dateStr: string): string =>
+  new Date(dateStr).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+
+const emptyForm: CustomerFormData = {
+  name: '',
+  mobile: '',
+  gstNumber: '',
+  address: '',
+  creditLimit: '',
+}
+
+// ── Component ───────────────────────────────────────────────────────────────
+
+export function CustomerModule() {
+  // State
+  const [customers, setCustomers] = React.useState<Customer[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [search, setSearch] = React.useState('')
+  const [debouncedSearch, setDebouncedSearch] = React.useState('')
+
+  // Dialog states
+  const [formOpen, setFormOpen] = React.useState(false)
+  const [editingCustomer, setEditingCustomer] = React.useState<Customer | null>(null)
+  const [formData, setFormData] = React.useState<CustomerFormData>(emptyForm)
+  const [formSubmitting, setFormSubmitting] = React.useState(false)
+
+  // Delete confirmation
+  const [deleteTarget, setDeleteTarget] = React.useState<Customer | null>(null)
+  const [deleting, setDeleting] = React.useState(false)
+
+  // Ledger
+  const [ledgerCustomer, setLedgerCustomer] = React.useState<Customer | null>(null)
+  const [ledgerPayments, setLedgerPayments] = React.useState<Payment[]>([])
+  const [ledgerLoading, setLedgerLoading] = React.useState(false)
+
+  // ── Debounced search ────────────────────────────────────────────────────
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  // ── Fetch customers ─────────────────────────────────────────────────────
+  const fetchCustomers = React.useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await api.getCustomers(debouncedSearch || undefined)
+      setCustomers(res.customers as Customer[])
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to fetch customers',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }, [debouncedSearch])
+
+  React.useEffect(() => {
+    fetchCustomers()
+  }, [fetchCustomers])
+
+  // ── Form handlers ───────────────────────────────────────────────────────
+  const openAddDialog = () => {
+    setEditingCustomer(null)
+    setFormData(emptyForm)
+    setFormOpen(true)
+  }
+
+  const openEditDialog = (customer: Customer) => {
+    setEditingCustomer(customer)
+    setFormData({
+      name: customer.name,
+      mobile: customer.mobile,
+      gstNumber: customer.gstNumber,
+      address: customer.address,
+      creditLimit: customer.creditLimit,
+    })
+    setFormOpen(true)
+  }
+
+  const handleFormChange = (field: keyof CustomerFormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleSubmit = async () => {
+    if (!formData.name.trim()) {
+      toast({ title: 'Validation Error', description: 'Customer name is required', variant: 'destructive' })
+      return
+    }
+    if (!formData.mobile.trim()) {
+      toast({ title: 'Validation Error', description: 'Mobile number is required', variant: 'destructive' })
+      return
+    }
+
+    setFormSubmitting(true)
+    try {
+      const payload = {
+        name: formData.name.trim(),
+        mobile: formData.mobile.trim(),
+        gstNumber: formData.gstNumber.trim(),
+        address: formData.address.trim(),
+        creditLimit: Number(formData.creditLimit) || 0,
+      }
+
+      if (editingCustomer) {
+        await api.updateCustomer(editingCustomer.id, payload)
+        toast({ title: 'Success', description: 'Customer updated successfully' })
+      } else {
+        await api.createCustomer(payload)
+        toast({ title: 'Success', description: 'Customer created successfully' })
+      }
+
+      setFormOpen(false)
+      setFormData(emptyForm)
+      setEditingCustomer(null)
+      fetchCustomers()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to save customer',
+        variant: 'destructive',
+      })
+    } finally {
+      setFormSubmitting(false)
+    }
+  }
+
+  // ── Delete handler ──────────────────────────────────────────────────────
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await api.deleteCustomer(deleteTarget.id)
+      toast({ title: 'Success', description: 'Customer deleted successfully' })
+      setDeleteTarget(null)
+      fetchCustomers()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete customer',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  // ── Ledger handler ──────────────────────────────────────────────────────
+  const openLedger = async (customer: Customer) => {
+    setLedgerCustomer(customer)
+    setLedgerLoading(true)
+    try {
+      const res = await api.getPayments()
+      const allPayments = res.payments as Payment[]
+      const filtered = allPayments.filter((p) => p.customerId === customer.id)
+      // Sort by date descending
+      filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      setLedgerPayments(filtered)
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to fetch payment history',
+        variant: 'destructive',
+      })
+      setLedgerPayments([])
+    } finally {
+      setLedgerLoading(false)
+    }
+  }
+
+  // ── Render: Loading skeletons ───────────────────────────────────────────
+  const renderSkeletons = () =>
+    Array.from({ length: 5 }).map((_, i) => (
+      <TableRow key={i}>
+        <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+        <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+        <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+        <TableCell><Skeleton className="h-8 w-28" /></TableCell>
+      </TableRow>
+    ))
+
+  // ── Render: Form dialog ─────────────────────────────────────────────────
+  const renderFormDialog = () => (
+    <Dialog open={formOpen} onOpenChange={setFormOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {editingCustomer ? 'Edit Customer' : 'Add Customer'}
+          </DialogTitle>
+          <DialogDescription>
+            {editingCustomer
+              ? 'Update the customer details below.'
+              : 'Fill in the details to create a new customer.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 py-2">
+          {/* Customer Name */}
+          <div className="grid gap-2">
+            <Label htmlFor="cust-name">
+              Customer Name <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="cust-name"
+              placeholder="Enter customer name"
+              value={formData.name}
+              onChange={(e) => handleFormChange('name', e.target.value)}
+            />
+          </div>
+
+          {/* Mobile Number */}
+          <div className="grid gap-2">
+            <Label htmlFor="cust-mobile">
+              Mobile Number <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="cust-mobile"
+              placeholder="Enter mobile number"
+              value={formData.mobile}
+              onChange={(e) => handleFormChange('mobile', e.target.value)}
+            />
+          </div>
+
+          {/* GST Number */}
+          <div className="grid gap-2">
+            <Label htmlFor="cust-gst">GST Number</Label>
+            <Input
+              id="cust-gst"
+              placeholder="Enter GST number (optional)"
+              value={formData.gstNumber}
+              onChange={(e) => handleFormChange('gstNumber', e.target.value)}
+            />
+          </div>
+
+          {/* Address */}
+          <div className="grid gap-2">
+            <Label htmlFor="cust-address">Address</Label>
+            <Textarea
+              id="cust-address"
+              placeholder="Enter address"
+              value={formData.address}
+              onChange={(e) => handleFormChange('address', e.target.value)}
+              className="min-h-[80px]"
+            />
+          </div>
+
+          {/* Credit Limit */}
+          <div className="grid gap-2">
+            <Label htmlFor="cust-credit">Credit Limit (₹)</Label>
+            <div className="relative">
+              <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                id="cust-credit"
+                type="number"
+                placeholder="0"
+                className="pl-9"
+                value={formData.creditLimit}
+                onChange={(e) => handleFormChange('creditLimit', e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setFormOpen(false)}
+            disabled={formSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={formSubmitting}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            {formSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+            {editingCustomer ? 'Update Customer' : 'Create Customer'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+
+  // ── Render: Delete confirmation ─────────────────────────────────────────
+  const renderDeleteDialog = () => (
+    <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete Customer</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete <strong>{deleteTarget?.name}</strong>? This action
+            cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDelete}
+            disabled={deleting}
+            className="bg-destructive text-white hover:bg-destructive/90"
+          >
+            {deleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+
+  // ── Render: Ledger dialog ───────────────────────────────────────────────
+  const renderLedgerDialog = () => (
+    <Dialog open={!!ledgerCustomer} onOpenChange={(open) => !open && setLedgerCustomer(null)}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <BookOpen className="size-5 text-emerald-600" />
+            Payment Ledger — {ledgerCustomer?.name}
+          </DialogTitle>
+          <DialogDescription>
+            Payment history for {ledgerCustomer?.name}
+          </DialogDescription>
+        </DialogHeader>
+
+        {ledgerLoading ? (
+          <div className="space-y-3 py-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : ledgerPayments.length === 0 ? (
+          <div className="py-8 text-center text-muted-foreground">
+            No payment records found for this customer.
+          </div>
+        ) : (
+          <div className="max-h-96 overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Remarks</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {ledgerPayments.map((payment) => (
+                  <TableRow key={payment.id}>
+                    <TableCell className="whitespace-nowrap">
+                      {formatDate(payment.date)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          payment.paymentType?.toLowerCase() === 'credit' ? 'secondary' : 'outline'
+                        }
+                        className={
+                          payment.paymentType?.toLowerCase() === 'credit'
+                            ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                            : 'bg-orange-100 text-orange-700 border-orange-200'
+                        }
+                      >
+                        {payment.paymentType}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-medium whitespace-nowrap">
+                      {formatCurrency(payment.amount)}
+                    </TableCell>
+                    <TableCell className="max-w-[200px] truncate text-muted-foreground">
+                      {payment.remarks || '—'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setLedgerCustomer(null)}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+
+  // ── Render: Main ────────────────────────────────────────────────────────
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+            <Users className="size-5" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Customer Management</h2>
+            <p className="text-sm text-muted-foreground">
+              Manage your customer database and ledgers
+            </p>
+          </div>
+        </div>
+        <Button
+          onClick={openAddDialog}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
+        >
+          <Plus className="size-4" />
+          Add Customer
+        </Button>
+      </div>
+
+      {/* Search */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search customers by name or mobile..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Customers</span>
+            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+              {customers.length} record{customers.length !== 1 ? 's' : ''}
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Mobile</TableHead>
+                  <TableHead>GST Number</TableHead>
+                  <TableHead>Address</TableHead>
+                  <TableHead className="text-right">Credit Limit (₹)</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  renderSkeletons()
+                ) : customers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                      {debouncedSearch
+                        ? 'No customers found matching your search.'
+                        : 'No customers yet. Click "Add Customer" to get started.'}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  customers.map((customer) => (
+                    <TableRow key={customer.id}>
+                      <TableCell className="font-medium">{customer.name}</TableCell>
+                      <TableCell className="whitespace-nowrap">{customer.mobile}</TableCell>
+                      <TableCell>
+                        {customer.gstNumber ? (
+                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                            {customer.gstNumber}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            No GST
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate text-muted-foreground">
+                        {customer.address || '—'}
+                      </TableCell>
+                      <TableCell className="text-right font-medium whitespace-nowrap">
+                        {formatCurrency(customer.creditLimit)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openLedger(customer)}
+                            title="View Ledger"
+                            className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                          >
+                            <BookOpen className="size-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditDialog(customer)}
+                            title="Edit Customer"
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDeleteTarget(customer)}
+                            title="Delete Customer"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Dialogs */}
+      {renderFormDialog()}
+      {renderDeleteDialog()}
+      {renderLedgerDialog()}
+    </div>
+  )
+}
+
+export default CustomerModule

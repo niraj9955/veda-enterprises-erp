@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("operator") // admin, operator, accountant
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Customer {
+  id          String   @id @default(cuid())
+  name        String
+  mobile      String
+  gstNumber   String   @default("")
+  address     String   @default("")
+  creditLimit Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders    Order[]
+  dispatches Dispatch[]
+  payments  Payment[]
+}
+
+model Production {
+  id               String   @id @default(cuid())
+  date             String   // YYYY-MM-DD
+  brickType        String
+  quantityProduced Int
+  shift            String   // Morning, Evening, Night
+  remarks          String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Stock {
+  id            String   @id @default(cuid())
+  brickType     String   @unique
+  openingStock  Int      @default(0)
+  currentStock  Int      @default(0)
+  updatedAt     DateTime @updatedAt
+}
+
+model Order {
+  id           String   @id @default(cuid())
+  orderNumber  String   @unique
+  customerId   String
+  brickType    String
+  quantity     Int
+  rate         Float
+  amount       Float
+  deliveryDate String
+  status       String   @default("Pending") // Pending, Processing, Delivered, Cancelled
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  customer  Customer   @relation(fields: [customerId], references: [id])
+  dispatches Dispatch[]
+}
+
+model Dispatch {
+  id             String   @id @default(cuid())
+  dispatchNumber String   @unique
+  customerId     String
+  orderId        String?
+  truckNumber    String
+  driverName     String
+  quantity       Int
+  brickType      String
+  date           String   // YYYY-MM-DD
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id])
+  order    Order?   @relation(fields: [orderId], references: [id])
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  customerId  String
+  paymentType String   // Cash, UPI, Bank Transfer
+  amount      Float
+  date        String   // YYYY-MM-DD
+  remarks     String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  category    String   // Labour, Coal, Diesel, Maintenance, Electricity
+  amount      Float
+  date        String   // YYYY-MM-DD
+  description String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
