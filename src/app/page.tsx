@@ -45,14 +45,24 @@ export default function Home() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        await api.getDashboard()
-        setChecking(false)
+        // Use a lightweight company endpoint to check auth status
+        const data = await api.getCompany()
+        if (data.session) {
+          // Session exists - user is authenticated
+          setUser({
+            id: (data.session as Record<string, unknown>).userId as string,
+            name: (data.session as Record<string, unknown>).name as string,
+            email: (data.session as Record<string, unknown>).email as string,
+            role: (data.session as Record<string, unknown>).role as string,
+          })
+        }
       } catch {
-        setChecking(false)
+        // Not authenticated - will show login page
       }
+      setChecking(false)
     }
     checkAuth()
-  }, [])
+  }, [setUser])
 
   // Load company data once authenticated
   useEffect(() => {
