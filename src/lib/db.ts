@@ -11,12 +11,22 @@ if (!cached) {
 export async function connectDB() {
   if (cached.conn) return cached.conn;
   if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI).then((m) => {
+    const opts: mongoose.ConnectOptions = {
+      bufferCommands: false,
+      serverSelectionTimeoutMS: 30000,
+      socketTimeoutMS: 45000,
+    };
+    cached.promise = mongoose.connect(MONGODB_URI, opts).then((m) => {
       console.log('MongoDB connected');
       return m;
     });
   }
-  cached.conn = await cached.promise;
+  try {
+    cached.conn = await cached.promise;
+  } catch (e) {
+    cached.promise = null;
+    throw e;
+  }
   return cached.conn;
 }
 
