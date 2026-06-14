@@ -39,7 +39,7 @@ export async function getSession(): Promise<JWTPayload | null> {
 export function hasAccess(role: string, module: string): boolean {
   const accessMap: Record<string, string[]> = {
     admin: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'settings', 'users', 'admin'],
-    operator: ['production', 'dispatch', 'stock', 'dashboard'],
+    operator: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports'],
     accountant: ['payments', 'expenses', 'reports', 'dashboard'],
   }
   return accessMap[role]?.includes(module) || false
@@ -64,9 +64,14 @@ export function canPerform(role: string, module: string, action: 'create' | 'rea
     },
     operator: {
       dashboard: ['read'],
+      customers: ['create', 'read', 'update'],
       production: ['create', 'read', 'update'],
-      dispatch: ['create', 'read', 'update'],
       stock: ['read'],
+      orders: ['create', 'read', 'update'],
+      dispatch: ['create', 'read', 'update'],
+      payments: ['create', 'read'],
+      expenses: ['create', 'read'],
+      reports: ['read'],
     },
     accountant: {
       dashboard: ['read'],
