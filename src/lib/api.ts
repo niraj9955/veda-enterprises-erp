@@ -92,4 +92,11 @@ export const api = {
 
   // Reports
   getReport: (type: string) => request<Record<string, unknown>>(`/reports?type=${type}`),
+
+  // Import
+  importData: (module: string, data: Record<string, unknown>[]) =>
+    request<{ success: boolean; imported: number; total: number; errors?: string[] }>('/import', {
+      method: 'POST',
+      body: JSON.stringify({ module, data }),
+    }),
 }

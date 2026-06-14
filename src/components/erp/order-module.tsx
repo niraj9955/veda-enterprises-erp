@@ -49,7 +49,9 @@ import {
   Trash2,
   Loader2,
   IndianRupee,
+  Upload,
 } from 'lucide-react'
+import ExcelImport from '@/components/erp/excel-import'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -138,6 +140,9 @@ export function OrderModule() {
   const [editTarget, setEditTarget] = React.useState<Order | null>(null)
   const [editStatus, setEditStatus] = React.useState('')
   const [editSubmitting, setEditSubmitting] = React.useState(false)
+
+  // Excel import
+  const [importOpen, setImportOpen] = React.useState(false)
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = React.useState<Order | null>(null)
@@ -565,13 +570,23 @@ export function OrderModule() {
             </p>
           </div>
         </div>
-        <Button
-          onClick={openCreateDialog}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
-        >
-          <Plus className="size-4" />
-          Create Order
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+            className="w-full sm:w-auto"
+          >
+            <Upload className="size-4 mr-2" />
+            Import Excel
+          </Button>
+          <Button
+            onClick={openCreateDialog}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
+          >
+            <Plus className="size-4" />
+            Create Order
+          </Button>
+        </div>
       </div>
 
       {/* Table */}
@@ -667,6 +682,8 @@ export function OrderModule() {
       {renderCreateDialog()}
       {renderEditStatusDialog()}
       {renderDeleteDialog()}
+
+      <ExcelImport module="orders" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchOrders} />
     </div>
   )
 }

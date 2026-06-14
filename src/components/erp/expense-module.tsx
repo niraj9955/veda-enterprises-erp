@@ -52,7 +52,9 @@ import {
   HardHat,
   Receipt,
   IndianRupee,
+  Upload,
 } from 'lucide-react'
+import ExcelImport from '@/components/erp/excel-import'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -136,6 +138,9 @@ export default function ExpenseModule() {
   const [saving, setSaving] = React.useState(false)
   const [deleteId, setDeleteId] = React.useState<string | null>(null)
   const [deleting, setDeleting] = React.useState(false)
+
+  // Excel import
+  const [importOpen, setImportOpen] = React.useState(false)
 
   // ── Fetch expenses ──────────────────────────────────────────────────────
 
@@ -284,10 +289,20 @@ export default function ExpenseModule() {
           <h2 className="text-2xl font-bold tracking-tight">Expense Management</h2>
           <p className="text-muted-foreground text-sm">Track and manage all your business expenses</p>
         </div>
-        <Button onClick={openAddDialog} className="w-full sm:w-auto">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Expense
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+            className="w-full sm:w-auto"
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Import Excel
+          </Button>
+          <Button onClick={openAddDialog} className="w-full sm:w-auto">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Expense
+          </Button>
+        </div>
       </div>
 
       {/* ── Summary Cards ───────────────────────────────────────────────── */}
@@ -548,6 +563,8 @@ export default function ExpenseModule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ExcelImport module="expenses" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchExpenses} />
     </div>
   )
 }

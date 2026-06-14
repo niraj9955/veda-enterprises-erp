@@ -54,7 +54,9 @@ import {
   Smartphone,
   Landmark,
   Users,
+  Upload,
 } from 'lucide-react'
+import ExcelImport from '@/components/erp/excel-import'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -154,6 +156,9 @@ export function PaymentModule() {
   const [editingPayment, setEditingPayment] = React.useState<Payment | null>(null)
   const [formData, setFormData] = React.useState<PaymentFormData>(emptyForm)
   const [formSubmitting, setFormSubmitting] = React.useState(false)
+
+  // Excel import
+  const [importOpen, setImportOpen] = React.useState(false)
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = React.useState<Payment | null>(null)
@@ -561,13 +566,23 @@ export function PaymentModule() {
             </p>
           </div>
         </div>
-        <Button
-          onClick={openCreateDialog}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
-        >
-          <Plus className="size-4" />
-          Receive Payment
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+            className="w-full sm:w-auto"
+          >
+            <Upload className="size-4 mr-2" />
+            Import Excel
+          </Button>
+          <Button
+            onClick={openCreateDialog}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
+          >
+            <Plus className="size-4" />
+            Receive Payment
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -758,6 +773,8 @@ export function PaymentModule() {
       {/* Dialogs */}
       {renderPaymentDialog()}
       {renderDeleteDialog()}
+
+      <ExcelImport module="payments" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchPayments} />
     </div>
   )
 }

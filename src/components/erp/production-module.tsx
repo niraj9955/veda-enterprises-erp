@@ -34,7 +34,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Plus, Pencil, Trash2, Search, RotateCcw, Factory } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, RotateCcw, Factory, Upload } from 'lucide-react'
+import ExcelImport from '@/components/erp/excel-import'
 
 interface Production {
   id: string
@@ -88,6 +89,9 @@ export default function ProductionModule() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState<FormData>(emptyForm)
+
+  // Excel import
+  const [importOpen, setImportOpen] = useState(false)
 
   // Filters
   const [filterDate, setFilterDate] = useState('')
@@ -225,13 +229,22 @@ export default function ProductionModule() {
             <p className="text-sm text-muted-foreground">Track daily brick production entries</p>
           </div>
         </div>
-        <Button
-          onClick={openAddDialog}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-        >
-          <Plus className="h-4 w-4" />
-          Add Production Entry
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Import Excel
+          </Button>
+          <Button
+            onClick={openAddDialog}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+          >
+            <Plus className="h-4 w-4" />
+            Add Production Entry
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -497,6 +510,8 @@ export default function ProductionModule() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ExcelImport module="production" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={() => fetchProductions(appliedFilters)} />
     </div>
   )
 }

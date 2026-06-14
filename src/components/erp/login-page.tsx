@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ThemeToggle } from '@/components/erp/theme-toggle'
 import { toast } from '@/hooks/use-toast'
 
 export default function LoginPage() {
@@ -20,7 +21,7 @@ export default function LoginPage() {
     try {
       await api.init()
       setInitialized(true)
-      toast({ title: 'System initialized', description: 'Default admin user created. Use admin@veda.com / admin123' })
+      toast({ title: 'System initialized', description: 'Default admin user created successfully.' })
     } catch {
       setInitialized(true)
     }
@@ -41,7 +42,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-amber-50 dark:from-gray-950 dark:to-gray-900 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-amber-50 dark:from-gray-950 dark:to-gray-900 p-4 relative">
+      {/* Theme toggle top right */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center space-y-2">
           <div className="mx-auto w-16 h-16 bg-emerald-600 rounded-2xl flex items-center justify-center mb-2">
@@ -59,7 +65,7 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@veda.com"
+                placeholder="Enter email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -83,9 +89,6 @@ export default function LoginPage() {
               Initialize Default Admin
             </Button>
           </form>
-          <p className="text-xs text-muted-foreground text-center mt-4">
-            Default credentials: admin@veda.com / admin123
-          </p>
         </CardContent>
       </Card>
     </div>

@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { ThemeToggle } from '@/components/erp/theme-toggle'
 import {
   LayoutDashboard,
   Users,
@@ -76,15 +77,16 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
         </nav>
       </ScrollArea>
 
-      <div className="border-t p-3">
-        <div className={cn('flex items-center gap-3 mb-2', !sidebarOpen && 'justify-center')}>
+      <div className="border-t p-3 space-y-2">
+        <div className={cn('flex items-center gap-3', !sidebarOpen && 'justify-center')}>
           <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-semibold text-xs flex-shrink-0">
             {user?.name?.charAt(0) || 'U'}
           </div>
-          <div className={cn('overflow-hidden transition-all', sidebarOpen ? 'w-32' : 'w-0')}>
+          <div className={cn('overflow-hidden transition-all flex-1', sidebarOpen ? 'w-32' : 'w-0')}>
             <p className="text-sm font-medium truncate">{user?.name}</p>
             <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
           </div>
+          {sidebarOpen && <ThemeToggle />}
         </div>
         <Button
           variant="ghost"
@@ -136,7 +138,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <SidebarContent {...sidebarProps} />
             </SheetContent>
           </Sheet>
-          <h1 className="font-bold text-emerald-700 dark:text-emerald-400">Veda Enterprises</h1>
+          <h1 className="font-bold text-emerald-700 dark:text-emerald-400 flex-1">Veda Enterprises</h1>
+          <ThemeToggle />
         </header>
 
         <main className="flex-1 overflow-auto">

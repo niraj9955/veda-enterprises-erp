@@ -45,7 +45,9 @@ import {
   BookOpen,
   Loader2,
   IndianRupee,
+  Upload,
 } from 'lucide-react'
+import ExcelImport from '@/components/erp/excel-import'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -117,6 +119,9 @@ export function CustomerModule() {
   const [editingCustomer, setEditingCustomer] = React.useState<Customer | null>(null)
   const [formData, setFormData] = React.useState<CustomerFormData>(emptyForm)
   const [formSubmitting, setFormSubmitting] = React.useState(false)
+
+  // Excel import
+  const [importOpen, setImportOpen] = React.useState(false)
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = React.useState<Customer | null>(null)
@@ -500,13 +505,23 @@ export function CustomerModule() {
             </p>
           </div>
         </div>
-        <Button
-          onClick={openAddDialog}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
-        >
-          <Plus className="size-4" />
-          Add Customer
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+            className="w-full sm:w-auto"
+          >
+            <Upload className="size-4 mr-2" />
+            Import Excel
+          </Button>
+          <Button
+            onClick={openAddDialog}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
+          >
+            <Plus className="size-4" />
+            Add Customer
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -623,6 +638,8 @@ export function CustomerModule() {
       {renderFormDialog()}
       {renderDeleteDialog()}
       {renderLedgerDialog()}
+
+      <ExcelImport module="customers" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchCustomers} />
     </div>
   )
 }
