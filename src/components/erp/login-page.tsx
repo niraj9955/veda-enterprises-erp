@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -15,15 +15,20 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [initialized, setInitialized] = useState(false)
+  const [companyName, setCompanyName] = useState('ERP System')
+
+  useEffect(() => {
+    api.getCompany().then((data) => {
+      if (data.company?.name) setCompanyName(data.company.name)
+    }).catch(() => {})
+  }, [])
 
   const handleInit = async () => {
     try {
       await api.init()
-      setInitialized(true)
       toast({ title: 'System initialized', description: 'Default admin user created successfully.' })
     } catch {
-      setInitialized(true)
+      // Already initialized
     }
   }
 
@@ -55,7 +60,7 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
           </div>
-          <CardTitle className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">Veda Enterprises</CardTitle>
+          <CardTitle className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{companyName}</CardTitle>
           <CardDescription>ERP & Management System</CardDescription>
         </CardHeader>
         <CardContent>

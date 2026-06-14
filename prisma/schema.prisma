@@ -7,12 +7,40 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Company {
+  id            String   @id @default(cuid())
+  name          String   @default("My Company")
+  tagline       String   @default("")
+  address       String   @default("")
+  city          String   @default("")
+  state         String   @default("")
+  pincode       String   @default("")
+  phone         String   @default("")
+  email         String   @default("")
+  gstNumber     String   @default("")
+  panNumber     String   @default("")
+  logoUrl       String   @default("")
+  primaryColor  String   @default("#059669")  // emerald-600
+  bankName      String   @default("")
+  bankAccount   String   @default("")
+  bankIfsc      String   @default("")
+  invoicePrefix String   @default("INV")
+  dispatchPrefix String  @default("DSP")
+  orderPrefix   String   @default("ORD")
+  terms         String   @default("")
+  signatureName String   @default("Authorized Signatory")
+  setupComplete Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
 model User {
   id        String   @id @default(cuid())
   name      String
   email     String   @unique
   password  String
   role      String   @default("operator") // admin, operator, accountant
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

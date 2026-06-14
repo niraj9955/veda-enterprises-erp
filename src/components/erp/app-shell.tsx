@@ -19,6 +19,8 @@ import {
   LogOut,
   Menu,
   ChevronLeft,
+  Settings,
+  UserCog,
   Building2,
 } from 'lucide-react'
 
@@ -32,26 +34,35 @@ const navItems: { key: ModuleKey; label: string; icon: React.ReactNode; roles: s
   { key: 'payments', label: 'Payments', icon: <CreditCard className="h-5 w-5" />, roles: ['admin', 'accountant'] },
   { key: 'expenses', label: 'Expenses', icon: <Receipt className="h-5 w-5" />, roles: ['admin', 'accountant'] },
   { key: 'reports', label: 'Reports', icon: <FileBarChart className="h-5 w-5" />, roles: ['admin', 'accountant'] },
+  { key: 'users', label: 'Users', icon: <UserCog className="h-5 w-5" />, roles: ['admin'] },
+  { key: 'settings', label: 'Settings', icon: <Settings className="h-5 w-5" />, roles: ['admin'] },
 ]
 
-function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logout }: {
+function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logout, companyName, companyTagline, logoUrl }: {
   user: { name: string; role: string } | null
   activeModule: ModuleKey
   setActiveModule: (m: ModuleKey) => void
   sidebarOpen: boolean
   logout: () => void
+  companyName: string
+  companyTagline: string
+  logoUrl: string
 }) {
   const filteredNav = navItems.filter((item) => user && item.roles.includes(user.role))
 
   return (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b flex items-center gap-3">
-        <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center flex-shrink-0">
-          <Building2 className="h-5 w-5 text-white" />
-        </div>
+        {logoUrl ? (
+          <img src={logoUrl} alt="Logo" className="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
+        ) : (
+          <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Building2 className="h-5 w-5 text-white" />
+          </div>
+        )}
         <div className={cn('overflow-hidden transition-all', sidebarOpen ? 'w-40' : 'w-0')}>
-          <h2 className="font-bold text-sm text-emerald-700 dark:text-emerald-400 whitespace-nowrap">Veda Enterprises</h2>
-          <p className="text-xs text-muted-foreground whitespace-nowrap">ERP System</p>
+          <h2 className="font-bold text-sm text-emerald-700 dark:text-emerald-400 whitespace-nowrap truncate">{companyName || 'My Company'}</h2>
+          <p className="text-xs text-muted-foreground whitespace-nowrap truncate">{companyTagline || 'ERP System'}</p>
         </div>
       </div>
 
@@ -103,9 +114,14 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
 }
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const { user, activeModule, setActiveModule, sidebarOpen, setSidebarOpen, logout } = useAppStore()
+  const { user, activeModule, setActiveModule, sidebarOpen, setSidebarOpen, logout, company } = useAppStore()
 
-  const sidebarProps = { user, activeModule, setActiveModule, sidebarOpen, logout }
+  const sidebarProps = {
+    user, activeModule, setActiveModule, sidebarOpen, logout,
+    companyName: company?.name || 'My Company',
+    companyTagline: company?.tagline || 'ERP System',
+    logoUrl: company?.logoUrl || '',
+  }
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
@@ -138,7 +154,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <SidebarContent {...sidebarProps} />
             </SheetContent>
           </Sheet>
-          <h1 className="font-bold text-emerald-700 dark:text-emerald-400 flex-1">Veda Enterprises</h1>
+          <h1 className="font-bold text-emerald-700 dark:text-emerald-400 flex-1 truncate">{company?.name || 'My Company'}</h1>
           <ThemeToggle />
         </header>
 

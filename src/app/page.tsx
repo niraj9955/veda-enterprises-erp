@@ -5,6 +5,7 @@ import { useAppStore, type ModuleKey } from '@/lib/store'
 import { api } from '@/lib/api'
 import LoginPage from '@/components/erp/login-page'
 import AppShell from '@/components/erp/app-shell'
+import SetupWizard from '@/components/erp/setup-wizard'
 import DashboardModule from '@/components/erp/dashboard-module'
 import CustomerModule from '@/components/erp/customer-module'
 import ProductionModule from '@/components/erp/production-module'
@@ -14,6 +15,8 @@ import DispatchModule from '@/components/erp/dispatch-module'
 import PaymentModule from '@/components/erp/payment-module'
 import ExpenseModule from '@/components/erp/expense-module'
 import ReportModule from '@/components/erp/report-module'
+import SettingsModule from '@/components/erp/settings-module'
+import UserManagementModule from '@/components/erp/user-management-module'
 
 const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   dashboard: DashboardModule,
@@ -25,10 +28,12 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   payments: PaymentModule,
   expenses: ExpenseModule,
   reports: ReportModule,
+  settings: SettingsModule,
+  users: UserManagementModule,
 }
 
 export default function Home() {
-  const { isAuthenticated, setUser, setActiveModule } = useAppStore()
+  const { isAuthenticated, setUser, setCompany } = useAppStore()
   const [checking, setChecking] = useState(true)
 
   useEffect(() => {
@@ -37,13 +42,9 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
-    // Check if already authenticated via cookie
     const checkAuth = async () => {
       try {
-        // Try to fetch dashboard - if it works, we're authenticated
         await api.getDashboard()
-        // If we get here without error, session is valid
-        // But we need user info - try login page auto-check
         setChecking(false)
       } catch {
         setChecking(false)
@@ -52,12 +53,21 @@ export default function Home() {
     checkAuth()
   }, [])
 
+  // Load company data once authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      api.getCompany().then((data) => {
+        setCompany(data.company as Parameters<typeof setCompany>[0])
+      }).catch(() => {})
+    }
+  }, [isAuthenticated, setCompany])
+
   if (checking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-muted-foreground">Loading Veda ERP...</p>
+          <p className="text-muted-foreground">Loading ERP...</p>
         </div>
       </div>
     )
@@ -67,10 +77,9 @@ export default function Home() {
     return <LoginPage />
   }
 
-  const ActiveModule = moduleComponents[useAppStore.getState().activeModule]
-
   return (
     <AppShell>
+      <SetupWizard />
       <ModuleRenderer />
     </AppShell>
   )

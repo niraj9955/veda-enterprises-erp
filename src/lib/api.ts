@@ -99,4 +99,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ module, data }),
     }),
+
+  // Company Settings
+  getCompany: () => request<{ company: Record<string, unknown> }>('/company'),
+  updateCompany: (data: Record<string, unknown>) =>
+    request<{ company: Record<string, unknown> }>('/company', { method: 'PUT', body: JSON.stringify(data) }),
+
+  // User Management
+  getUsers: () => request<{ users: Record<string, unknown>[] }>('/users'),
+  createUser: (data: Record<string, unknown>) =>
+    request<{ user: Record<string, unknown> }>('/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateUser: (id: string, data: Record<string, unknown>) =>
+    request<{ user: Record<string, unknown> }>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteUser: (id: string) =>
+    request<{ message: string }>(`/users/${id}`, { method: 'DELETE' }),
+
+  // Database Management
+  exportBackup: () => request<Record<string, unknown>>('/database'),
+  clearData: () => request<{ message: string }>('/database', { method: 'DELETE' }),
+  restoreBackup: (data: Record<string, unknown>) =>
+    request<{ message: string; counts: Record<string, number> }>('/database', { method: 'PUT', body: JSON.stringify({ data }) }),
 }
