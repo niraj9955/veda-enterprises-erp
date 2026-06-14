@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -332,7 +332,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
   const template = moduleTemplates[module]
 
   // Fetch customers for name->ID resolution
-  React.useEffect(() => {
+  useEffect(() => {
     if (open && ['orders', 'dispatch', 'payments'].includes(module)) {
       api.getCustomers().then((data) => {
         setCustomers((data.customers as { id: string; name: string }[]).map((c) => ({ id: c.id, name: c.name })))
