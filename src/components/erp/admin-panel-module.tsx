@@ -112,24 +112,30 @@ interface UserFormData {
   role: string
 }
 
-const ROLES = ['Admin', 'Operator', 'Accountant'] as const
+const ROLES = ['admin', 'operator', 'accountant'] as const
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  operator: 'Operator',
+  accountant: 'Accountant',
+}
 
 const ROLE_BADGE_STYLES: Record<string, string> = {
-  Admin: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800',
-  Operator: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800',
-  Accountant: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800',
+  admin: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800',
+  operator: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800',
+  accountant: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800',
 }
 
 const ROLE_PERMISSIONS: Record<string, { modules: string[]; description: string }> = {
-  Admin: {
+  admin: {
     modules: ['Dashboard', 'Customers', 'Production', 'Stock', 'Orders', 'Dispatch', 'Payments', 'Expenses', 'Reports', 'Users', 'Settings', 'Admin Panel'],
     description: 'Full access to all modules and features. Can manage users, company settings, and data.',
   },
-  Operator: {
+  operator: {
     modules: ['Dashboard', 'Production', 'Dispatch', 'Stock'],
     description: 'Access to production, dispatch, and stock modules. Can create and update entries but cannot delete.',
   },
-  Accountant: {
+  accountant: {
     modules: ['Dashboard', 'Payments', 'Expenses', 'Reports'],
     description: 'Access to payments, expenses, and reports. Can manage financial records and generate reports.',
   },
@@ -162,7 +168,7 @@ const emptyUserForm: UserFormData = {
   name: '',
   email: '',
   password: '',
-  role: 'Operator',
+  role: 'operator',
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -723,10 +729,10 @@ export default function AdminPanelModule() {
           {/* Role Overview Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {ROLES.map((role) => (
-              <Card key={role} className="border-l-4" style={{ borderLeftColor: role === 'Admin' ? '#059669' : role === 'Operator' ? '#d97706' : '#0284c7' }}>
+              <Card key={role} className="border-l-4" style={{ borderLeftColor: role === 'admin' ? '#059669' : role === 'operator' ? '#d97706' : '#0284c7' }}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-lg flex items-center gap-2">
-                    <Badge className={ROLE_BADGE_STYLES[role]}>{role}</Badge>
+                    <Badge className={ROLE_BADGE_STYLES[role]}>{ROLE_LABELS[role] || role}</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
@@ -802,7 +808,7 @@ export default function AdminPanelModule() {
                             </TableCell>
                             <TableCell className="text-muted-foreground">{u.email}</TableCell>
                             <TableCell>
-                              <Badge className={ROLE_BADGE_STYLES[u.role] || ''}>{u.role}</Badge>
+                              <Badge className={ROLE_BADGE_STYLES[u.role] || ''}>{ROLE_LABELS[u.role] || u.role}</Badge>
                             </TableCell>
                             <TableCell>
                               <Badge className={u.active ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' : 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800'}>

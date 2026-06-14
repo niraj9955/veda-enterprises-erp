@@ -73,19 +73,25 @@ interface UserFormData {
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-const ROLES = ['Admin', 'Operator', 'Accountant'] as const
+const ROLES = ['admin', 'operator', 'accountant'] as const
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  operator: 'Operator',
+  accountant: 'Accountant',
+}
 
 const ROLE_BADGE_STYLES: Record<string, string> = {
-  Admin: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  Operator: 'bg-amber-100 text-amber-700 border-amber-200',
-  Accountant: 'bg-sky-100 text-sky-700 border-sky-200',
+  admin: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  operator: 'bg-amber-100 text-amber-700 border-amber-200',
+  accountant: 'bg-sky-100 text-sky-700 border-sky-200',
 }
 
 const emptyForm: UserFormData = {
   name: '',
   email: '',
   password: '',
-  role: 'Operator',
+  role: 'operator',
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -418,7 +424,7 @@ export function UserManagementModule() {
   // ── Render: Role badge ──────────────────────────────────────────────────
   const renderRoleBadge = (role: string) => (
     <Badge className={ROLE_BADGE_STYLES[role] || 'bg-gray-100 text-gray-700 border-gray-200'}>
-      {role}
+      {ROLE_LABELS[role] || role}
     </Badge>
   )
 
