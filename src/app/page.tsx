@@ -96,7 +96,17 @@ export default function Home() {
 }
 
 function ModuleRenderer() {
-  const activeModule = useAppStore((s) => s.activeModule)
-  const Component = moduleComponents[activeModule]
+  const { activeModule, user } = useAppStore()
+
+  // Role-based module access guard
+  const accessMap: Record<string, string[]> = {
+    admin: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'settings', 'users', 'admin'],
+    operator: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports'],
+    accountant: ['dashboard', 'payments', 'expenses', 'reports'],
+  }
+
+  const allowedModules = accessMap[user?.role || ''] || ['dashboard']
+  const safeModule = allowedModules.includes(activeModule) ? activeModule : 'dashboard'
+  const Component = moduleComponents[safeModule]
   return <Component />
 }
