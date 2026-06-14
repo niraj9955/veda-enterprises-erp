@@ -1,23 +1,22 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { connectDB, toObject } from '@/lib/db'
+import { Company } from '@/lib/models'
 import { getSession } from '@/lib/auth'
 
 export async function GET() {
   try {
+    await connectDB()
     const session = await getSession()
 
-    let company = await db.company.findFirst()
-
+    let company = await Company.findOne({})
     if (!company) {
-      company = await db.company.create({
-        data: {
-          name: 'My Company',
-          setupComplete: false,
-        },
+      company = await Company.create({
+        name: 'My Company',
+        setupComplete: false,
       })
     }
 
-    return NextResponse.json({ company, session })
+    return NextResponse.json({ company: toObject(company), session })
   } catch (error) {
     console.error('Error fetching company:', error)
     return NextResponse.json(
@@ -29,22 +28,17 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
+    await connectDB()
     const session = await getSession()
     const body = await request.json()
 
-    let company = await db.company.findFirst()
-
+    let company = await Company.findOne({})
     if (!company) {
-      company = await db.company.create({
-        data: {
-          name: 'My Company',
-          setupComplete: false,
-        },
+      company = await Company.create({
+        name: 'My Company',
+        setupComplete: false,
       })
     }
-
-    // Build update data from body
-    const updateData: Record<string, unknown> = {}
 
     const fields = [
       'name', 'tagline', 'address', 'city', 'state', 'pincode',
@@ -54,6 +48,7 @@ export async function PUT(request: Request) {
       'signatureName', 'setupComplete',
     ]
 
+    const updateData: Record<string, unknown> = {}
     for (const field of fields) {
       if (body[field] !== undefined) {
         updateData[field] = body[field]
@@ -70,12 +65,9 @@ export async function PUT(request: Request) {
       updateData.setupComplete = true
     }
 
-    const updated = await db.company.update({
-      where: { id: company.id },
-      data: updateData,
-    })
+    const updated = await Company.findByIdAndUpdate(company._id, updateData, { new: true })
 
-    return NextResponse.json({ company: updated, session })
+    return NextResponse.json({ company: toObject(updated), session })
   } catch (error) {
     console.error('Error updating company:', error)
     return NextResponse.json(

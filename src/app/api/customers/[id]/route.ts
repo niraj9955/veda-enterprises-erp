@@ -1,101 +1,57 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { getSession } from '@/lib/auth'
+import { connectDB, toObject } from '@/lib/db'
+import { Customer } from '@/lib/models'
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await getSession()
+    await connectDB()
     const { id } = await params
-
-    const customer = await db.customer.findUnique({
-      where: { id },
-    })
-
+    const customer = await Customer.findById(id)
     if (!customer) {
-      return NextResponse.json(
-        { error: 'Customer not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     }
-
-    return NextResponse.json({ customer, session })
+    return NextResponse.json({ customer: toObject(customer) })
   } catch (error) {
     console.error('Error fetching customer:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch customer' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to fetch customer' }, { status: 500 })
   }
 }
 
-export async function PUT(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await getSession()
+    await connectDB()
     const { id } = await params
     const body = await request.json()
 
-    const existing = await db.customer.findUnique({ where: { id } })
-    if (!existing) {
-      return NextResponse.json(
-        { error: 'Customer not found' },
-        { status: 404 }
-      )
+    const updateData: Record<string, unknown> = {}
+    const fields = ['name', 'mobile', 'gstNumber', 'address', 'creditLimit']
+    for (const field of fields) {
+      if (body[field] !== undefined) updateData[field] = body[field]
     }
 
-    const customer = await db.customer.update({
-      where: { id },
-      data: {
-        ...(body.name !== undefined && { name: body.name }),
-        ...(body.mobile !== undefined && { mobile: body.mobile }),
-        ...(body.gstNumber !== undefined && { gstNumber: body.gstNumber }),
-        ...(body.address !== undefined && { address: body.address }),
-        ...(body.creditLimit !== undefined && { creditLimit: body.creditLimit }),
-      },
-    })
+    const customer = await Customer.findByIdAndUpdate(id, updateData, { new: true })
+    if (!customer) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
+    }
 
-    return NextResponse.json({ customer, session })
+    return NextResponse.json({ customer: toObject(customer) })
   } catch (error) {
     console.error('Error updating customer:', error)
-    return NextResponse.json(
-      { error: 'Failed to update customer' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to update customer' }, { status: 500 })
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await getSession()
+    await connectDB()
     const { id } = await params
-
-    const existing = await db.customer.findUnique({ where: { id } })
-    if (!existing) {
-      return NextResponse.json(
-        { error: 'Customer not found' },
-        { status: 404 }
-      )
+    const customer = await Customer.findByIdAndDelete(id)
+    if (!customer) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     }
-
-    await db.customer.delete({ where: { id } })
-
-    return NextResponse.json(
-      { message: 'Customer deleted successfully', session },
-      { status: 200 }
-    )
+    return NextResponse.json({ message: 'Customer deleted successfully' })
   } catch (error) {
     console.error('Error deleting customer:', error)
-    return NextResponse.json(
-      { error: 'Failed to delete customer' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to delete customer' }, { status: 500 })
   }
 }

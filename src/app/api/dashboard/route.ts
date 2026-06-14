@@ -1,151 +1,102 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { connectDB, toObject, extractCustomer } from '@/lib/db'
+import { Production, Stock, Dispatch, Order, Payment, Expense, Customer } from '@/lib/models'
 import { getSession } from '@/lib/auth'
 
 export async function GET() {
   try {
+    await connectDB()
     const session = await getSession()
 
     const today = new Date().toISOString().split('T')[0]
-    const currentMonth = today.substring(0, 7) // YYYY-MM
+    const currentMonth = today.substring(0, 7)
 
     // Today's production
-    const todayProductions = await db.production.findMany({
-      where: { date: today },
-    })
-    const todayProduction = todayProductions.reduce(
-      (sum, p) => sum + p.quantityProduced,
-      0
-    )
+    const todayProductions = await Production.find({ date: today })
+    const todayProduction = todayProductions.reduce((sum, p) => sum + p.quantityProduced, 0)
 
     // Total stock
-    const stocks = await db.stock.findMany()
+    const stocks = await Stock.find({})
     const totalStock = stocks.reduce((sum, s) => sum + s.currentStock, 0)
 
     // Today's dispatch
-    const todayDispatches = await db.dispatch.findMany({
-      where: { date: today },
-    })
-    const todayDispatch = todayDispatches.reduce(
-      (sum, d) => sum + d.quantity,
-      0
-    )
+    const todayDispatches = await Dispatch.find({ date: today })
+    const todayDispatch = todayDispatches.reduce((sum, d) => sum + d.quantity, 0)
 
     // Pending orders
-    const pendingOrders = await db.order.count({
-      where: { status: 'Pending' },
-    })
+    const pendingOrders = await Order.countDocuments({ status: 'Pending' })
 
-    // Outstanding payments: sum of (order amount - payments received) for all customers
-    const allOrders = await db.order.findMany()
-    const allPayments = await db.payment.findMany()
+    // Outstanding payments
+    const allOrders = await Order.find({})
+    const allPayments = await Payment.find({})
 
-    // Group payments by customerId
     const paymentsByCustomer = new Map<string, number>()
     for (const payment of allPayments) {
-      const current = paymentsByCustomer.get(payment.customerId) || 0
-      paymentsByCustomer.set(payment.customerId, current + payment.amount)
+      const cid = payment.customerId.toString()
+      paymentsByCustomer.set(cid, (paymentsByCustomer.get(cid) || 0) + payment.amount)
     }
 
-    // Group order amounts by customerId
     const ordersByCustomer = new Map<string, number>()
     for (const order of allOrders) {
-      const current = ordersByCustomer.get(order.customerId) || 0
-      ordersByCustomer.set(order.customerId, current + order.amount)
+      const cid = order.customerId.toString()
+      ordersByCustomer.set(cid, (ordersByCustomer.get(cid) || 0) + order.amount)
     }
 
-    // Calculate outstanding
     let outstandingPayments = 0
     for (const [customerId, orderTotal] of ordersByCustomer) {
       const paidAmount = paymentsByCustomer.get(customerId) || 0
       const outstanding = orderTotal - paidAmount
-      if (outstanding > 0) {
-        outstandingPayments += outstanding
-      }
+      if (outstanding > 0) outstandingPayments += outstanding
     }
 
-    // Monthly sales: sum of dispatch amounts for current month
-    // We need to calculate dispatch amount = quantity * rate (from order)
-    const monthlyDispatches = await db.dispatch.findMany({
-      where: {
-        date: { startsWith: currentMonth },
-      },
-    })
+    // Monthly sales
+    const monthlyDispatches = await Dispatch.find({ date: { $regex: `^${currentMonth}` } })
 
-    // Get order rates for dispatch amounts
-    const orderIds = monthlyDispatches
-      .map((d) => d.orderId)
-      .filter(Boolean) as string[]
-
-    const ordersForRates = await db.order.findMany({
-      where: { id: { in: orderIds } },
-    })
-
-    const orderRateMap = new Map(ordersForRates.map((o) => [o.id, o.rate]))
+    const orderIds = monthlyDispatches.map(d => d.orderId).filter(Boolean)
+    const ordersForRates = orderIds.length > 0 ? await Order.find({ _id: { $in: orderIds } }) : []
+    const orderRateMap = new Map(ordersForRates.map(o => [o._id.toString(), o.rate]))
 
     let monthlySales = 0
     for (const dispatch of monthlyDispatches) {
       if (dispatch.orderId) {
-        const rate = orderRateMap.get(dispatch.orderId) || 0
+        const rate = orderRateMap.get(dispatch.orderId.toString()) || 0
         monthlySales += dispatch.quantity * rate
       }
     }
 
     // Monthly expenses
-    const monthlyExpenses = await db.expense.findMany({
-      where: {
-        date: { startsWith: currentMonth },
-      },
-    })
-    const totalMonthlyExpenses = monthlyExpenses.reduce(
-      (sum, e) => sum + e.amount,
-      0
-    )
-
+    const monthlyExpenses = await Expense.find({ date: { $regex: `^${currentMonth}` } })
+    const totalMonthlyExpenses = monthlyExpenses.reduce((sum, e) => sum + e.amount, 0)
     const monthlyProfit = monthlySales - totalMonthlyExpenses
 
     // Recent productions (last 5)
-    const recentProductions = await db.production.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 5,
+    const recentProductions = (await Production.find({}).sort({ createdAt: -1 }).limit(5)).map(toObject)
+
+    // Recent dispatches (last 5) - with customer names
+    const recentDispatchDocs = await Dispatch.find({}).sort({ createdAt: -1 }).limit(5).populate('customerId')
+    const recentDispatches = recentDispatchDocs.map((d: any) => {
+      const obj = toObject(d)
+      const { customer, customerId } = extractCustomer(d)
+      obj.customer = customer
+      obj.customerId = customerId
+      obj.customerName = customer?.name || ''
+      return obj
     })
 
-    // Recent dispatches (last 5)
-    const recentDispatches = await db.dispatch.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-    })
-
-    // Monthly production data: grouped by date for current month
-    const monthlyProductions = await db.production.findMany({
-      where: {
-        date: { startsWith: currentMonth },
-      },
-      orderBy: { date: 'asc' },
-    })
-
-    const monthlyProductionData: Record<string, number> = {}
+    // Monthly production chart data
+    const monthlyProductions = await Production.find({ date: { $regex: `^${currentMonth}` } }).sort({ date: 1 })
+    const monthlyProductionDataMap: Record<string, number> = {}
     for (const p of monthlyProductions) {
-      monthlyProductionData[p.date] =
-        (monthlyProductionData[p.date] || 0) + p.quantityProduced
+      monthlyProductionDataMap[p.date] = (monthlyProductionDataMap[p.date] || 0) + p.quantityProduced
     }
+    const monthlyProductionChartData = Object.entries(monthlyProductionDataMap).map(([date, quantity]) => ({ date, quantity }))
 
-    // Format for charts: array of { date, quantity }
-    const monthlyProductionChartData = Object.entries(monthlyProductionData).map(
-      ([date, quantity]) => ({ date, quantity })
-    )
-
-    // Monthly expense data: grouped by category for current month
-    const monthlyExpenseData: Record<string, number> = {}
+    // Monthly expense chart data
+    const monthlyExpenseDataMap: Record<string, number> = {}
     for (const e of monthlyExpenses) {
-      monthlyExpenseData[e.category] =
-        (monthlyExpenseData[e.category] || 0) + e.amount
+      monthlyExpenseDataMap[e.category] = (monthlyExpenseDataMap[e.category] || 0) + e.amount
     }
-
-    // Format for charts: array of { category, amount }
-    const monthlyExpenseChartData = Object.entries(monthlyExpenseData).map(
-      ([category, amount]) => ({ category, amount })
-    )
+    const monthlyExpenseChartData = Object.entries(monthlyExpenseDataMap).map(([category, amount]) => ({ category, amount }))
 
     return NextResponse.json({
       todayProduction,

@@ -1,98 +1,59 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { getSession } from '@/lib/auth'
+import { connectDB, toObject } from '@/lib/db'
+import { Production, Stock } from '@/lib/models'
 
 export async function GET(request: Request) {
   try {
-    const session = await getSession()
+    await connectDB()
     const { searchParams } = new URL(request.url)
     const date = searchParams.get('date')
     const brickType = searchParams.get('brickType')
 
-    const where: Record<string, unknown> = {}
+    const filter: any = {}
+    if (date) filter.date = date
+    if (brickType) filter.brickType = brickType
 
-    if (date) {
-      if (date.includes(',')) {
-        const [startDate, endDate] = date.split(',')
-        where.date = { gte: startDate, lte: endDate }
-      } else {
-        where.date = date
-      }
-    }
-
-    if (brickType) {
-      where.brickType = brickType
-    }
-
-    const productions = await db.production.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    })
-
-    return NextResponse.json({ productions, session })
+    const productions = await Production.find(filter).sort({ createdAt: -1 })
+    return NextResponse.json({ productions: productions.map(toObject) })
   } catch (error) {
-    console.error('Error fetching productions:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch productions' },
-      { status: 500 }
-    )
+    console.error('Error fetching production:', error)
+    return NextResponse.json({ error: 'Failed to fetch production entries' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession()
+    await connectDB()
     const body = await request.json()
-    const { date, brickType, quantityProduced, shift, remarks } = body
 
-    if (!date || !brickType || !quantityProduced || !shift) {
-      return NextResponse.json(
-        { error: 'Date, brickType, quantityProduced, and shift are required' },
-        { status: 400 }
-      )
+    if (!body.date || !body.brickType || !body.quantityProduced || !body.shift) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const production = await db.production.create({
-      data: {
-        date,
-        brickType,
-        quantityProduced,
-        shift,
-        remarks: remarks || '',
-      },
+    const production = await Production.create({
+      date: body.date,
+      brickType: body.brickType,
+      quantityProduced: Number(body.quantityProduced),
+      shift: body.shift,
+      remarks: body.remarks || '',
     })
 
-    // Update stock: increment currentStock by quantityProduced for that brickType
-    const existingStock = await db.stock.findUnique({
-      where: { brickType },
-    })
-
-    if (existingStock) {
-      await db.stock.update({
-        where: { brickType },
-        data: {
-          currentStock: existingStock.currentStock + quantityProduced,
-        },
+    // Auto-update stock
+    let stock = await Stock.findOne({ brickType: body.brickType })
+    if (!stock) {
+      stock = await Stock.create({
+        brickType: body.brickType,
+        openingStock: 0,
+        currentStock: Number(body.quantityProduced),
       })
     } else {
-      await db.stock.create({
-        data: {
-          brickType,
-          openingStock: 0,
-          currentStock: quantityProduced,
-        },
-      })
+      stock.currentStock += Number(body.quantityProduced)
+      await stock.save()
     }
 
-    return NextResponse.json(
-      { production, session },
-      { status: 201 }
-    )
+    return NextResponse.json({ production: toObject(production) }, { status: 201 })
   } catch (error) {
     console.error('Error creating production:', error)
-    return NextResponse.json(
-      { error: 'Failed to create production' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to create production entry' }, { status: 500 })
   }
 }

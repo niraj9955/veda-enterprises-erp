@@ -1,110 +1,77 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { getSession } from '@/lib/auth'
+import { connectDB, toObject, extractCustomer, extractOrder } from '@/lib/db'
+import { Dispatch, Stock } from '@/lib/models'
 
 export async function GET() {
   try {
-    const session = await getSession()
+    await connectDB()
+    const dispatches = await Dispatch.find({}).populate('customerId').populate('orderId').sort({ createdAt: -1 })
 
-    const dispatches = await db.dispatch.findMany({
-      orderBy: { createdAt: 'desc' },
+    const result = dispatches.map((d: any) => {
+      const obj = toObject(d)
+      const { customer, customerId } = extractCustomer(d)
+      const { order, orderId } = extractOrder(d)
+      obj.customer = customer
+      obj.customerId = customerId
+      obj.order = order
+      obj.orderId = orderId
+      obj.customerName = customer?.name || ''
+      return obj
     })
 
-    // Fetch customers separately for SQLite compatibility
-    const customerIds = [...new Set(dispatches.map((d) => d.customerId))]
-    const customers = await db.customer.findMany({
-      where: { id: { in: customerIds } },
-    })
-
-    const customerMap = new Map(customers.map((c) => [c.id, c]))
-
-    // Fetch orders separately for SQLite compatibility
-    const orderIds = dispatches.filter((d) => d.orderId).map((d) => d.orderId!)
-    const orderMap = new Map<string, { id: string; orderNumber: string }>()
-    if (orderIds.length > 0) {
-      const uniqueOrderIds = [...new Set(orderIds)]
-      const orders = await db.order.findMany({
-        where: { id: { in: uniqueOrderIds } },
-      })
-      orders.forEach((o) => orderMap.set(o.id, { id: o.id, orderNumber: o.orderNumber }))
-    }
-
-    const dispatchesWithRelations = dispatches.map((dispatch) => ({
-      ...dispatch,
-      customer: customerMap.get(dispatch.customerId) || null,
-      order: dispatch.orderId ? orderMap.get(dispatch.orderId) || null : null,
-    }))
-
-    return NextResponse.json({ dispatches: dispatchesWithRelations, session })
+    return NextResponse.json({ dispatches: result })
   } catch (error) {
     console.error('Error fetching dispatches:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch dispatches' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to fetch dispatches' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession()
+    await connectDB()
     const body = await request.json()
-    const { dispatchNumber, customerId, orderId, truckNumber, driverName, quantity, brickType, date } = body
 
-    if (!customerId || !truckNumber || !driverName || !quantity || !brickType || !date) {
-      return NextResponse.json(
-        { error: 'customerId, truckNumber, driverName, quantity, brickType, and date are required' },
-        { status: 400 }
-      )
+    if (!body.customerId || !body.truckNumber || !body.quantity || !body.brickType || !body.date) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const generatedDispatchNumber = dispatchNumber || `DSP-${Date.now()}`
+    const count = await Dispatch.countDocuments({})
+    const { Company } = await import('@/lib/models')
+    const company = await Company.findOne({})
+    const prefix = company?.dispatchPrefix || 'DSP'
+    const dispatchNumber = `${prefix}-${String(count + 1).padStart(4, '0')}`
 
-    const dispatch = await db.dispatch.create({
-      data: {
-        dispatchNumber: generatedDispatchNumber,
-        customerId,
-        orderId: orderId || null,
-        truckNumber,
-        driverName,
-        quantity,
-        brickType,
-        date,
-      },
+    const dispatch = await Dispatch.create({
+      dispatchNumber,
+      customerId: body.customerId,
+      orderId: body.orderId || null,
+      truckNumber: body.truckNumber,
+      driverName: body.driverName || '',
+      quantity: Number(body.quantity),
+      brickType: body.brickType,
+      date: body.date,
     })
 
-    // Update stock: decrement currentStock by quantity for that brickType
-    const existingStock = await db.stock.findUnique({
-      where: { brickType },
-    })
-
-    if (existingStock) {
-      await db.stock.update({
-        where: { brickType },
-        data: {
-          currentStock: Math.max(0, existingStock.currentStock - quantity),
-        },
-      })
-    } else {
-      // Create stock entry with negative (shouldn't normally happen but handle gracefully)
-      await db.stock.create({
-        data: {
-          brickType,
-          openingStock: 0,
-          currentStock: Math.max(0, -quantity),
-        },
-      })
+    // Auto-update stock - reduce on dispatch
+    const stock = await Stock.findOne({ brickType: body.brickType })
+    if (stock) {
+      stock.currentStock = Math.max(0, stock.currentStock - Number(body.quantity))
+      await stock.save()
     }
 
-    return NextResponse.json(
-      { dispatch, session },
-      { status: 201 }
-    )
+    const populated = await Dispatch.findById(dispatch._id).populate('customerId').populate('orderId')
+    const obj = toObject(populated)
+    const { customer, customerId } = extractCustomer(populated)
+    const { order, orderId } = extractOrder(populated)
+    obj.customer = customer
+    obj.customerId = customerId
+    obj.order = order
+    obj.orderId = orderId
+    obj.customerName = customer?.name || ''
+
+    return NextResponse.json({ dispatch: obj }, { status: 201 })
   } catch (error) {
     console.error('Error creating dispatch:', error)
-    return NextResponse.json(
-      { error: 'Failed to create dispatch' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to create dispatch' }, { status: 500 })
   }
 }

@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { connectDB, toObject } from '@/lib/db'
+import { User } from '@/lib/models'
 import bcrypt from 'bcryptjs'
 import { signToken } from '@/lib/auth'
 
 export async function POST(request: Request) {
   try {
+    await connectDB()
+
     const body = await request.json()
     const { email, password } = body
 
@@ -15,13 +18,18 @@ export async function POST(request: Request) {
       )
     }
 
-    const user = await db.user.findUnique({
-      where: { email },
-    })
+    const user = await User.findOne({ email })
 
     if (!user) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
+        { status: 401 }
+      )
+    }
+
+    if (!user.active) {
+      return NextResponse.json(
+        { error: 'Account is disabled' },
         { status: 401 }
       )
     }
@@ -36,7 +44,7 @@ export async function POST(request: Request) {
     }
 
     const token = await signToken({
-      userId: user.id,
+      userId: user._id.toString(),
       email: user.email,
       role: user.role,
       name: user.name,
@@ -46,7 +54,7 @@ export async function POST(request: Request) {
       {
         message: 'Login successful',
         user: {
-          id: user.id,
+          id: user._id.toString(),
           name: user.name,
           email: user.email,
           role: user.role,

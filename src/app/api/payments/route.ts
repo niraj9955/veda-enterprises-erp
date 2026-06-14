@@ -1,70 +1,53 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { getSession } from '@/lib/auth'
+import { connectDB, toObject, extractCustomer } from '@/lib/db'
+import { Payment } from '@/lib/models'
 
 export async function GET() {
   try {
-    const session = await getSession()
+    await connectDB()
+    const payments = await Payment.find({}).populate('customerId').sort({ createdAt: -1 })
 
-    const payments = await db.payment.findMany({
-      orderBy: { createdAt: 'desc' },
+    const result = payments.map((p: any) => {
+      const obj = toObject(p)
+      const { customer, customerId } = extractCustomer(p)
+      obj.customer = customer
+      obj.customerId = customerId
+      return obj
     })
 
-    // Fetch customers separately for SQLite compatibility
-    const customerIds = [...new Set(payments.map((p) => p.customerId))]
-    const customers = await db.customer.findMany({
-      where: { id: { in: customerIds } },
-    })
-
-    const customerMap = new Map(customers.map((c) => [c.id, c]))
-
-    const paymentsWithCustomer = payments.map((payment) => ({
-      ...payment,
-      customer: customerMap.get(payment.customerId) || null,
-    }))
-
-    return NextResponse.json({ payments: paymentsWithCustomer, session })
+    return NextResponse.json({ payments: result })
   } catch (error) {
     console.error('Error fetching payments:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch payments' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to fetch payments' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession()
+    await connectDB()
     const body = await request.json()
-    const { customerId, paymentType, amount, date, remarks } = body
 
-    if (!customerId || !paymentType || !amount || !date) {
-      return NextResponse.json(
-        { error: 'customerId, paymentType, amount, and date are required' },
-        { status: 400 }
-      )
+    if (!body.customerId || !body.paymentType || !body.amount || !body.date) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const payment = await db.payment.create({
-      data: {
-        customerId,
-        paymentType,
-        amount,
-        date,
-        remarks: remarks || '',
-      },
+    const payment = await Payment.create({
+      customerId: body.customerId,
+      paymentType: body.paymentType,
+      amount: Number(body.amount),
+      date: body.date,
+      remarks: body.remarks || '',
     })
 
-    return NextResponse.json(
-      { payment, session },
-      { status: 201 }
-    )
+    const populated = await Payment.findById(payment._id).populate('customerId')
+    const obj = toObject(populated)
+    const { customer, customerId } = extractCustomer(populated)
+    obj.customer = customer
+    obj.customerId = customerId
+
+    return NextResponse.json({ payment: obj }, { status: 201 })
   } catch (error) {
     console.error('Error creating payment:', error)
-    return NextResponse.json(
-      { error: 'Failed to create payment' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to create payment' }, { status: 500 })
   }
 }

@@ -1,84 +1,56 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { getSession } from '@/lib/auth'
-import bcrypt from 'bcryptjs'
+import { connectDB, toObject } from '@/lib/db'
+import { User } from '@/lib/models'
 
 export async function GET() {
   try {
-    const session = await getSession()
+    await connectDB()
+    const users = await User.find({}).sort({ createdAt: -1 })
 
-    const users = await db.user.findMany({
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        active: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
+    // Don't return passwords
+    const result = users.map((u: any) => {
+      const obj = toObject(u)
+      delete obj.password
+      return obj
     })
 
-    return NextResponse.json({ users, session })
+    return NextResponse.json({ users: result })
   } catch (error) {
     console.error('Error fetching users:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch users' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession()
+    await connectDB()
+    const bcrypt = await import('bcryptjs')
     const body = await request.json()
-    const { name, email, password, role } = body
 
-    if (!name || !email || !password) {
-      return NextResponse.json(
-        { error: 'Name, email, and password are required' },
-        { status: 400 }
-      )
+    if (!body.name || !body.email || !body.password || !body.role) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    // Check email uniqueness
-    const existing = await db.user.findUnique({ where: { email } })
+    // Check if email already exists
+    const existing = await User.findOne({ email: body.email })
     if (existing) {
-      return NextResponse.json(
-        { error: 'Email already exists' },
-        { status: 409 }
-      )
+      return NextResponse.json({ error: 'Email already exists' }, { status: 400 })
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10)
-
-    const user = await db.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        role: role || 'operator',
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        active: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const hashedPassword = await bcrypt.default.hash(body.password, 10)
+    const user = await User.create({
+      name: body.name,
+      email: body.email,
+      password: hashedPassword,
+      role: body.role,
+      active: body.active !== undefined ? body.active : true,
     })
 
-    return NextResponse.json({ user, session }, { status: 201 })
+    const obj = toObject(user)
+    delete obj.password
+    return NextResponse.json({ user: obj }, { status: 201 })
   } catch (error) {
     console.error('Error creating user:', error)
-    return NextResponse.json(
-      { error: 'Failed to create user' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to create user' }, { status: 500 })
   }
 }

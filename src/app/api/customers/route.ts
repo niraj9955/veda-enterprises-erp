@@ -1,71 +1,49 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { getSession } from '@/lib/auth'
+import { connectDB, toObject } from '@/lib/db'
+import { Customer } from '@/lib/models'
 
 export async function GET(request: Request) {
   try {
-    const session = await getSession()
+    await connectDB()
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
 
-    const where: Record<string, unknown> = {}
-
+    const filter: any = {}
     if (search) {
-      where.OR = [
-        { name: { contains: search } },
-        { mobile: { contains: search } },
-        { gstNumber: { contains: search } },
-        { address: { contains: search } },
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { mobile: { $regex: search, $options: 'i' } },
       ]
     }
 
-    const customers = await db.customer.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    })
-
-    return NextResponse.json({ customers, session })
+    const customers = await Customer.find(filter).sort({ createdAt: -1 })
+    return NextResponse.json({ customers: customers.map(toObject) })
   } catch (error) {
     console.error('Error fetching customers:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch customers' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to fetch customers' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession()
+    await connectDB()
     const body = await request.json()
-    const { name, mobile, gstNumber, address, creditLimit } = body
 
-    if (!name || !mobile) {
-      return NextResponse.json(
-        { error: 'Name and mobile are required' },
-        { status: 400 }
-      )
+    if (!body.name || !body.mobile) {
+      return NextResponse.json({ error: 'Name and mobile are required' }, { status: 400 })
     }
 
-    const customer = await db.customer.create({
-      data: {
-        name,
-        mobile,
-        gstNumber: gstNumber || '',
-        address: address || '',
-        creditLimit: creditLimit || 0,
-      },
+    const customer = await Customer.create({
+      name: body.name,
+      mobile: body.mobile,
+      gstNumber: body.gstNumber || '',
+      address: body.address || '',
+      creditLimit: Number(body.creditLimit) || 0,
     })
 
-    return NextResponse.json(
-      { customer, session },
-      { status: 201 }
-    )
+    return NextResponse.json({ customer: toObject(customer) }, { status: 201 })
   } catch (error) {
     console.error('Error creating customer:', error)
-    return NextResponse.json(
-      { error: 'Failed to create customer' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to create customer' }, { status: 500 })
   }
 }

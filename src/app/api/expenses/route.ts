@@ -1,75 +1,53 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { getSession } from '@/lib/auth'
+import { connectDB, toObject } from '@/lib/db'
+import { Expense } from '@/lib/models'
 
 export async function GET(request: Request) {
   try {
-    const session = await getSession()
+    await connectDB()
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')
-    const date = searchParams.get('date')
+    const dateRange = searchParams.get('date')
 
-    const where: Record<string, unknown> = {}
+    const filter: any = {}
+    if (category) filter.category = category
 
-    if (category) {
-      where.category = category
-    }
-
-    if (date) {
-      if (date.includes(',')) {
-        const [startDate, endDate] = date.split(',')
-        where.date = { gte: startDate, lte: endDate }
+    if (dateRange) {
+      const parts = dateRange.split(',')
+      if (parts.length === 2) {
+        filter.date = { $gte: parts[0], $lte: parts[1] }
       } else {
-        where.date = date
+        filter.date = dateRange
       }
     }
 
-    const expenses = await db.expense.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    })
-
-    return NextResponse.json({ expenses, session })
+    const expenses = await Expense.find(filter).sort({ date: -1 })
+    return NextResponse.json({ expenses: expenses.map(toObject) })
   } catch (error) {
     console.error('Error fetching expenses:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch expenses' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to fetch expenses' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession()
+    await connectDB()
     const body = await request.json()
-    const { category, amount, date, description } = body
 
-    if (!category || !amount || !date) {
-      return NextResponse.json(
-        { error: 'Category, amount, and date are required' },
-        { status: 400 }
-      )
+    if (!body.category || !body.amount || !body.date) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const expense = await db.expense.create({
-      data: {
-        category,
-        amount,
-        date,
-        description: description || '',
-      },
+    const expense = await Expense.create({
+      category: body.category,
+      amount: Number(body.amount),
+      date: body.date,
+      description: body.description || '',
     })
 
-    return NextResponse.json(
-      { expense, session },
-      { status: 201 }
-    )
+    return NextResponse.json({ expense: toObject(expense) }, { status: 201 })
   } catch (error) {
     console.error('Error creating expense:', error)
-    return NextResponse.json(
-      { error: 'Failed to create expense' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to create expense' }, { status: 500 })
   }
 }
