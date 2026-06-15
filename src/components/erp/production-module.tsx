@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import * as React from 'react'
 import { api } from '@/lib/api'
 import { toast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,15 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import {
   Dialog,
   DialogContent,
@@ -18,98 +27,124 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableFooter,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Plus, Pencil, Trash2, Search, RotateCcw, Factory, Upload } from 'lucide-react'
-import ExcelImport from '@/components/erp/excel-import'
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Factory, Plus, Trash2, Pencil, Loader2, IndianRupee } from 'lucide-react'
+
+// ── Types ───────────────────────────────────────────────────────────────────
 
 interface Production {
   id: string
   date: string
-  brickType: string
-  quantityProduced: number
-  shift: string
+  customerName: string
+  address: string
+  zigZagWhite80mm: number
+  zigZagRed80mm: number
+  zigZagYellow80mm: number
+  zigZagWhite60mm: number
+  zigZagRed60mm: number
+  zigZagYellow60mm: number
+  curveStone: number
+  chequreTile: number
+  transportationCharge: number
   remarks: string
   createdAt: string
+  updatedAt: string
 }
 
-const BRICK_TYPES = ['Red Brick', 'Fly Ash Brick', 'Cement Brick', 'Hollow Block']
-const SHIFTS = ['Morning', 'Evening', 'Night']
-
-const SHIFT_COLORS: Record<string, string> = {
-  Morning: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800',
-  Evening: 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800',
-  Night: 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-800',
+interface ProductionFormData {
+  date: string
+  customerName: string
+  address: string
+  zigZagWhite80mm: string
+  zigZagRed80mm: string
+  zigZagYellow80mm: string
+  zigZagWhite60mm: string
+  zigZagRed60mm: string
+  zigZagYellow60mm: string
+  curveStone: string
+  chequreTile: string
+  transportationCharge: string
+  remarks: string
 }
 
-function formatDate(dateStr: string): string {
-  if (!dateStr) return ''
-  const date = new Date(dateStr + 'T00:00:00')
-  return date.toLocaleDateString('en-GB', {
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+const formatCurrency = (amount: number): string =>
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(amount)
+
+const formatDate = (dateStr: string): string =>
+  new Date(dateStr + 'T00:00:00').toLocaleDateString('en-IN', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
   })
-}
 
-interface FormData {
-  date: string
-  brickType: string
-  quantityProduced: string
-  shift: string
-  remarks: string
-}
+const enIN = new Intl.NumberFormat('en-IN')
 
-const emptyForm: FormData = {
+const emptyForm: ProductionFormData = {
   date: '',
-  brickType: '',
-  quantityProduced: '',
-  shift: '',
+  customerName: '',
+  address: '',
+  zigZagWhite80mm: '',
+  zigZagRed80mm: '',
+  zigZagYellow80mm: '',
+  zigZagWhite60mm: '',
+  zigZagRed60mm: '',
+  zigZagYellow60mm: '',
+  curveStone: '',
+  chequreTile: '',
+  transportationCharge: '',
   remarks: '',
 }
 
-export default function ProductionModule() {
-  const [productions, setProductions] = useState<Production[]>([])
-  const [loading, setLoading] = useState(true)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [formData, setFormData] = useState<FormData>(emptyForm)
+const PRODUCT_FIELDS: { key: keyof ProductionFormData; label: string }[] = [
+  { key: 'zigZagWhite80mm', label: 'Zig Zag White 80mm' },
+  { key: 'zigZagRed80mm', label: 'Zig Zag Red 80mm' },
+  { key: 'zigZagYellow80mm', label: 'Zig Zag Yellow 80mm' },
+  { key: 'zigZagWhite60mm', label: 'Zig Zag White 60mm' },
+  { key: 'zigZagRed60mm', label: 'Zig Zag Red 60mm' },
+  { key: 'zigZagYellow60mm', label: 'Zig Zag Yellow 60mm' },
+  { key: 'curveStone', label: 'Curve Stone' },
+  { key: 'chequreTile', label: 'Chequre Tile' },
+]
 
-  // Excel import
-  const [importOpen, setImportOpen] = useState(false)
+// ── Component ───────────────────────────────────────────────────────────────
 
-  // Filters
-  const [filterDate, setFilterDate] = useState('')
-  const [filterBrickType, setFilterBrickType] = useState('')
-  const [appliedFilters, setAppliedFilters] = useState<{ date?: string; brickType?: string }>({})
+export function ProductionModule() {
+  const [productions, setProductions] = React.useState<Production[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [formOpen, setFormOpen] = React.useState(false)
+  const [editingProduction, setEditingProduction] = React.useState<Production | null>(null)
+  const [formData, setFormData] = React.useState<ProductionFormData>(emptyForm)
+  const [formSubmitting, setFormSubmitting] = React.useState(false)
+  const [deleteTarget, setDeleteTarget] = React.useState<Production | null>(null)
+  const [deleting, setDeleting] = React.useState(false)
 
-  const fetchProductions = useCallback(async (filters?: { date?: string; brickType?: string }) => {
+  const fetchProductions = React.useCallback(async () => {
     setLoading(true)
     try {
-      const res = await api.getProduction(filters)
-      const prods = (res.productions as Production[]).sort(
+      const res = await api.getProduction()
+      const data = (res.productions as Production[]).sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
       )
-      setProductions(prods)
-    } catch {
+      setProductions(data)
+    } catch (err) {
       toast({
         title: 'Error',
-        description: 'Failed to fetch production entries',
+        description: err instanceof Error ? err.message : 'Failed to fetch production data',
         variant: 'destructive',
       })
     } finally {
@@ -117,303 +152,243 @@ export default function ProductionModule() {
     }
   }, [])
 
-  useEffect(() => {
+  React.useEffect(() => {
     fetchProductions()
   }, [fetchProductions])
 
-  const handleApplyFilters = () => {
-    const filters: { date?: string; brickType?: string } = {}
-    if (filterDate) filters.date = filterDate
-    if (filterBrickType) filters.brickType = filterBrickType
-    setAppliedFilters(filters)
-    fetchProductions(filters)
-  }
-
-  const handleResetFilters = () => {
-    setFilterDate('')
-    setFilterBrickType('')
-    setAppliedFilters({})
-    fetchProductions()
-  }
-
   const openAddDialog = () => {
-    setEditingId(null)
+    setEditingProduction(null)
     setFormData(emptyForm)
-    setDialogOpen(true)
+    setFormOpen(true)
   }
 
   const openEditDialog = (prod: Production) => {
-    setEditingId(prod.id)
+    setEditingProduction(prod)
     setFormData({
-      date: prod.date,
-      brickType: prod.brickType,
-      quantityProduced: String(prod.quantityProduced),
-      shift: prod.shift,
+      date: prod.date ? prod.date.split('T')[0] : '',
+      customerName: prod.customerName || '',
+      address: prod.address || '',
+      zigZagWhite80mm: String(prod.zigZagWhite80mm || ''),
+      zigZagRed80mm: String(prod.zigZagRed80mm || ''),
+      zigZagYellow80mm: String(prod.zigZagYellow80mm || ''),
+      zigZagWhite60mm: String(prod.zigZagWhite60mm || ''),
+      zigZagRed60mm: String(prod.zigZagRed60mm || ''),
+      zigZagYellow60mm: String(prod.zigZagYellow60mm || ''),
+      curveStone: String(prod.curveStone || ''),
+      chequreTile: String(prod.chequreTile || ''),
+      transportationCharge: String(prod.transportationCharge || ''),
       remarks: prod.remarks || '',
     })
-    setDialogOpen(true)
+    setFormOpen(true)
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this production entry?')) return
-    try {
-      await fetch(`/api/production/${id}`, { method: 'DELETE' })
-      toast({ title: 'Success', description: 'Production entry deleted successfully' })
-      fetchProductions(appliedFilters)
-    } catch {
-      toast({ title: 'Error', description: 'Failed to delete production entry', variant: 'destructive' })
-    }
+  const handleFormChange = (field: keyof ProductionFormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
   const handleSubmit = async () => {
-    if (!formData.date || !formData.brickType || !formData.quantityProduced || !formData.shift) {
-      toast({ title: 'Validation Error', description: 'Please fill all required fields', variant: 'destructive' })
+    if (!formData.date) {
+      toast({ title: 'Validation Error', description: 'Date is required', variant: 'destructive' })
       return
     }
 
-    const quantity = Number(formData.quantityProduced)
-    if (isNaN(quantity) || quantity <= 0) {
-      toast({ title: 'Validation Error', description: 'Quantity must be a positive number', variant: 'destructive' })
-      return
-    }
-
-    setSubmitting(true)
+    setFormSubmitting(true)
     try {
       const payload = {
         date: formData.date,
-        brickType: formData.brickType,
-        quantityProduced: quantity,
-        shift: formData.shift,
-        remarks: formData.remarks,
+        customerName: formData.customerName.trim(),
+        address: formData.address.trim(),
+        zigZagWhite80mm: Number(formData.zigZagWhite80mm) || 0,
+        zigZagRed80mm: Number(formData.zigZagRed80mm) || 0,
+        zigZagYellow80mm: Number(formData.zigZagYellow80mm) || 0,
+        zigZagWhite60mm: Number(formData.zigZagWhite60mm) || 0,
+        zigZagRed60mm: Number(formData.zigZagRed60mm) || 0,
+        zigZagYellow60mm: Number(formData.zigZagYellow60mm) || 0,
+        curveStone: Number(formData.curveStone) || 0,
+        chequreTile: Number(formData.chequreTile) || 0,
+        transportationCharge: Number(formData.transportationCharge) || 0,
+        remarks: formData.remarks.trim(),
       }
 
-      if (editingId) {
-        await fetch(`/api/production/${editingId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
+      if (editingProduction) {
+        await api.updateProduction(editingProduction.id, payload)
         toast({ title: 'Success', description: 'Production entry updated successfully' })
       } else {
         await api.createProduction(payload)
         toast({ title: 'Success', description: 'Production entry created successfully' })
       }
 
-      setDialogOpen(false)
+      setFormOpen(false)
       setFormData(emptyForm)
-      setEditingId(null)
-      fetchProductions(appliedFilters)
-    } catch {
+      setEditingProduction(null)
+      fetchProductions()
+    } catch (err) {
       toast({
         title: 'Error',
-        description: editingId ? 'Failed to update production entry' : 'Failed to create production entry',
+        description: err instanceof Error ? err.message : 'Failed to save production entry',
         variant: 'destructive',
       })
     } finally {
-      setSubmitting(false)
+      setFormSubmitting(false)
     }
   }
 
-  const totalQuantity = productions.reduce((sum, p) => sum + p.quantityProduced, 0)
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await api.deleteProduction(deleteTarget.id)
+      toast({ title: 'Success', description: 'Production entry deleted successfully' })
+      setDeleteTarget(null)
+      fetchProductions()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete production entry',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const renderSkeletons = () =>
+    Array.from({ length: 3 }).map((_, i) => (
+      <TableRow key={i}>
+        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+        <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+        {PRODUCT_FIELDS.map((_, j) => (
+          <TableCell key={j}><Skeleton className="h-4 w-16" /></TableCell>
+        ))}
+        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+        <TableCell><Skeleton className="h-8 w-20" /></TableCell>
+      </TableRow>
+    ))
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
-            <Factory className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+          <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+            <Factory className="size-5" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Production Management</h1>
-            <p className="text-sm text-muted-foreground">Track daily brick production entries</p>
+            <h2 className="text-2xl font-bold tracking-tight">Production Management</h2>
+            <p className="text-sm text-muted-foreground">
+              Track daily paver block production entries
+            </p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setImportOpen(true)}
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Import Excel
-          </Button>
-          <Button
-            onClick={openAddDialog}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-          >
-            <Plus className="h-4 w-4" />
-            Add Production Entry
-          </Button>
-        </div>
+        <Button
+          onClick={openAddDialog}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
+        >
+          <Plus className="size-4" />
+          Add Production Entry
+        </Button>
       </div>
 
-      {/* Filters */}
+      {/* Table */}
       <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            Filters
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Production Records</span>
+            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+              {productions.length} record{productions.length !== 1 ? 's' : ''}
+            </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col sm:flex-row gap-3 items-end">
-            <div className="flex-1 min-w-0 space-y-1.5">
-              <Label htmlFor="filter-date">Date</Label>
-              <Input
-                id="filter-date"
-                type="date"
-                value={filterDate}
-                onChange={(e) => setFilterDate(e.target.value)}
-                className="w-full"
-              />
-            </div>
-            <div className="flex-1 min-w-0 space-y-1.5">
-              <Label>Brick Type</Label>
-              <Select value={filterBrickType} onValueChange={setFilterBrickType}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All Types" />
-                </SelectTrigger>
-                <SelectContent>
-                  {BRICK_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="sticky left-0 bg-background z-10">Date</TableHead>
+                  <TableHead>Customer Name</TableHead>
+                  <TableHead>Address</TableHead>
+                  {PRODUCT_FIELDS.map((f) => (
+                    <TableHead key={f.key} className="text-right whitespace-nowrap">{f.label}</TableHead>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                onClick={handleApplyFilters}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                <Search className="h-4 w-4" />
-                Apply
-              </Button>
-              <Button variant="outline" onClick={handleResetFilters}>
-                <RotateCcw className="h-4 w-4" />
-                Reset
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Production Table */}
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="p-6 space-y-4">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="flex gap-4">
-                  <Skeleton className="h-10 flex-1" />
-                  <Skeleton className="h-10 flex-1" />
-                  <Skeleton className="h-10 flex-1" />
-                  <Skeleton className="h-10 w-24" />
-                </div>
-              ))}
-            </div>
-          ) : productions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Factory className="h-12 w-12 text-muted-foreground/40 mb-4" />
-              <h3 className="text-lg font-medium text-muted-foreground">No production entries found</h3>
-              <p className="text-sm text-muted-foreground/70 mt-1">
-                {Object.keys(appliedFilters).length
-                  ? 'Try adjusting your filters or reset them'
-                  : 'Click "Add Production Entry" to create your first entry'}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
+                  <TableHead className="text-right whitespace-nowrap">Transport ₹</TableHead>
+                  <TableHead>Remarks</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  renderSkeletons()
+                ) : productions.length === 0 ? (
                   <TableRow>
-                    <TableHead className="w-[120px]">Date</TableHead>
-                    <TableHead>Brick Type</TableHead>
-                    <TableHead className="text-right">Quantity Produced</TableHead>
-                    <TableHead>Shift</TableHead>
-                    <TableHead className="hidden md:table-cell">Remarks</TableHead>
-                    <TableHead className="text-right w-[100px]">Actions</TableHead>
+                    <TableCell colSpan={PRODUCT_FIELDS.length + 6} className="h-32 text-center text-muted-foreground">
+                      No production entries yet. Click &quot;Add Production Entry&quot; to get started.
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {productions.map((prod) => (
+                ) : (
+                  productions.map((prod) => (
                     <TableRow key={prod.id}>
-                      <TableCell className="font-medium">{formatDate(prod.date)}</TableCell>
-                      <TableCell>{prod.brickType}</TableCell>
-                      <TableCell className="text-right font-mono">
-                        {prod.quantityProduced.toLocaleString()}
+                      <TableCell className="font-medium whitespace-nowrap sticky left-0 bg-background z-10">
+                        {formatDate(prod.date)}
                       </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={SHIFT_COLORS[prod.shift] || ''}
-                        >
-                          {prod.shift}
-                        </Badge>
+                      <TableCell className="font-medium">{prod.customerName || '—'}</TableCell>
+                      <TableCell className="max-w-[150px] truncate text-muted-foreground">{prod.address || '—'}</TableCell>
+                      {PRODUCT_FIELDS.map((f) => (
+                        <TableCell key={f.key} className="text-right font-mono">
+                          {enIN.format((prod as unknown as Record<string, unknown>)[f.key] as number || 0)}
+                        </TableCell>
+                      ))}
+                      <TableCell className="text-right whitespace-nowrap">
+                        {formatCurrency(prod.transportationCharge || 0)}
                       </TableCell>
-                      <TableCell className="hidden md:table-cell max-w-[200px] truncate text-muted-foreground">
+                      <TableCell className="max-w-[150px] truncate text-muted-foreground">
                         {prod.remarks || '—'}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
+                        <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
                             onClick={() => openEditDialog(prod)}
+                            title="Edit"
                           >
-                            <Pencil className="h-4 w-4" />
-                            <span className="sr-only">Edit</span>
+                            <Pencil className="size-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => handleDelete(prod.id)}
+                            onClick={() => setDeleteTarget(prod)}
+                            title="Delete"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
                           >
-                            <Trash2 className="h-4 w-4" />
-                            <span className="sr-only">Delete</span>
+                            <Trash2 className="size-4" />
                           </Button>
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-                <TableFooter>
-                  <TableRow className="bg-emerald-50/50 dark:bg-emerald-900/10 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10">
-                    <TableCell colSpan={2} className="font-semibold text-emerald-700 dark:text-emerald-400">
-                      Total
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                      {totalQuantity.toLocaleString()}
-                    </TableCell>
-                    <TableCell colSpan={3} />
-                  </TableRow>
-                </TableFooter>
-              </Table>
-            </div>
-          )}
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
       {/* Add/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Factory className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-              {editingId ? 'Edit Production Entry' : 'Add Production Entry'}
+            <DialogTitle>
+              {editingProduction ? 'Edit Production Entry' : 'Add Production Entry'}
             </DialogTitle>
             <DialogDescription>
-              {editingId
+              {editingProduction
                 ? 'Update the production entry details below.'
                 : 'Fill in the details to create a new production entry.'}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
-            {/* Date */}
-            <div className="space-y-2">
+            <div className="grid gap-2">
               <Label htmlFor="prod-date">
                 Date <span className="text-destructive">*</span>
               </Label>
@@ -421,97 +396,110 @@ export default function ProductionModule() {
                 id="prod-date"
                 type="date"
                 value={formData.date}
-                onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
+                onChange={(e) => handleFormChange('date', e.target.value)}
               />
             </div>
-
-            {/* Brick Type */}
-            <div className="space-y-2">
-              <Label>
-                Brick Type <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={formData.brickType}
-                onValueChange={(val) => setFormData((prev) => ({ ...prev, brickType: val }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select brick type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {BRICK_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="prod-customer">Customer Name</Label>
+                <Input
+                  id="prod-customer"
+                  placeholder="Enter customer name"
+                  value={formData.customerName}
+                  onChange={(e) => handleFormChange('customerName', e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="prod-address">Address</Label>
+                <Input
+                  id="prod-address"
+                  placeholder="Enter address"
+                  value={formData.address}
+                  onChange={(e) => handleFormChange('address', e.target.value)}
+                />
+              </div>
             </div>
-
-            {/* Quantity Produced */}
-            <div className="space-y-2">
-              <Label htmlFor="prod-quantity">
-                Quantity Produced <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="prod-quantity"
-                type="number"
-                min="1"
-                placeholder="Enter quantity"
-                value={formData.quantityProduced}
-                onChange={(e) => setFormData((prev) => ({ ...prev, quantityProduced: e.target.value }))}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {PRODUCT_FIELDS.map((f) => (
+                <div key={f.key} className="grid gap-2">
+                  <Label htmlFor={`prod-${f.key}`}>{f.label}</Label>
+                  <Input
+                    id={`prod-${f.key}`}
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={formData[f.key]}
+                    onChange={(e) => handleFormChange(f.key, e.target.value)}
+                  />
+                </div>
+              ))}
             </div>
-
-            {/* Shift */}
-            <div className="space-y-2">
-              <Label>
-                Shift <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={formData.shift}
-                onValueChange={(val) => setFormData((prev) => ({ ...prev, shift: val }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select shift" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SHIFTS.map((shift) => (
-                    <SelectItem key={shift} value={shift}>
-                      {shift}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid gap-2">
+              <Label htmlFor="prod-transport">Transportation Charge (₹)</Label>
+              <div className="relative">
+                <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                <Input
+                  id="prod-transport"
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  className="pl-9"
+                  value={formData.transportationCharge}
+                  onChange={(e) => handleFormChange('transportationCharge', e.target.value)}
+                />
+              </div>
             </div>
-
-            {/* Remarks */}
-            <div className="space-y-2">
+            <div className="grid gap-2">
               <Label htmlFor="prod-remarks">Remarks</Label>
               <Textarea
                 id="prod-remarks"
-                placeholder="Optional notes about this production entry..."
+                placeholder="Optional remarks..."
                 value={formData.remarks}
-                onChange={(e) => setFormData((prev) => ({ ...prev, remarks: e.target.value }))}
-                rows={3}
+                onChange={(e) => handleFormChange('remarks', e.target.value)}
+                className="min-h-[80px]"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>
+            <Button variant="outline" onClick={() => setFormOpen(false)} disabled={formSubmitting}>
               Cancel
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={submitting}
+              disabled={formSubmitting}
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
             >
-              {submitting ? 'Saving...' : editingId ? 'Update Entry' : 'Create Entry'}
+              {formSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+              {editingProduction ? 'Update Entry' : 'Create Entry'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <ExcelImport module="production" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={() => fetchProductions(appliedFilters)} />
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Production Entry</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this production entry? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {deleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
+
+export default ProductionModule

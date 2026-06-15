@@ -23,6 +23,13 @@ import {
   UserCog,
   Building2,
   ShieldCheck,
+  HardHat,
+  Mountain,
+  Construction,
+  Droplets,
+  Zap,
+  Wrench,
+  Banknote,
 } from 'lucide-react'
 
 const navItems: { key: ModuleKey; label: string; icon: React.ReactNode; roles: string[] }[] = [
@@ -30,6 +37,15 @@ const navItems: { key: ModuleKey; label: string; icon: React.ReactNode; roles: s
   { key: 'customers', label: 'Customers', icon: <Users className="h-5 w-5" />, roles: ['admin', 'operator'] },
   { key: 'production', label: 'Production', icon: <Factory className="h-5 w-5" />, roles: ['admin', 'operator'] },
   { key: 'stock', label: 'Stock', icon: <Package className="h-5 w-5" />, roles: ['admin', 'operator'] },
+  { key: 'dailySell', label: 'Daily Sell', icon: <ShoppingCart className="h-5 w-5" />, roles: ['admin', 'operator', 'accountant'] },
+  { key: 'customerPayment', label: 'Customer Payment', icon: <Banknote className="h-5 w-5" />, roles: ['admin', 'operator', 'accountant'] },
+  { key: 'labourPayment', label: 'Labour Payment', icon: <HardHat className="h-5 w-5" />, roles: ['admin', 'operator', 'accountant'] },
+  { key: 'tractorPayment', label: 'Tractor Payment', icon: <Truck className="h-5 w-5" />, roles: ['admin', 'operator', 'accountant'] },
+  { key: 'dustPurchase', label: 'Dust Purchase', icon: <Mountain className="h-5 w-5" />, roles: ['admin', 'operator', 'accountant'] },
+  { key: 'cementPurchase', label: 'Cement Purchase', icon: <Construction className="h-5 w-5" />, roles: ['admin', 'operator', 'accountant'] },
+  { key: 'hardner', label: 'Hardner', icon: <Droplets className="h-5 w-5" />, roles: ['admin', 'operator', 'accountant'] },
+  { key: 'electricity', label: 'Electricity', icon: <Zap className="h-5 w-5" />, roles: ['admin', 'operator', 'accountant'] },
+  { key: 'factoryStuff', label: 'Factory Stuff', icon: <Wrench className="h-5 w-5" />, roles: ['admin', 'operator', 'accountant'] },
   { key: 'orders', label: 'Orders', icon: <ShoppingCart className="h-5 w-5" />, roles: ['admin', 'operator'] },
   { key: 'dispatch', label: 'Dispatch', icon: <Truck className="h-5 w-5" />, roles: ['admin', 'operator'] },
   { key: 'payments', label: 'Payments', icon: <CreditCard className="h-5 w-5" />, roles: ['admin', 'operator', 'accountant'] },
@@ -52,6 +68,11 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
 }) {
   const filteredNav = navItems.filter((item) => user && item.roles.includes(user.role))
 
+  // Group nav items
+  const mainItems = filteredNav.filter((item) => ['dashboard', 'customers', 'production', 'stock', 'dailySell', 'customerPayment', 'labourPayment'].includes(item.key))
+  const purchaseItems = filteredNav.filter((item) => ['tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff'].includes(item.key))
+  const otherItems = filteredNav.filter((item) => ['orders', 'dispatch', 'payments', 'expenses', 'reports', 'admin', 'users', 'settings'].includes(item.key))
+
   return (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b flex items-center gap-3">
@@ -70,7 +91,53 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
 
       <ScrollArea className="flex-1 py-2">
         <nav className="space-y-1 px-2">
-          {filteredNav.map((item) => (
+          {mainItems.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => setActiveModule(item.key)}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                activeModule === item.key
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}
+            >
+              {item.icon}
+              <span className={cn('whitespace-nowrap transition-all', sidebarOpen ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden')}>
+                {item.label}
+              </span>
+            </button>
+          ))}
+
+          {purchaseItems.length > 0 && sidebarOpen && (
+            <div className="pt-3 pb-1 px-3">
+              <p className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider">Purchases & Expenses</p>
+            </div>
+          )}
+          {purchaseItems.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => setActiveModule(item.key)}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                activeModule === item.key
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}
+            >
+              {item.icon}
+              <span className={cn('whitespace-nowrap transition-all', sidebarOpen ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden')}>
+                {item.label}
+              </span>
+            </button>
+          ))}
+
+          {otherItems.length > 0 && sidebarOpen && (
+            <div className="pt-3 pb-1 px-3">
+              <p className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider">Other</p>
+            </div>
+          )}
+          {otherItems.map((item) => (
             <button
               key={item.key}
               onClick={() => setActiveModule(item.key)}

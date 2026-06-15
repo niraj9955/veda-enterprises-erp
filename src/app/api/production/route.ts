@@ -1,19 +1,15 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
-import { Production, Stock } from '@/lib/models'
+import { Production } from '@/lib/models'
 
 export async function GET(request: Request) {
   try {
     await connectDB()
     const { searchParams } = new URL(request.url)
     const date = searchParams.get('date')
-    const brickType = searchParams.get('brickType')
-
     const filter: any = {}
     if (date) filter.date = date
-    if (brickType) filter.brickType = brickType
-
-    const productions = await Production.find(filter).sort({ createdAt: -1 })
+    const productions = await Production.find(filter).sort({ date: -1 })
     return NextResponse.json({ productions: productions.map(toObject) })
   } catch (error) {
     console.error('Error fetching production:', error)
@@ -25,32 +21,25 @@ export async function POST(request: Request) {
   try {
     await connectDB()
     const body = await request.json()
-
-    if (!body.date || !body.brickType || !body.quantityProduced || !body.shift) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    if (!body.date) {
+      return NextResponse.json({ error: 'Date is required' }, { status: 400 })
     }
-
     const production = await Production.create({
       date: body.date,
-      brickType: body.brickType,
-      quantityProduced: Number(body.quantityProduced),
-      shift: body.shift,
+      customerId: body.customerId || null,
+      customerName: body.customerName || '',
+      address: body.address || '',
+      zigZagWhite80: Number(body.zigZagWhite80) || 0,
+      zigZagRed80: Number(body.zigZagRed80) || 0,
+      zigZagYellow80: Number(body.zigZagYellow80) || 0,
+      zigZagWhite60: Number(body.zigZagWhite60) || 0,
+      zigZagRed60: Number(body.zigZagRed60) || 0,
+      zigZagYellow60: Number(body.zigZagYellow60) || 0,
+      curveStone: Number(body.curveStone) || 0,
+      chequreTile: Number(body.chequreTile) || 0,
+      transportationCharge: Number(body.transportationCharge) || 0,
       remarks: body.remarks || '',
     })
-
-    // Auto-update stock
-    let stock = await Stock.findOne({ brickType: body.brickType })
-    if (!stock) {
-      stock = await Stock.create({
-        brickType: body.brickType,
-        openingStock: 0,
-        currentStock: Number(body.quantityProduced),
-      })
-    } else {
-      stock.currentStock += Number(body.quantityProduced)
-      await stock.save()
-    }
-
     return NextResponse.json({ production: toObject(production) }, { status: 201 })
   } catch (error) {
     console.error('Error creating production:', error)

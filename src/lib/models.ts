@@ -43,23 +43,134 @@ const CustomerSchema = new mongoose.Schema({
   creditLimit: { type: Number, default: 0 },
 }, { timestamps: true });
 
-// ─── Production ─────────────────────────────────────────────────────────────
+// ─── Production (Product-wise with customer & transport) ────────────────────
 const ProductionSchema = new mongoose.Schema({
   date: { type: String, required: true },
-  brickType: { type: String, required: true },
-  quantityProduced: { type: Number, required: true },
-  shift: { type: String, required: true },
+  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
+  customerName: { type: String, default: '' },
+  address: { type: String, default: '' },
+  zigZagWhite80: { type: Number, default: 0 },
+  zigZagRed80: { type: Number, default: 0 },
+  zigZagYellow80: { type: Number, default: 0 },
+  zigZagWhite60: { type: Number, default: 0 },
+  zigZagRed60: { type: Number, default: 0 },
+  zigZagYellow60: { type: Number, default: 0 },
+  curveStone: { type: Number, default: 0 },
+  chequreTile: { type: Number, default: 0 },
+  transportationCharge: { type: Number, default: 0 },
   remarks: { type: String, default: '' },
 }, { timestamps: true });
 
-// ─── Stock ──────────────────────────────────────────────────────────────────
+// ─── Stock (Product-wise tracking) ─────────────────────────────────────────
 const StockSchema = new mongoose.Schema({
-  brickType: { type: String, required: true, unique: true },
-  openingStock: { type: Number, default: 0 },
-  currentStock: { type: Number, default: 0 },
+  date: { type: String, required: true },
+  cement: { type: Number, default: 0 },
+  zigZagGrey80: { type: Number, default: 0 },
+  zigZagRed80: { type: Number, default: 0 },
+  zigZagYellow80: { type: Number, default: 0 },
+  zigZagGrey60: { type: Number, default: 0 },
+  zigZagRed60: { type: Number, default: 0 },
+  zigZagYellow60: { type: Number, default: 0 },
+  chequreTile: { type: Number, default: 0 },
+  curveStone: { type: Number, default: 0 },
+  dumbleGrey80: { type: Number, default: 0 },
+  dumbleRed80: { type: Number, default: 0 },
+  dumbleYellow80: { type: Number, default: 0 },
 }, { timestamps: true });
 
-// ─── Order ──────────────────────────────────────────────────────────────────
+// ─── Daily Sell ────────────────────────────────────────────────────────────
+const DailySellSchema = new mongoose.Schema({
+  date: { type: String, required: true },
+  customerName: { type: String, required: true },
+  address: { type: String, default: '' },
+  amount: { type: Number, required: true },
+  remarks: { type: String, default: '' },
+  contactNumber: { type: String, default: '' },
+}, { timestamps: true });
+
+// ─── Customer Payment ──────────────────────────────────────────────────────
+const CustomerPaymentSchema = new mongoose.Schema({
+  date: { type: String, required: true },
+  name: { type: String, required: true },
+  address: { type: String, default: '' },
+  amount: { type: Number, required: true },
+  remarks: { type: String, default: '' },
+}, { timestamps: true });
+
+// ─── Labour Payment ────────────────────────────────────────────────────────
+const LabourPaymentSchema = new mongoose.Schema({
+  date: { type: String, required: true },
+  name: { type: String, required: true },
+  address: { type: String, default: '' },
+  amount: { type: Number, required: true },
+  remarks: { type: String, default: '' },
+}, { timestamps: true });
+
+// ─── Tractor Payment ───────────────────────────────────────────────────────
+const TractorPaymentSchema = new mongoose.Schema({
+  date: { type: String, required: true },
+  vendorName: { type: String, required: true },
+  quantityTon: { type: Number, required: true },
+  rate: { type: Number, required: true },
+  totalAmount: { type: Number, required: true },
+  paidAmount: { type: Number, default: 0 },
+  remainingAmount: { type: Number, default: 0 },
+  remarks: { type: String, default: '' },
+}, { timestamps: true });
+
+// ─── Dust Purchase ─────────────────────────────────────────────────────────
+const DustPurchaseSchema = new mongoose.Schema({
+  date: { type: String, required: true },
+  vendorName: { type: String, required: true },
+  cementName: { type: String, default: '' },
+  quantity: { type: Number, required: true },
+  rate: { type: Number, required: true },
+  totalAmount: { type: Number, required: true },
+  paidAmount: { type: Number, default: 0 },
+  transportationCharge: { type: Number, default: 0 },
+  gst: { type: Number, default: 0 },
+  remarks: { type: String, default: '' },
+}, { timestamps: true });
+
+// ─── Cement Purchase ───────────────────────────────────────────────────────
+const CementPurchaseSchema = new mongoose.Schema({
+  date: { type: String, required: true },
+  vendorName: { type: String, required: true },
+  itemName: { type: String, default: '' },
+  quantity: { type: Number, required: true },
+  rate: { type: Number, required: true },
+  totalAmount: { type: Number, required: true },
+  paidAmount: { type: Number, default: 0 },
+  transportationCharge: { type: Number, default: 0 },
+  gst: { type: Number, default: 0 },
+  remarks: { type: String, default: '' },
+}, { timestamps: true });
+
+// ─── Hardner ───────────────────────────────────────────────────────────────
+const HardnerSchema = new mongoose.Schema({
+  date: { type: String, required: true },
+  amount: { type: Number, required: true },
+}, { timestamps: true });
+
+// ─── Electricity ───────────────────────────────────────────────────────────
+const ElectricitySchema = new mongoose.Schema({
+  date: { type: String, required: true },
+  name: { type: String, default: '' },
+  work: { type: String, default: '' },
+  amount: { type: Number, required: true },
+  remarks: { type: String, default: '' },
+}, { timestamps: true });
+
+// ─── Factory Stuff ─────────────────────────────────────────────────────────
+const FactoryStuffSchema = new mongoose.Schema({
+  date: { type: String, required: true },
+  itemName: { type: String, required: true },
+  quantity: { type: Number, default: 0 },
+  amount: { type: Number, required: true },
+  remarks: { type: String, default: '' },
+}, { timestamps: true });
+
+// ─── Legacy Models (kept for backward compatibility with existing API routes) ─
 const OrderSchema = new mongoose.Schema({
   orderNumber: { type: String, required: true, unique: true },
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
@@ -71,7 +182,6 @@ const OrderSchema = new mongoose.Schema({
   status: { type: String, default: 'Pending' },
 }, { timestamps: true });
 
-// ─── Dispatch ───────────────────────────────────────────────────────────────
 const DispatchSchema = new mongoose.Schema({
   dispatchNumber: { type: String, required: true, unique: true },
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
@@ -83,7 +193,6 @@ const DispatchSchema = new mongoose.Schema({
   date: { type: String, required: true },
 }, { timestamps: true });
 
-// ─── Payment ────────────────────────────────────────────────────────────────
 const PaymentSchema = new mongoose.Schema({
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
   paymentType: { type: String, required: true },
@@ -92,7 +201,6 @@ const PaymentSchema = new mongoose.Schema({
   remarks: { type: String, default: '' },
 }, { timestamps: true });
 
-// ─── Expense ────────────────────────────────────────────────────────────────
 const ExpenseSchema = new mongoose.Schema({
   category: { type: String, required: true },
   amount: { type: Number, required: true },
@@ -110,3 +218,12 @@ export const Order = mongoose.models.Order || mongoose.model('Order', OrderSchem
 export const Dispatch = mongoose.models.Dispatch || mongoose.model('Dispatch', DispatchSchema);
 export const Payment = mongoose.models.Payment || mongoose.model('Payment', PaymentSchema);
 export const Expense = mongoose.models.Expense || mongoose.model('Expense', ExpenseSchema);
+export const DailySell = mongoose.models.DailySell || mongoose.model('DailySell', DailySellSchema);
+export const CustomerPayment = mongoose.models.CustomerPayment || mongoose.model('CustomerPayment', CustomerPaymentSchema);
+export const LabourPayment = mongoose.models.LabourPayment || mongoose.model('LabourPayment', LabourPaymentSchema);
+export const TractorPayment = mongoose.models.TractorPayment || mongoose.model('TractorPayment', TractorPaymentSchema);
+export const DustPurchase = mongoose.models.DustPurchase || mongoose.model('DustPurchase', DustPurchaseSchema);
+export const CementPurchase = mongoose.models.CementPurchase || mongoose.model('CementPurchase', CementPurchaseSchema);
+export const Hardner = mongoose.models.Hardner || mongoose.model('Hardner', HardnerSchema);
+export const Electricity = mongoose.models.Electricity || mongoose.model('Electricity', ElectricitySchema);
+export const FactoryStuff = mongoose.models.FactoryStuff || mongoose.model('FactoryStuff', FactoryStuffSchema);

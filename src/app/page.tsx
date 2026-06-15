@@ -17,6 +17,15 @@ import ReportModule from '@/components/erp/report-module'
 import SettingsModule from '@/components/erp/settings-module'
 import UserManagementModule from '@/components/erp/user-management-module'
 import AdminPanelModule from '@/components/erp/admin-panel-module'
+import DailySellModule from '@/components/erp/daily-sell-module'
+import CustomerPaymentModule from '@/components/erp/customer-payment-module'
+import LabourPaymentModule from '@/components/erp/labour-payment-module'
+import TractorPaymentModule from '@/components/erp/tractor-payment-module'
+import DustPurchaseModule from '@/components/erp/dust-purchase-module'
+import CementPurchaseModule from '@/components/erp/cement-purchase-module'
+import HardnerModule from '@/components/erp/hardner-module'
+import ElectricityModule from '@/components/erp/electricity-module'
+import FactoryStuffModule from '@/components/erp/factory-stuff-module'
 
 const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   dashboard: DashboardModule,
@@ -31,6 +40,15 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   settings: SettingsModule,
   users: UserManagementModule,
   admin: AdminPanelModule,
+  dailySell: DailySellModule,
+  customerPayment: CustomerPaymentModule,
+  labourPayment: LabourPaymentModule,
+  tractorPayment: TractorPaymentModule,
+  dustPurchase: DustPurchaseModule,
+  cementPurchase: CementPurchaseModule,
+  hardner: HardnerModule,
+  electricity: ElectricityModule,
+  factoryStuff: FactoryStuffModule,
 }
 
 export default function Home() {
@@ -100,9 +118,9 @@ function ModuleRenderer() {
 
   // Role-based module access guard
   const accessMap: Record<string, string[]> = {
-    admin: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'settings', 'users', 'admin'],
-    operator: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports'],
-    accountant: ['dashboard', 'payments', 'expenses', 'reports'],
+    admin: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'settings', 'users', 'admin', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff'],
+    operator: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff'],
+    accountant: ['dashboard', 'payments', 'expenses', 'reports', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff'],
   }
 
   const allowedModules = accessMap[user?.role || ''] || ['dashboard']

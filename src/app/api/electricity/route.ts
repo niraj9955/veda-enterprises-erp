@@ -1,0 +1,35 @@
+import { NextResponse } from 'next/server'
+import { connectDB, toObject } from '@/lib/db'
+import { Electricity } from '@/lib/models'
+
+export async function GET() {
+  try {
+    await connectDB()
+    const records = await Electricity.find({}).sort({ date: -1 })
+    return NextResponse.json({ electricitys: records.map(toObject) })
+  } catch (error) {
+    console.error('Error fetching electricity:', error)
+    return NextResponse.json({ error: 'Failed to fetch electricity' }, { status: 500 })
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    await connectDB()
+    const body = await request.json()
+    if (!body.date || !body.amount) {
+      return NextResponse.json({ error: 'Date and amount are required' }, { status: 400 })
+    }
+    const record = await Electricity.create({
+      date: body.date,
+      name: body.name || '',
+      work: body.work || '',
+      amount: Number(body.amount),
+      remarks: body.remarks || '',
+    })
+    return NextResponse.json({ electricity: toObject(record) }, { status: 201 })
+  } catch (error) {
+    console.error('Error creating electricity:', error)
+    return NextResponse.json({ error: 'Failed to create electricity' }, { status: 500 })
+  }
+}
