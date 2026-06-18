@@ -63,15 +63,13 @@ export default function Home() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Use a lightweight company endpoint to check auth status
-        const data = await api.getCompany()
-        if (data.session) {
-          // Session exists - user is authenticated
+        const data = await api.me()
+        if (data.user) {
           setUser({
-            id: (data.session as Record<string, unknown>).userId as string,
-            name: (data.session as Record<string, unknown>).name as string,
-            email: (data.session as Record<string, unknown>).email as string,
-            role: (data.session as Record<string, unknown>).role as string,
+            id: data.user.userId,
+            name: data.user.name,
+            email: data.user.email,
+            role: data.user.role,
           })
         }
       } catch {

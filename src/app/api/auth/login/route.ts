@@ -63,8 +63,13 @@ export async function POST(request: Request) {
       { status: 200 }
     )
 
+    // Detect if request is over HTTPS (Vercel) or HTTP (localhost)
+    const isSecure = request.headers.get('x-forwarded-proto') === 'https' ||
+      request.url.startsWith('https')
+
     response.cookies.set('token', token, {
       httpOnly: true,
+      secure: isSecure,
       sameSite: 'lax',
       maxAge: 86400,
       path: '/',

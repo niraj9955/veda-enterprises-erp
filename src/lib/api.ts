@@ -21,6 +21,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  me: () => request<{ user: { userId: string; name: string; email: string; role: string } }>('/auth/me'),
 
   // Dashboard
   getDashboard: () => request<Record<string, unknown>>('/dashboard'),
