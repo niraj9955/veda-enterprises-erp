@@ -7,7 +7,7 @@ import { getSession } from '@/lib/auth'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-// GET — list all bills (with optional filter by type/status)
+// GET — list all bills (with optional filter by type/status/search)
 export async function GET(request: Request) {
   try {
     await connectDB()
@@ -19,12 +19,27 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const billType = searchParams.get('billType')
     const status = searchParams.get('status')
+    const search = searchParams.get('search')?.trim()
 
-    const query: Record<string, string> = {}
+    // Build query — search matches billNumber OR party name (toName) OR
+    // customer phone (toPhone). Case-insensitive regex.
+    const query: Record<string, unknown> = {}
     if (billType) query.billType = billType
     if (status) query.status = status
+    if (search) {
+      query.$or = [
+        { billNumber: { $regex: search, $options: 'i' } },
+        { toName: { $regex: search, $options: 'i' } },
+        { toPhone: { $regex: search, $options: 'i' } },
+      ]
+    }
 
-    const bills = await Bill.find(query).sort({ createdAt: -1 }).lean()
+    // Cap at 50 when searching (dropdown UX), otherwise return all
+    const limit = search ? 50 : 0
+    const bills = await Bill.find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean()
     const res = NextResponse.json({ bills: toObject(bills) })
     res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
     return res

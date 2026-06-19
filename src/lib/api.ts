@@ -203,10 +203,11 @@ export const api = {
     request<{ message: string }>(`/factory-stuff/${id}`, { method: 'DELETE' }),
 
   // Bills (Billing system)
-  getBills: (filters?: { billType?: string; status?: string }) => {
+  getBills: (filters?: { billType?: string; status?: string; search?: string }) => {
     const params = new URLSearchParams()
     if (filters?.billType) params.set('billType', filters.billType)
     if (filters?.status) params.set('status', filters.status)
+    if (filters?.search) params.set('search', filters.search)
     const qs = params.toString()
     return request<{ bills: unknown[] }>(`/bills${qs ? `?${qs}` : ''}`)
   },

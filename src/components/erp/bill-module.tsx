@@ -434,7 +434,7 @@ function BillForm({ bill, onSave, onCancel }: { bill: Bill | null; onSave: () =>
         </div>
       </div>
 
-      {/* Customer search & auto-fill */}
+      {/* Customer + Previous-Bill search & auto-fill */}
       <CustomerSearchCard
         selectedCustomerId={customerId}
         onSelectCustomer={(c) => {
@@ -443,6 +443,36 @@ function BillForm({ bill, onSave, onCancel }: { bill: Bill | null; onSave: () =>
           setToPhone(c.mobile || '')
           setToAddress(c.address || '')
           setToGst(c.gstNumber || '')
+        }}
+        onSelectBill={(b) => {
+          // Duplicate-from-previous-bill: pre-fill everything except paid
+          // amount and notes (those belong to the new transaction). Link
+          // the customer too so the new bill's paidAmount auto-syncs.
+          setCustomerId(b.customerId || null)
+          setToName(b.toName || '')
+          setToPhone(b.toPhone || '')
+          setToAddress(b.toAddress || '')
+          setToGst(b.toGst || '')
+          if (b.items?.length) {
+            setItems(b.items.map((it) => ({
+              description: it.description || '',
+              hsn: it.hsn || '',
+              quantity: Number(it.quantity) || 0,
+              unit: it.unit || 'pcs',
+              rate: Number(it.rate) || 0,
+              amount: Number(it.amount) || 0,
+            })))
+          }
+          if (typeof b.discountPercent === 'number') setDiscountPercent(b.discountPercent)
+          if (typeof b.cgstPercent === 'number') setCgstPercent(b.cgstPercent)
+          if (typeof b.sgstPercent === 'number') setSgstPercent(b.sgstPercent)
+          if (typeof b.igstPercent === 'number') setIgstPercent(b.igstPercent)
+          if (b.paymentMode) setPaymentMode(b.paymentMode)
+          if (b.terms) setTerms(b.terms)
+          toast({
+            title: 'Bill data loaded',
+            description: `Pre-filled from ${b.billNumber}. Review and update the paid amount before saving.`,
+          })
         }}
         onClear={() => setCustomerId(null)}
       />
@@ -757,11 +787,14 @@ function PrintBill({ bill, onClose }: { bill: Bill; onClose: () => void }) {
   )
 }
 
-// ─── Customer Search Card ─────────────────────────────────────────────────────
-// Live-searches /api/customers by name / mobile / address and lets the user
-// pick a customer to auto-fill the Bill To fields. The selected customer's
-// id is propagated up so the Bill can be linked and the paid amount can
-// auto-sync to the Payments module.
+// ─── Customer + Bill Search Card ─────────────────────────────────────────────
+// Dual-source live search:
+//   • Section 1: customers (click → fills party details, links customer)
+//   • Section 2: previous bills (click → fills party + items + tax + payment
+//     mode + terms — like a "duplicate bill" shortcut)
+//
+// Both sections fire in parallel on the same query so the user sees results
+// from either source instantly.
 interface CustomerSearchResult {
   id: string
   name: string
@@ -770,48 +803,106 @@ interface CustomerSearchResult {
   gstNumber?: string
 }
 
+interface BillSearchResult {
+  id: string
+  billNumber: string
+  billType: string
+  date: string
+  customerId?: string | null
+  toName: string
+  toPhone?: string
+  toAddress?: string
+  toGst?: string
+  items?: Array<{
+    description: string
+    hsn?: string
+    quantity: number
+    unit?: string
+    rate: number
+    amount: number
+  }>
+  discountPercent?: number
+  cgstPercent?: number
+  sgstPercent?: number
+  igstPercent?: number
+  grandTotal?: number
+  paymentMode?: string
+  terms?: string
+}
+
 function CustomerSearchCard({
   selectedCustomerId,
   onSelectCustomer,
+  onSelectBill,
   onClear,
 }: {
   selectedCustomerId: string | null
   onSelectCustomer: (c: CustomerSearchResult) => void
+  onSelectBill: (b: BillSearchResult) => void
   onClear: () => void
 }) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<CustomerSearchResult[]>([])
+  const [customers, setCustomers] = useState<CustomerSearchResult[]>([])
+  const [bills, setBills] = useState<BillSearchResult[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
 
-  // Debounced search — fires 350ms after the user stops typing
+  // Debounced dual-source search — fires 350ms after the user stops typing.
+  // Runs both API calls in parallel via Promise.allSettled so a failure in
+  // one source doesn't hide results from the other.
   useEffect(() => {
     if (!query.trim()) {
-      setResults([])
+      setCustomers([])
+      setBills([])
       setOpen(false)
       return
     }
     setLoading(true)
     const t = setTimeout(async () => {
-      try {
-        const data = await api.getCustomers(query.trim())
-        // Map raw customer records to the search-result shape
-        const list = (data.customers as CustomerSearchResult[]).map((c: any) => ({
-          id: c.id,
-          name: c.name,
-          mobile: c.mobile || '',
-          address: c.address || '',
-          gstNumber: c.gstNumber || '',
-        }))
-        setResults(list)
-        setOpen(true)
-      } catch {
-        setResults([])
-        setOpen(false)
-      } finally {
-        setLoading(false)
-      }
+      const [custRes, billRes] = await Promise.allSettled([
+        api.getCustomers(query.trim()),
+        api.getBills({ search: query.trim() }),
+      ])
+
+      const custList: CustomerSearchResult[] =
+        custRes.status === 'fulfilled'
+          ? (custRes.value.customers as any[]).map((c) => ({
+              id: c.id,
+              name: c.name,
+              mobile: c.mobile || '',
+              address: c.address || '',
+              gstNumber: c.gstNumber || '',
+            }))
+          : []
+
+      const billList: BillSearchResult[] =
+        billRes.status === 'fulfilled'
+          ? (billRes.value.bills as any[]).map((b) => ({
+              id: b.id,
+              billNumber: b.billNumber,
+              billType: b.billType,
+              date: b.date,
+              customerId: b.customerId || null,
+              toName: b.toName || '',
+              toPhone: b.toPhone || '',
+              toAddress: b.toAddress || '',
+              toGst: b.toGst || '',
+              items: b.items || [],
+              discountPercent: b.discountPercent,
+              cgstPercent: b.cgstPercent,
+              sgstPercent: b.sgstPercent,
+              igstPercent: b.igstPercent,
+              grandTotal: b.grandTotal,
+              paymentMode: b.paymentMode,
+              terms: b.terms,
+            }))
+          : []
+
+      setCustomers(custList)
+      setBills(billList)
+      setOpen(custList.length > 0 || billList.length > 0)
+      setLoading(false)
     }, 350)
     return () => clearTimeout(t)
   }, [query])
@@ -827,25 +918,37 @@ function CustomerSearchCard({
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const handlePick = (c: CustomerSearchResult) => {
+  const handlePickCustomer = (c: CustomerSearchResult) => {
     onSelectCustomer(c)
     setQuery('')
-    setResults([])
+    setCustomers([])
+    setBills([])
+    setOpen(false)
+  }
+
+  const handlePickBill = (b: BillSearchResult) => {
+    onSelectBill(b)
+    setQuery('')
+    setCustomers([])
+    setBills([])
     setOpen(false)
   }
 
   const handleClear = () => {
     onClear()
     setQuery('')
-    setResults([])
+    setCustomers([])
+    setBills([])
   }
+
+  const hasAny = customers.length > 0 || bills.length > 0
 
   return (
     <Card className="border-emerald-200 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/10">
       <CardHeader className="pb-3">
         <CardTitle className="text-sm flex items-center gap-2">
           <Search className="h-4 w-4 text-emerald-600" />
-          Search Customer (auto-fill party details)
+          Search Customer or Previous Bill (auto-fill)
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -865,47 +968,88 @@ function CustomerSearchCard({
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Type customer name, mobile, or address to search..."
+                placeholder="Type customer name, mobile, address, OR previous bill number..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                onFocus={() => results.length > 0 && setOpen(true)}
+                onFocus={() => hasAny && setOpen(true)}
                 className="pl-9"
               />
               {loading && (
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">Searching...</span>
               )}
             </div>
-            {open && results.length > 0 && (
-              <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg max-h-72 overflow-auto">
-                {results.map((c) => (
-                  <button
-                    type="button"
-                    key={c.id}
-                    onClick={() => handlePick(c)}
-                    className="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-b last:border-0 transition-colors"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{c.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {[c.mobile, c.address].filter(Boolean).join(' • ') || 'No contact info'}
-                        </p>
-                      </div>
-                      {c.gstNumber && (
-                        <Badge variant="outline" className="text-xs shrink-0">GST</Badge>
-                      )}
+
+            {open && (
+              <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg max-h-80 overflow-auto">
+                {/* Section: Customers */}
+                {customers.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1.5 text-[11px] uppercase tracking-wide font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/30 border-b">
+                      Customers ({customers.length})
                     </div>
-                  </button>
-                ))}
+                    {customers.map((c) => (
+                      <button
+                        type="button"
+                        key={`c-${c.id}`}
+                        onClick={() => handlePickCustomer(c)}
+                        className="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-b transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">{c.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {[c.mobile, c.address].filter(Boolean).join(' • ') || 'No contact info'}
+                            </p>
+                          </div>
+                          {c.gstNumber && (
+                            <Badge variant="outline" className="text-xs shrink-0">GST</Badge>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Section: Previous Bills */}
+                {bills.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1.5 text-[11px] uppercase tracking-wide font-semibold text-violet-700 dark:text-violet-400 bg-violet-50/60 dark:bg-violet-950/30 border-b">
+                      Previous Bills ({bills.length}) — click to duplicate
+                    </div>
+                    {bills.map((b) => (
+                      <button
+                        type="button"
+                        key={`b-${b.id}`}
+                        onClick={() => handlePickBill(b)}
+                        className="w-full text-left px-3 py-2 hover:bg-violet-50 dark:hover:bg-violet-950/30 border-b last:border-0 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">
+                              {b.toName} <span className="text-xs text-muted-foreground">— {b.billNumber}</span>
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {b.date} • ₹{(b.grandTotal || 0).toLocaleString('en-IN')} • {(b.items?.length || 0)} items
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-xs shrink-0 capitalize">{b.billType}</Badge>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* No results at all */}
+                {!hasAny && !loading && query.trim() && (
+                  <div className="px-3 py-3 text-sm text-muted-foreground">
+                    No matching customers or previous bills. You can still enter party details manually below.
+                  </div>
+                )}
               </div>
             )}
-            {open && results.length === 0 && !loading && query.trim() && (
-              <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg px-3 py-3 text-sm text-muted-foreground">
-                No matching customers found. You can still enter party details manually below.
-              </div>
-            )}
+
             <p className="text-xs text-muted-foreground mt-2">
-              Tip: linking a customer lets the bill's paid amount auto-sync to the Payments module — no manual payment entry needed.
+              Tip: pick a customer to auto-fill party details, or pick a previous bill to duplicate the entire bill (items + tax + terms).
             </p>
           </div>
         )}
