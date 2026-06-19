@@ -26,6 +26,7 @@ import CementPurchaseModule from '@/components/erp/cement-purchase-module'
 import HardnerModule from '@/components/erp/hardner-module'
 import ElectricityModule from '@/components/erp/electricity-module'
 import FactoryStuffModule from '@/components/erp/factory-stuff-module'
+import BillModule from '@/components/erp/bill-module'
 
 const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   dashboard: DashboardModule,
@@ -49,6 +50,7 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   hardner: HardnerModule,
   electricity: ElectricityModule,
   factoryStuff: FactoryStuffModule,
+  bills: BillModule,
 }
 
 export default function Home() {
@@ -116,9 +118,9 @@ function ModuleRenderer() {
 
   // Role-based module access guard
   const accessMap: Record<string, string[]> = {
-    admin: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'settings', 'users', 'admin', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff'],
-    operator: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff'],
-    accountant: ['dashboard', 'payments', 'expenses', 'reports', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff'],
+    admin: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'settings', 'users', 'admin', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff', 'bills'],
+    operator: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff', 'bills'],
+    accountant: ['dashboard', 'payments', 'expenses', 'reports', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff', 'bills'],
   }
 
   const allowedModules = accessMap[user?.role || ''] || ['dashboard']

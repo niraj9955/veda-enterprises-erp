@@ -38,9 +38,9 @@ export async function getSession(): Promise<JWTPayload | null> {
 
 export function hasAccess(role: string, module: string): boolean {
   const accessMap: Record<string, string[]> = {
-    admin: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'settings', 'users', 'admin', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff'],
-    operator: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff'],
-    accountant: ['dashboard', 'payments', 'expenses', 'reports', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff'],
+    admin: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'settings', 'users', 'admin', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff', 'bills'],
+    operator: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff', 'bills'],
+    accountant: ['dashboard', 'payments', 'expenses', 'reports', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff', 'bills'],
   }
   return accessMap[role]?.includes(module) || false
 }
@@ -70,6 +70,7 @@ export function canPerform(role: string, module: string, action: 'create' | 'rea
       hardner: ['create', 'read', 'update', 'delete'],
       electricity: ['create', 'read', 'update', 'delete'],
       factoryStuff: ['create', 'read', 'update', 'delete'],
+      bills: ['create', 'read', 'update', 'delete'],
     },
     operator: {
       dashboard: ['read'],
@@ -90,6 +91,7 @@ export function canPerform(role: string, module: string, action: 'create' | 'rea
       hardner: ['create', 'read', 'update'],
       electricity: ['create', 'read', 'update'],
       factoryStuff: ['create', 'read', 'update'],
+      bills: ['create', 'read', 'update'],
     },
     accountant: {
       dashboard: ['read'],
@@ -105,6 +107,7 @@ export function canPerform(role: string, module: string, action: 'create' | 'rea
       hardner: ['create', 'read', 'update'],
       electricity: ['create', 'read', 'update'],
       factoryStuff: ['create', 'read', 'update'],
+      bills: ['create', 'read', 'update'],
     },
   }
 

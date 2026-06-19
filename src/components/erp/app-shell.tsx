@@ -37,6 +37,7 @@ import {
   Flame,
   ClipboardList,
   Briefcase,
+  FileText,
 } from 'lucide-react'
 
 // Navigation structure with collapsible sections
@@ -59,6 +60,7 @@ interface NavSection {
 const topItems: NavItem[] = [
   { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4.5 w-4.5" />, roles: ['admin', 'operator', 'accountant'] },
   { key: 'customers', label: 'Customers', icon: <Users className="h-4.5 w-4.5" />, roles: ['admin', 'operator'] },
+  { key: 'bills', label: 'Billing', icon: <FileText className="h-4.5 w-4.5" />, roles: ['admin', 'operator', 'accountant'] },
 ]
 
 const navSections: NavSection[] = [

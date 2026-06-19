@@ -183,6 +183,22 @@ export const api = {
   deleteFactoryStuff: (id: string) =>
     request<{ message: string }>(`/factory-stuff/${id}`, { method: 'DELETE' }),
 
+  // Bills (Billing system)
+  getBills: (filters?: { billType?: string; status?: string }) => {
+    const params = new URLSearchParams()
+    if (filters?.billType) params.set('billType', filters.billType)
+    if (filters?.status) params.set('status', filters.status)
+    const qs = params.toString()
+    return request<{ bills: unknown[] }>(`/bills${qs ? `?${qs}` : ''}`)
+  },
+  getBill: (id: string) => request<{ bill: Record<string, unknown> }>(`/bills/${id}`),
+  createBill: (data: Record<string, unknown>) =>
+    request<{ bill: Record<string, unknown> }>('/bills', { method: 'POST', body: JSON.stringify(data) }),
+  updateBill: (id: string, data: Record<string, unknown>) =>
+    request<{ bill: Record<string, unknown> }>(`/bills/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteBill: (id: string) =>
+    request<{ message: string }>(`/bills/${id}`, { method: 'DELETE' }),
+
   // Reports
   getReport: (type: string) => request<Record<string, unknown>>(`/reports?type=${type}`),
 

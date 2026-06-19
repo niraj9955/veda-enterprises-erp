@@ -1,0 +1,110 @@
+import { NextResponse } from 'next/server'
+import { connectDB, toObject } from '@/lib/db'
+import { Bill, Company } from '@/lib/models'
+import { getSession } from '@/lib/auth'
+
+// GET — list all bills (with optional filter by type/status)
+export async function GET(request: Request) {
+  try {
+    await connectDB()
+    const session = await getSession()
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const billType = searchParams.get('billType')
+    const status = searchParams.get('status')
+
+    const query: Record<string, string> = {}
+    if (billType) query.billType = billType
+    if (status) query.status = status
+
+    const bills = await Bill.find(query).sort({ createdAt: -1 }).lean()
+    return NextResponse.json({ bills: toObject(bills) })
+  } catch (error) {
+    console.error('Error fetching bills:', error)
+    return NextResponse.json({ error: 'Failed to fetch bills' }, { status: 500 })
+  }
+}
+
+// POST — create new bill
+export async function POST(request: Request) {
+  try {
+    await connectDB()
+    const session = await getSession()
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+
+    // Generate bill number: BILL-YYYYMM-0001
+    const count = await Bill.countDocuments({})
+    const now = new Date()
+    const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
+    const billNumber = `BILL-${yyyymm}-${String(count + 1).padStart(4, '0')}`
+
+    // Get company info for "from" fields (defaults)
+    const company = await Company.findOne({})
+    const fromName = body.fromName || company?.name || 'Veda Enterprises'
+    const fromAddress = body.fromAddress || [company?.address, company?.city, company?.state, company?.pincode].filter(Boolean).join(', ')
+    const fromGst = body.fromGst || company?.gstNumber || ''
+    const fromPhone = body.fromPhone || company?.phone || ''
+
+    // Calculate amounts if items present
+    const items = Array.isArray(body.items) ? body.items : []
+    const subTotal = items.reduce((sum: number, item: Record<string, number>) => sum + (Number(item.amount) || 0), 0)
+    const discountPercent = Number(body.discountPercent) || 0
+    const discountAmount = Number(body.discountAmount) || (subTotal * discountPercent / 100)
+    const taxableAmount = subTotal - discountAmount
+
+    const cgstPercent = Number(body.cgstPercent) || 0
+    const cgstAmount = Number(body.cgstAmount) || (taxableAmount * cgstPercent / 100)
+    const sgstPercent = Number(body.sgstPercent) || 0
+    const sgstAmount = Number(body.sgstAmount) || (taxableAmount * sgstPercent / 100)
+    const igstPercent = Number(body.igstPercent) || 0
+    const igstAmount = Number(body.igstAmount) || (taxableAmount * igstPercent / 100)
+
+    const totalBeforeRound = taxableAmount + cgstAmount + sgstAmount + igstAmount
+    const grandTotal = Math.round(totalBeforeRound)
+    const roundOff = grandTotal - totalBeforeRound
+
+    const paidAmount = Number(body.paidAmount) || 0
+    const balanceAmount = grandTotal - paidAmount
+
+    const bill = await Bill.create({
+      billNumber,
+      billType: body.billType || 'sales',
+      date: body.date || new Date().toISOString().split('T')[0],
+      dueDate: body.dueDate || '',
+      fromName, fromAddress, fromGst, fromPhone,
+      toName: body.toName,
+      toAddress: body.toAddress || '',
+      toGst: body.toGst || '',
+      toPhone: body.toPhone || '',
+      items,
+      subTotal,
+      discountPercent,
+      discountAmount,
+      taxableAmount,
+      cgstPercent, cgstAmount,
+      sgstPercent, sgstAmount,
+      igstPercent, igstAmount,
+      roundOff,
+      grandTotal,
+      paidAmount,
+      balanceAmount,
+      paymentMode: body.paymentMode || 'Cash',
+      notes: body.notes || '',
+      terms: body.terms || company?.terms || '',
+      status: paidAmount >= grandTotal && grandTotal > 0 ? 'paid' : (paidAmount > 0 ? 'partial' : 'draft'),
+      createdBy: session.name,
+    })
+
+    return NextResponse.json({ bill: toObject(bill) }, { status: 201 })
+  } catch (error) {
+    console.error('Error creating bill:', error)
+    return NextResponse.json({ error: 'Failed to create bill' }, { status: 500 })
+  }
+}

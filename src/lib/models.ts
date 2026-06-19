@@ -208,6 +208,72 @@ const ExpenseSchema = new mongoose.Schema({
   description: { type: String, default: '' },
 }, { timestamps: true });
 
+// ─── Bill / Invoice (Multi-purpose billing system) ──────────────────────────
+const BillItemSchema = new mongoose.Schema({
+  description: { type: String, required: true },
+  hsn: { type: String, default: '' },
+  quantity: { type: Number, required: true, default: 1 },
+  unit: { type: String, default: 'pcs' },
+  rate: { type: Number, required: true, default: 0 },
+  amount: { type: Number, required: true, default: 0 },
+}, { _id: false });
+
+const BillSchema = new mongoose.Schema({
+  billNumber: { type: String, required: true, unique: true },
+  billType: {
+    type: String,
+    required: true,
+    enum: ['sales', 'purchase', 'quotation', 'service', 'other'],
+    default: 'sales',
+  },
+  date: { type: String, required: true },
+  dueDate: { type: String, default: '' },
+
+  // Bill From (seller — usually the company)
+  fromName: { type: String, default: '' },
+  fromAddress: { type: String, default: '' },
+  fromGst: { type: String, default: '' },
+  fromPhone: { type: String, default: '' },
+
+  // Bill To (customer/party)
+  toName: { type: String, required: true },
+  toAddress: { type: String, default: '' },
+  toGst: { type: String, default: '' },
+  toPhone: { type: String, default: '' },
+
+  // Items
+  items: [BillItemSchema],
+
+  // Money calculations
+  subTotal: { type: Number, default: 0 },
+  discountPercent: { type: Number, default: 0 },
+  discountAmount: { type: Number, default: 0 },
+  taxableAmount: { type: Number, default: 0 },
+  cgstPercent: { type: Number, default: 0 },
+  cgstAmount: { type: Number, default: 0 },
+  sgstPercent: { type: Number, default: 0 },
+  sgstAmount: { type: Number, default: 0 },
+  igstPercent: { type: Number, default: 0 },
+  igstAmount: { type: Number, default: 0 },
+  roundOff: { type: Number, default: 0 },
+  grandTotal: { type: Number, default: 0 },
+
+  // Payment
+  paidAmount: { type: Number, default: 0 },
+  balanceAmount: { type: Number, default: 0 },
+  paymentMode: { type: String, default: 'Cash' },
+
+  // Other
+  notes: { type: String, default: '' },
+  terms: { type: String, default: '' },
+  status: {
+    type: String,
+    enum: ['draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled'],
+    default: 'draft',
+  },
+  createdBy: { type: String, default: '' },
+}, { timestamps: true });
+
 // ─── Models ─────────────────────────────────────────────────────────────────
 export const Company = mongoose.models.Company || mongoose.model('Company', CompanySchema);
 export const User = mongoose.models.User || mongoose.model('User', UserSchema);
@@ -227,3 +293,4 @@ export const CementPurchase = mongoose.models.CementPurchase || mongoose.model('
 export const Hardner = mongoose.models.Hardner || mongoose.model('Hardner', HardnerSchema);
 export const Electricity = mongoose.models.Electricity || mongoose.model('Electricity', ElectricitySchema);
 export const FactoryStuff = mongoose.models.FactoryStuff || mongoose.model('FactoryStuff', FactoryStuffSchema);
+export const Bill = mongoose.models.Bill || mongoose.model('Bill', BillSchema);
