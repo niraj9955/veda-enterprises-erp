@@ -149,8 +149,26 @@ export async function GET(request: Request) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUT — Restore a backup.
-// Accepts two payload shapes for backwards compatibility:
+// PUT — Restore a backup (MERGE mode).
+//
+// IMPORTANT — MERGE SEMANTICS (not REPLACE):
+//   • Docs in the backup file with the same `_id` as an existing doc
+//     → REPLACE the existing doc (backup version wins).
+//   • Docs in the backup file with a new `_id`
+//     → INSERTED as new documents.
+//   • Docs in the current DB whose `_id` is NOT in the backup file
+//     → LEFT UNTOUCHED (current data survives).
+//
+// This is the safe behaviour the user expects: if they took a backup,
+// entered some new data, then restored the backup, the new data is NOT lost.
+// Only data whose `_id` matches a backup row gets overwritten.
+//
+// Implementation: per collection, we issue a `bulkWrite` of `replaceOne`
+// operations with `upsert: true`. replaceOne (vs updateOne with $set) makes
+// the entire backup doc replace the existing doc — so removed fields in the
+// backup don't linger. upsert:true makes new _ids insert as new docs.
+//
+// Payload shapes accepted (for backwards compatibility):
 //   Shape A (v2 backup file): { data: { customers: [...], ... }, counts, version }
 //     → frontend calls api.restoreBackup(parsedFile) which wraps once more,
 //       so the server actually sees { data: { data: {...}, counts, ... } }
@@ -167,18 +185,28 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json()
+    console.log('[restore] received body top-level keys:', Object.keys(body || {}))
 
     // Normalise: extract the actual collection map from any of the supported shapes
     let data: Record<string, unknown[]> = {}
     if (body?.data?.data && typeof body.data.data === 'object') {
       // Shape A — frontend wrapped a v2 backup file
       data = body.data.data
-    } else if (body?.data && Array.isArray((body.data as any).customers) || (body.data as any)?.customers !== undefined) {
+      console.log('[restore] detected Shape A (double-wrapped v2 file)')
+    } else if (body?.data && (Array.isArray((body.data as any).customers) || (body.data as any)?.customers !== undefined)) {
       // Shape B — frontend passed the inner data object directly
       data = body.data as Record<string, unknown[]>
+      console.log('[restore] detected Shape B (unwrapped v2 file)')
     } else if (body?.customers !== undefined || body?.data) {
       // Shape C — raw collections, or body.data is the collections map
       data = (body.data || body) as Record<string, unknown[]>
+      console.log('[restore] detected Shape C (raw collections)')
+    }
+
+    // Log every collection's row count for debugging
+    for (const k of Object.keys(data)) {
+      const v = data[k]
+      console.log(`[restore] payload collection "${k}":`, Array.isArray(v) ? `${v.length} rows` : typeof v)
     }
 
     // Safety: if we still don't have any recognizable collection, abort early
@@ -195,44 +223,72 @@ export async function PUT(request: Request) {
       )
     }
 
-    // Clear all collections (including Company and User — a restore is a full
-    // reset, NOT a clear). Use deleteMany in parallel for speed.
-    await Promise.all(COLLECTIONS.map(({ model }) => model.deleteMany({})))
-
-    // Restore: insert each collection's docs. Use insertMany with
-    // `rawResult: false, ordered: false` so a single bad doc doesn't fail
-    // the entire batch — we want as many rows as possible to make it back.
-    const counts: Record<string, number> = {}
+    // MERGE restore — NO deleteMany. For each collection, build a bulkWrite
+    // of replaceOne + upsert operations keyed by _id. This preserves docs
+    // whose _id is not in the backup file (the user's "current data").
+    const counts: Record<string, number> = { inserted: 0, replaced: 0 }
+    const perCollection: Record<string, { inserted: number; replaced: number; skipped: number }> = {}
     const errors: Record<string, string> = {}
 
     for (const { key, model } of COLLECTIONS) {
       const rows = data[key]
       if (!Array.isArray(rows) || rows.length === 0) {
-        counts[key] = 0
+        perCollection[key] = { inserted: 0, replaced: 0, skipped: 0 }
         continue
       }
       try {
-        // Sanitize each row: ensure _id is a valid ObjectId string (or
-        // strip it if invalid), convert date strings back to Date objects
-        // for fields that look like timestamps.
-        const sanitized = rows.map((row: any) => sanitizeRow(row, key))
-        await model.insertMany(sanitized, { ordered: false, rawResult: false })
-        counts[key] = sanitized.length
+        // Sanitize each row: ensure _id is a valid ObjectId string, convert
+        // date strings back to Date objects for timestamp fields, etc.
+        const sanitized = rows
+          .map((row: any) => sanitizeRow(row, key))
+          // Drop rows without a usable _id — without one we can't upsert and
+          // Mongoose would generate a fresh ObjectId, which would create
+          // duplicates on subsequent restores. Better to skip than corrupt.
+          .filter((r: any) => r && r._id)
+
+        if (sanitized.length === 0) {
+          perCollection[key] = { inserted: 0, replaced: 0, skipped: rows.length }
+          continue
+        }
+
+        const ops = sanitized.map((doc: any) => ({
+          replaceOne: {
+            filter: { _id: doc._id },
+            replacement: doc,
+            upsert: true,
+          },
+        }))
+
+        const result: any = await (model as any).bulkWrite(ops, { ordered: false })
+        const inserted = result?.upsertedCount ?? 0
+        const replaced = result?.modifiedCount ?? 0
+        perCollection[key] = {
+          inserted,
+          replaced,
+          skipped: rows.length - sanitized.length,
+        }
+        counts.inserted += inserted
+        counts.replaced += replaced
+        console.log(`[restore] ${key}: inserted=${inserted} replaced=${replaced} skipped=${rows.length - sanitized.length}`)
       } catch (err: any) {
-        // insertMany with ordered:false can throw a partial-error
-        // AggregateError on Mongoose ≥7. Treat as best-effort: count
-        // whatever was inserted and surface the error message.
-        const inserted = err?.insertedDocs?.length ?? 0
-        counts[key] = inserted
+        // bulkWrite with ordered:false can throw a partial-error. Treat as
+        // best-effort: surface what we know.
+        const inserted = err?.result?.upsertedCount ?? 0
+        const replaced = err?.result?.modifiedCount ?? 0
+        perCollection[key] = { inserted, replaced, skipped: 0 }
+        counts.inserted += inserted
+        counts.replaced += replaced
         errors[key] = err?.message || String(err)
-        console.error(`Restore: partial failure for ${key}:`, err?.message)
+        console.error(`[restore] partial failure for ${key}:`, err?.message)
       }
     }
 
-    const totalRestored = Object.values(counts).reduce((s, n) => s + n, 0)
+    const totalAffected = counts.inserted + counts.replaced
     const res = NextResponse.json({
-      message: `Backup restored successfully — ${totalRestored} documents across ${Object.keys(counts).length} collections.`,
+      message: `Restore complete (MERGE mode) — ${counts.inserted} new + ${counts.replaced} replaced = ${totalAffected} docs affected. Current data not in backup is preserved.`,
+      mode: 'merge',
       counts,
+      perCollection,
       errors: Object.keys(errors).length ? errors : undefined,
     })
     res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')

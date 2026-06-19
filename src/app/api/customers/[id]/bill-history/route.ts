@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
-import { Customer, Production, Dispatch, Bill } from '@/lib/models'
+import { Customer, Production, Dispatch, Bill, Order, Payment } from '@/lib/models'
 
 // Force dynamic — history changes after every mutation.
 export const dynamic = 'force-dynamic'
@@ -24,6 +24,11 @@ const PRODUCT_FIELDS: Array<{ key: string; label: string; hsn: string }> = [
 //   - customer record (for auto-filling party details)
 //   - production records (product-wise quantities per date)
 //   - dispatches (delivered quantities)
+//   - orders (with their items[] — user can one-click import order items
+//     into the bill, so they don't have to retype line items)
+//   - payments (customer's payment history — both manual payments and
+//     auto-synced payments from previous bills. Useful for setting the
+//     paidAmount field on a new bill.)
 //   - previous bills (so user can see what's already been billed)
 //   - aggregated product totals across all production records — gives the
 //     user a one-click "Add all unbilled production to bill" UX
@@ -41,16 +46,19 @@ export async function GET(
     }
 
     // Match production by customerId OR by customerName (some legacy rows
-    // may not have customerId set). Dispatches use customerId only.
+    // may not have customerId set). Dispatches, orders, payments, and bills
+    // use customerId only.
     const customerName = String(customer.name || '').trim()
     const prodQuery: Record<string, unknown> = {
       $or: [{ customerId: id }, ...(customerName ? [{ customerName }] : [])],
     }
 
-    const [productions, dispatches, bills] = await Promise.all([
+    const [productions, dispatches, bills, orders, payments] = await Promise.all([
       Production.find(prodQuery).sort({ date: -1 }).lean(),
       Dispatch.find({ customerId: id }).sort({ date: -1 }).lean(),
       Bill.find({ customerId: id }).sort({ createdAt: -1 }).lean(),
+      Order.find({ customerId: id }).sort({ createdAt: -1 }).lean(),
+      Payment.find({ customerId: id }).sort({ date: -1 }).lean(),
     ])
 
     // Aggregate product totals across all production rows — gives a
@@ -85,19 +93,32 @@ export async function GET(
       0
     )
 
+    // Sum all customer payments (manual + auto-synced from bills) — gives
+    // the user a quick view of how much the customer has already paid
+    // across all channels.
+    const totalPaymentsReceived = payments.reduce(
+      (s, p) => s + (Number(p.amount) || 0),
+      0
+    )
+
     const res = NextResponse.json({
       customer: toObject(customer),
       productions: productions.map(toObject),
       dispatches: dispatches.map(toObject),
       bills: bills.map(toObject),
+      orders: orders.map(toObject),
+      payments: payments.map(toObject),
       productFields: PRODUCT_FIELDS,
       summary: {
         productionCount: productions.length,
         dispatchCount: dispatches.length,
         billCount: bills.length,
+        orderCount: orders.length,
+        paymentCount: payments.length,
         totalDispatchedQty,
         totalPreviouslyBilled,
         totalPreviouslyPaid,
+        totalPaymentsReceived,
         outstanding: totalPreviouslyBilled - totalPreviouslyPaid,
         productTotals,
         dispatchedTotals,

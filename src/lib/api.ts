@@ -76,16 +76,63 @@ export const api = {
         transportationCharge?: number
         remarks?: string
       }>
-      dispatches: unknown[]
-      bills: unknown[]
+      dispatches: Array<{
+        id: string
+        dispatchNumber: string
+        truckNumber: string
+        driverName?: string
+        quantity: number
+        brickType: string
+        date: string
+        orderId?: string
+      }>
+      bills: Array<{
+        id: string
+        billNumber: string
+        date: string
+        grandTotal: number
+        paidAmount: number
+        balanceAmount: number
+        status: string
+      }>
+      orders: Array<{
+        id: string
+        orderNumber: string
+        brickType?: string
+        quantity?: number
+        rate?: number
+        amount?: number
+        deliveryDate: string
+        status?: string
+        items?: Array<{
+          description: string
+          hsn?: string
+          quantity: number
+          unit?: string
+          rate: number
+          amount: number
+        }>
+      }>
+      payments: Array<{
+        id: string
+        paymentType: string
+        amount: number
+        date: string
+        remarks?: string
+        billId?: string | null
+        billNumber?: string
+      }>
       productFields: Array<{ key: string; label: string; hsn: string }>
       summary: {
         productionCount: number
         dispatchCount: number
         billCount: number
+        orderCount: number
+        paymentCount: number
         totalDispatchedQty: number
         totalPreviouslyBilled: number
         totalPreviouslyPaid: number
+        totalPaymentsReceived: number
         outstanding: number
         productTotals: Record<string, number>
         dispatchedTotals: Record<string, number>
@@ -294,7 +341,9 @@ export const api = {
   restoreBackup: (data: Record<string, unknown>) =>
     request<{
       message: string
-      counts: Record<string, number>
+      mode?: 'merge'
+      counts: { inserted: number; replaced: number }
+      perCollection?: Record<string, { inserted: number; replaced: number; skipped: number }>
       errors?: Record<string, string>
     }>('/database', { method: 'PUT', body: JSON.stringify({ data }) }),
 }

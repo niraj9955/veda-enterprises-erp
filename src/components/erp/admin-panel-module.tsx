@@ -470,19 +470,21 @@ export default function AdminPanelModule() {
           : parsed
 
         const result = await api.restoreBackup(payload)
-        // Show what was actually restored — useful when the user wants to
-        // verify their customers came back, or debug a partial restore.
-        const counts = (result as any)?.counts || {}
-        const total = Object.values(counts).reduce((s: number, n: any) => s + (Number(n) || 0), 0)
-        const summary = Object.entries(counts)
-          .filter(([, n]) => Number(n) > 0)
-          .map(([k, n]) => `${k}: ${n}`)
+        // Result shape (MERGE mode):
+        //   { mode: 'merge', counts: { inserted, replaced }, perCollection: { customers: {inserted, replaced, skipped}, ... } }
+        // Show a clear breakdown so the user can verify their data was restored.
+        const inserted = (result as any)?.counts?.inserted ?? 0
+        const replaced = (result as any)?.counts?.replaced ?? 0
+        const perCollection = (result as any)?.perCollection || {}
+        const summary = Object.entries(perCollection)
+          .filter(([, v]: any) => (v?.inserted ?? 0) + (v?.replaced ?? 0) > 0)
+          .map(([k, v]: any) => `${k}: +${v.inserted ?? 0} new / ~${v.replaced ?? 0} updated`)
           .join(' • ')
         toast({
-          title: 'Backup restored',
+          title: 'Backup restored (merge mode)',
           description: summary
-            ? `${total} records restored (${summary})`
-            : 'Database has been restored from backup',
+            ? `${inserted + replaced} docs affected (${inserted} new + ${replaced} updated). Current data NOT in backup is preserved. ${summary}`
+            : `${inserted + replaced} docs affected. Current data NOT in backup is preserved.`,
         })
       } catch (err) {
         console.error('Restore failed:', err)

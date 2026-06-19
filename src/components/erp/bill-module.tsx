@@ -14,6 +14,7 @@ import { toast } from '@/hooks/use-toast'
 import {
   Plus, Trash2, Edit, Printer, FileText, Search, UserCheck, X,
   ArrowLeft, Loader2, Package, Truck, FileSpreadsheet, ShoppingCart,
+  ClipboardList, IndianRupee,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -87,19 +88,53 @@ interface ProductionRow {
   remarks?: string
 }
 
+interface OrderRow {
+  id: string
+  orderNumber: string
+  brickType?: string
+  quantity?: number
+  rate?: number
+  amount?: number
+  deliveryDate: string
+  status?: string
+  items?: Array<{
+    description: string
+    hsn?: string
+    quantity: number
+    unit?: string
+    rate: number
+    amount: number
+  }>
+}
+
+interface PaymentRow {
+  id: string
+  paymentType: string
+  amount: number
+  date: string
+  remarks?: string
+  billId?: string | null
+  billNumber?: string
+}
+
 interface CustomerBillHistory {
   customer: { id: string; name: string; mobile?: string; address?: string; gstNumber?: string }
   productions: ProductionRow[]
   dispatches: any[]
   bills: any[]
+  orders: OrderRow[]
+  payments: PaymentRow[]
   productFields: Array<{ key: string; label: string; hsn: string }>
   summary: {
     productionCount: number
     dispatchCount: number
     billCount: number
+    orderCount: number
+    paymentCount: number
     totalDispatchedQty: number
     totalPreviouslyBilled: number
     totalPreviouslyPaid: number
+    totalPaymentsReceived: number
     outstanding: number
     productTotals: Record<string, number>
   }
@@ -400,7 +435,7 @@ function BillCreatePage({
   const [history, setHistory] = useState<CustomerBillHistory | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
-  const [activeHistoryTab, setActiveHistoryTab] = useState<'production' | 'dispatches' | 'bills'>('production')
+  const [activeHistoryTab, setActiveHistoryTab] = useState<'orders' | 'production' | 'dispatches' | 'bills' | 'payments'>('orders')
 
   // ─── Customer selection handler ──────────────────────────────────────────
   // When a customer is picked from the search dropdown:
@@ -555,6 +590,66 @@ function BillCreatePage({
       title: 'All production added',
       description: `${newItems.length} product types from ${history.summary.productionCount} production records. Set rates to calculate amounts.`,
     })
+  }
+
+  // ─── Add an order's line items to the bill ──────────────────────────────
+  // Order items already have description, hsn, quantity, unit, rate, amount —
+  // we copy them straight into the bill's items[] table. If the order uses
+  // the legacy brickType + quantity + rate fields (no items[]), we convert
+  // those into a single line item.
+  const addOrderToBill = (order: OrderRow) => {
+    const newItems: BillItem[] = []
+    if (order.items && order.items.length > 0) {
+      for (const it of order.items) {
+        if (!it.description?.trim() && Number(it.quantity) === 0) continue
+        newItems.push({
+          description: it.description || order.brickType || 'Item',
+          hsn: it.hsn || '',
+          quantity: Number(it.quantity) || 0,
+          unit: it.unit || 'pcs',
+          rate: Number(it.rate) || 0,
+          amount: Number(it.amount) || (Number(it.quantity) || 0) * (Number(it.rate) || 0),
+        })
+      }
+    } else if (order.brickType && Number(order.quantity) > 0) {
+      // Legacy single-line order — convert to one bill item
+      newItems.push({
+        description: order.brickType,
+        hsn: '6810',
+        quantity: Number(order.quantity) || 0,
+        unit: 'pcs',
+        rate: Number(order.rate) || 0,
+        amount: Number(order.amount) || (Number(order.quantity) || 0) * (Number(order.rate) || 0),
+      })
+    }
+    if (newItems.length === 0) {
+      toast({ title: 'No items', description: 'This order has no billable items.', variant: 'destructive' })
+      return
+    }
+    // Replace current items (an order IS the bill spec, so we don't merge —
+    // we overwrite). Keep the bottom editable blank row for further edits.
+    setItems(() => {
+      const merged = [...newItems]
+      if (merged.length === 0 || merged[merged.length - 1].description.trim() !== '') {
+        merged.push({ description: '', hsn: '', quantity: 1, unit: 'pcs', rate: 0, amount: 0 })
+      }
+      return merged
+    })
+    // Auto-fill paidAmount if customer has advance payments (so the user
+    // doesn't have to manually look up what's been paid already).
+    const totalReceived = history?.summary?.totalPaymentsReceived ?? 0
+    if (totalReceived > 0 && paidAmount === 0) {
+      setPaidAmount(totalReceived)
+      toast({
+        title: 'Order imported + advance applied',
+        description: `${newItems.length} item${newItems.length > 1 ? 's' : ''} from order ${order.orderNumber}. Advance of ₹${totalReceived.toLocaleString('en-IN')} auto-applied to Paid Amount — adjust if needed.`,
+      })
+    } else {
+      toast({
+        title: 'Order imported',
+        description: `${newItems.length} item${newItems.length > 1 ? 's' : ''} from order ${order.orderNumber} added to bill.`,
+      })
+    }
   }
 
   // ─── Calculations ────────────────────────────────────────────────────────
@@ -798,7 +893,7 @@ function BillCreatePage({
                 </div>
               ))}
               <p className="text-xs text-muted-foreground pt-2">
-                Tip: pick a customer above to see their production history, then click "Add to Bill" on any production row to auto-fill items.
+                Tip: pick a customer above, then go to the &quot;Orders&quot; tab on the right and click &quot;Add to Bill&quot; to auto-fill items from the order. Or use the &quot;Production&quot; tab to add manufactured quantities.
               </p>
             </CardContent>
           </Card>
@@ -874,6 +969,7 @@ function BillCreatePage({
             onTabChange={setActiveHistoryTab}
             onAddProduction={addProductionToBill}
             onAddAllProduction={addAllProductionToBill}
+            onAddOrder={addOrderToBill}
           />
         </div>
       </div>
@@ -1024,7 +1120,7 @@ function CustomerSearchBlock({
             )}
 
             <p className="text-xs text-muted-foreground mt-2">
-              Search fetches live from the Customer module. Selecting a customer auto-fills party details AND loads their production/dispatch/bill history.
+              Search fetches live from the Customer module. Selecting a customer auto-fills party details AND loads their orders, production, dispatches, previous bills, and payments — pick anything to import into this bill.
             </p>
           </div>
         )}
@@ -1035,8 +1131,9 @@ function CustomerSearchBlock({
 
 // ════════════════════════════════════════════════════════════════════════════
 // CUSTOMER HISTORY PANEL — shown when a customer is selected
-// Shows tabs: Production | Dispatches | Previous Bills
-// User can click "Add to Bill" on any production row to auto-fill items
+// Shows tabs: Orders | Production | Dispatches | Bills | Payments
+// User can click "Add to Bill" on any production row OR any order row to
+// auto-fill items in the bill.
 // ════════════════════════════════════════════════════════════════════════════
 function CustomerHistoryPanel({
   customerId,
@@ -1047,15 +1144,17 @@ function CustomerHistoryPanel({
   onTabChange,
   onAddProduction,
   onAddAllProduction,
+  onAddOrder,
 }: {
   customerId: string | null
   history: CustomerBillHistory | null
   loading: boolean
   error: string | null
-  activeTab: 'production' | 'dispatches' | 'bills'
-  onTabChange: (t: 'production' | 'dispatches' | 'bills') => void
+  activeTab: 'orders' | 'production' | 'dispatches' | 'bills' | 'payments'
+  onTabChange: (t: 'orders' | 'production' | 'dispatches' | 'bills' | 'payments') => void
   onAddProduction: (p: ProductionRow) => void
   onAddAllProduction: () => void
+  onAddOrder: (o: OrderRow) => void
 }) {
   if (!customerId) {
     return (
@@ -1068,7 +1167,7 @@ function CustomerHistoryPanel({
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground text-center py-8">
-            Select a customer to view their production, dispatch, and billing history.
+            Select a customer to view their orders, production, dispatches, bills, and payments.
           </p>
         </CardContent>
       </Card>
@@ -1098,24 +1197,24 @@ function CustomerHistoryPanel({
 
   if (!history) return null
 
-  const { summary, productions, dispatches, bills } = history
+  const { summary, productions, dispatches, bills, orders, payments } = history
 
   return (
     <Card className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-hidden flex flex-col">
       <CardHeader className="pb-3 shrink-0">
         <CardTitle className="text-sm flex items-center gap-2">
           <Package className="h-4 w-4 text-emerald-600" />
-          {history.customer.name}'s History
+          {history.customer.name}&apos;s History
         </CardTitle>
         {/* Summary chips */}
         <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
           <div className="bg-muted/40 rounded px-2 py-1">
-            <span className="text-muted-foreground">Productions:</span>{' '}
-            <span className="font-medium">{summary.productionCount}</span>
+            <span className="text-muted-foreground">Orders:</span>{' '}
+            <span className="font-medium">{summary.orderCount}</span>
           </div>
           <div className="bg-muted/40 rounded px-2 py-1">
-            <span className="text-muted-foreground">Dispatches:</span>{' '}
-            <span className="font-medium">{summary.dispatchCount}</span>
+            <span className="text-muted-foreground">Productions:</span>{' '}
+            <span className="font-medium">{summary.productionCount}</span>
           </div>
           <div className="bg-muted/40 rounded px-2 py-1">
             <span className="text-muted-foreground">Prev. Bills:</span>{' '}
@@ -1125,21 +1224,27 @@ function CustomerHistoryPanel({
             <span className="text-muted-foreground">Outstanding:</span>{' '}
             <span className="font-medium text-amber-600">₹{summary.outstanding.toLocaleString('en-IN')}</span>
           </div>
+          <div className="bg-muted/40 rounded px-2 py-1 col-span-2">
+            <span className="text-muted-foreground">Total Payments Received:</span>{' '}
+            <span className="font-medium text-emerald-600">₹{Number(summary.totalPaymentsReceived || 0).toLocaleString('en-IN')}</span>
+          </div>
         </div>
       </CardHeader>
 
       {/* Tabs */}
-      <div className="flex border-b shrink-0">
+      <div className="flex border-b shrink-0 overflow-x-auto">
         {[
+          { key: 'orders' as const, label: 'Orders', icon: ClipboardList, count: summary.orderCount },
           { key: 'production' as const, label: 'Production', icon: Package, count: summary.productionCount },
           { key: 'dispatches' as const, label: 'Dispatches', icon: Truck, count: summary.dispatchCount },
           { key: 'bills' as const, label: 'Bills', icon: FileSpreadsheet, count: summary.billCount },
+          { key: 'payments' as const, label: 'Payments', icon: IndianRupee, count: summary.paymentCount },
         ].map((tab) => (
           <button
             key={tab.key}
             type="button"
             onClick={() => onTabChange(tab.key)}
-            className={`flex-1 px-2 py-2 text-xs font-medium flex items-center justify-center gap-1 border-b-2 transition-colors ${
+            className={`flex-1 min-w-[60px] px-2 py-2 text-xs font-medium flex items-center justify-center gap-1 border-b-2 transition-colors whitespace-nowrap ${
               activeTab === tab.key
                 ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -1154,6 +1259,76 @@ function CustomerHistoryPanel({
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        {activeTab === 'orders' && (
+          orders.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-4">
+              No orders for this customer. Create an order first, then come back to bill it.
+            </p>
+          ) : (
+            orders.map((o) => {
+              const itemCount = (o.items?.length || 0)
+              const totalQty = o.items?.reduce((s, it) => s + (Number(it.quantity) || 0), 0) ?? Number(o.quantity || 0)
+              const totalAmt = o.items?.reduce((s, it) => s + (Number(it.amount) || 0), 0) ?? Number(o.amount || 0)
+              return (
+                <div key={o.id} className="border rounded p-2 text-xs hover:border-emerald-300">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="min-w-0">
+                      <span className="font-medium">{o.orderNumber}</span>
+                      <span className="text-muted-foreground ml-1">• {o.deliveryDate}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-6 px-2 text-[11px] bg-emerald-600 hover:bg-emerald-700"
+                      onClick={() => onAddOrder(o)}
+                    >
+                      <Plus className="h-3 w-3 mr-0.5" /> Add to Bill
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Badge variant="outline" className="text-[10px]">{o.status || 'Pending'}</Badge>
+                    {o.brickType && !itemCount && (
+                      <Badge variant="outline" className="text-[10px]">{o.brickType}</Badge>
+                    )}
+                  </div>
+                  {itemCount > 0 ? (
+                    <div className="space-y-0.5">
+                      {o.items!.slice(0, 5).map((it, i) => (
+                        <div key={i} className="flex justify-between">
+                          <span className="text-muted-foreground truncate pr-1">{it.description}</span>
+                          <span className="font-medium whitespace-nowrap">
+                            {it.quantity} {it.unit || 'pcs'} × ₹{Number(it.rate || 0).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                      ))}
+                      {itemCount > 5 && (
+                        <p className="text-[10px] text-muted-foreground italic">+ {itemCount - 5} more items</p>
+                      )}
+                      <div className="flex justify-between pt-1 mt-1 border-t">
+                        <span className="text-muted-foreground">Total ({itemCount} items, {totalQty} qty)</span>
+                        <span className="font-medium text-emerald-700 dark:text-emerald-400">₹{totalAmt.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+                  ) : o.brickType ? (
+                    <div className="space-y-0.5">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">{o.brickType}</span>
+                        <span className="font-medium">{o.quantity} qty × ₹{Number(o.rate || 0).toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="flex justify-between pt-1 mt-1 border-t">
+                        <span className="text-muted-foreground">Total</span>
+                        <span className="font-medium text-emerald-700 dark:text-emerald-400">₹{totalAmt.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No items</p>
+                  )}
+                </div>
+              )
+            })
+          )
+        )}
+
         {activeTab === 'production' && (
           <>
             {productions.length > 0 && (
@@ -1264,6 +1439,44 @@ function CustomerHistoryPanel({
                 </div>
               </div>
             ))
+          )
+        )}
+
+        {activeTab === 'payments' && (
+          payments.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-4">
+              No payment records for this customer.
+            </p>
+          ) : (
+            <>
+              <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded p-2 mb-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total Received:</span>
+                  <span className="font-bold text-emerald-700 dark:text-emerald-400">
+                    ₹{Number(summary.totalPaymentsReceived || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </div>
+              {payments.map((p) => (
+                <div key={p.id} className="border rounded p-2 text-xs">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-medium">{p.date}</span>
+                    <span className="font-bold text-emerald-700 dark:text-emerald-400">
+                      ₹{Number(p.amount || 0).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="text-[10px]">{p.paymentType}</Badge>
+                    {p.billNumber && (
+                      <Badge variant="outline" className="text-[10px] text-emerald-700">{p.billNumber}</Badge>
+                    )}
+                  </div>
+                  {p.remarks && (
+                    <p className="text-[10px] text-muted-foreground italic mt-1">{p.remarks}</p>
+                  )}
+                </div>
+              ))}
+            </>
           )
         )}
       </div>

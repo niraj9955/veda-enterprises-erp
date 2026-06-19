@@ -262,3 +262,43 @@ Stage Summary:
 - All 3 modules that had customer dropdowns (Order, Dispatch, Payment) now use the searchable CustomerSearchInput — no more slow scrolling through long customer lists
 - Restore bug FIXED (root causes: unpushed commits + password validation). All 3 commits pushed to GitHub so Vercel will deploy the working version.
 - After Vercel deploys (~2-3 min), user should: hard-refresh browser (Ctrl+Shift+R) to clear cached old JS bundle, then test restore with a FRESH backup file (old backup files only have 9 collections — export a new one with all 19 collections)
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: Fix restore deleting current data + Add Orders/Payments fetching to Bill creation
+
+Work Log:
+- User reported: "restore krne pe customer me data to aaya but current data ud gya" — restore wiped current data even though backup data came back
+- Root cause: PUT /api/database/route.ts was doing `deleteMany({})` on ALL 19 collections BEFORE inserting backup data. If a collection wasn't in the backup (or failed to restore), that data was GONE forever.
+- REWROTE PUT /api/database/route.ts to use MERGE semantics instead of REPLACE:
+  * Removed the deleteMany step entirely
+  * Replaced insertMany with bulkWrite of replaceOne + upsert:true, keyed by _id
+  * Docs in backup with same _id as existing → REPLACE existing (backup wins)
+  * Docs in backup with new _id → INSERT as new
+  * Docs in current DB whose _id is NOT in backup → LEFT UNTOUCHED (current data survives)
+  * Added verbose console logging ([restore] prefix) for each collection's inserted/replaced/skipped counts
+  * New response shape: { mode: 'merge', counts: {inserted, replaced}, perCollection: {customers: {inserted, replaced, skipped}, ...} }
+- UPDATED admin-panel-module.tsx handleRestoreBackup to display new merge-mode breakdown in toast: "X new + Y updated. Current data NOT in backup is preserved."
+- UPDATED api.ts restoreBackup return type to include mode, perCollection fields
+
+- User reported: "jo order me data h customer ka wo data bill me v to fetch hona chahiye manual bill q banana direct order data fetch krega or payment data v fetch krega auto"
+- UPDATED /api/customers/[id]/bill-history/route.ts to also fetch Orders + Payments (in addition to existing productions/dispatches/bills)
+- Added summary fields: orderCount, paymentCount, totalPaymentsReceived
+- UPDATED api.ts getCustomerBillHistory return type to include orders[] and payments[] arrays with proper TypeScript types
+- ADDED OrderRow + PaymentRow interfaces in bill-module.tsx
+- UPDATED BillCreatePage's CustomerHistoryPanel:
+  * Added new "Orders" tab (default active, since orders are the primary bill source)
+  * Added new "Payments" tab showing customer's payment history
+  * 5 tabs total: Orders | Production | Dispatches | Bills | Payments
+  * Each order row shows: order number, delivery date, status badge, item list (up to 5), total qty + amount, "Add to Bill" button
+  * Clicking "Add to Bill" on an order copies all order items[] straight into the bill's items table (description, hsn, qty, unit, rate, amount preserved)
+  * If customer has advance payments (totalPaymentsReceived > 0), auto-applies it to paidAmount field so user doesn't have to look it up manually
+  * Payments tab shows total received summary at top + each payment with date, amount, type, linked bill number
+- TypeScript: zero errors in any edited file (verified with npx tsc --noEmit)
+
+Stage Summary:
+- Restore is now SAFE: it MERGES backup with current data instead of wiping and replacing. Current data not in backup is preserved. Backup docs replace same-_id docs, new docs insert.
+- Bill creation now fetches customer's orders + payments automatically. User can one-click "Add to Bill" on any order to import all order items (no more manual bill creation when an order already exists). Customer's advance payments are auto-applied to paidAmount.
+- 5 history tabs in the right sidebar: Orders (default), Production, Dispatches, Bills, Payments.
+- All changes saved. User should push to GitHub / deploy to Vercel to see live.
