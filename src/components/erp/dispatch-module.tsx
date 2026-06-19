@@ -57,6 +57,7 @@ import {
   Search,
 } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
+import CustomerSearchInput from '@/components/erp/customer-search-input'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -372,30 +373,19 @@ export function DispatchModule() {
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
-          {/* Customer */}
-          <div className="grid gap-2">
-            <Label>
-              Customer <span className="text-destructive">*</span>
-            </Label>
-            <Select
-              value={formData.customerId}
-              onValueChange={(val) =>
-                setFormData((prev) => ({ ...prev, customerId: val, orderId: '', brickType: '', quantity: '' }))
-              }
-              disabled={dropdownsLoading}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder={dropdownsLoading ? 'Loading...' : 'Select customer'} />
-              </SelectTrigger>
-              <SelectContent>
-                {customers.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name} — {c.mobile}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Customer — SEARCHABLE (replaces old dropdown) */}
+          <CustomerSearchInput
+            value={formData.customerId}
+            onSelect={(c) =>
+              setFormData((prev) => ({ ...prev, customerId: c.id, orderId: '', brickType: '', quantity: '' }))
+            }
+            onClear={() =>
+              setFormData((prev) => ({ ...prev, customerId: '', orderId: '', brickType: '', quantity: '' }))
+            }
+            required
+            label="Customer"
+            placeholder="Type customer name or mobile to search..."
+          />
 
           {/* Order (optional) */}
           <div className="grid gap-2">

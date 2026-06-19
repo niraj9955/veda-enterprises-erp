@@ -197,13 +197,29 @@ const FactoryStuffSchema = new mongoose.Schema({
 FactoryStuffSchema.index({ date: -1 });
 
 // ─── Legacy Models (kept for backward compatibility with existing API routes) ─
+const OrderItemSchema = new mongoose.Schema({
+  description: { type: String, required: true },
+  hsn: { type: String, default: '' },
+  quantity: { type: Number, required: true, default: 1 },
+  unit: { type: String, default: 'pcs' },
+  rate: { type: Number, required: true, default: 0 },
+  amount: { type: Number, required: true, default: 0 },
+}, { _id: false });
+
 const OrderSchema = new mongoose.Schema({
   orderNumber: { type: String, required: true, unique: true },
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
-  brickType: { type: String, required: true },
-  quantity: { type: Number, required: true },
-  rate: { type: Number, required: true },
-  amount: { type: Number, required: true },
+  // Primary brick type — kept for backward compatibility with existing
+  // orders + dispatches that reference it. Now optional: when the user
+  // fills the items[] section instead, this can be empty.
+  brickType: { type: String, default: '' },
+  quantity: { type: Number, default: 0 },
+  rate: { type: Number, default: 0 },
+  amount: { type: Number, default: 0 },
+  // Optional line items — when present, these are the detailed breakdown
+  // of the order and the top-level quantity/rate/amount become summary
+  // fields (sum of item qty, weighted avg rate, sum of item amounts).
+  items: [OrderItemSchema],
   deliveryDate: { type: String, required: true },
   status: { type: String, default: 'Pending' },
 }, { timestamps: true });

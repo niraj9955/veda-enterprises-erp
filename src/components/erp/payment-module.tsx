@@ -58,6 +58,7 @@ import {
   Search,
 } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
+import CustomerSearchInput from '@/components/erp/customer-search-input'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -434,27 +435,15 @@ export function PaymentModule() {
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
-          {/* Customer */}
-          <div className="grid gap-2">
-            <Label htmlFor="payment-customer">
-              Customer <span className="text-destructive">*</span>
-            </Label>
-            <Select
-              value={formData.customerId}
-              onValueChange={(val) => handleFormChange('customerId', val)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select customer" />
-              </SelectTrigger>
-              <SelectContent>
-                {customers.map((customer) => (
-                  <SelectItem key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Customer — SEARCHABLE (replaces old dropdown) */}
+          <CustomerSearchInput
+            value={formData.customerId}
+            onSelect={(c) => handleFormChange('customerId', c.id)}
+            onClear={() => handleFormChange('customerId', '')}
+            required
+            label="Customer"
+            placeholder="Type customer name or mobile to search..."
+          />
 
           {/* Payment Type */}
           <div className="grid gap-2">

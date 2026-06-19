@@ -251,7 +251,12 @@ export async function PUT(request: Request) {
 //   2. Strip the `id` field — Mongoose treats it as a strict-schema field
 //      only if defined; otherwise it gets stored as a useless extra key
 //   3. Convert ISO date strings back to Date objects for createdAt/updatedAt
-function sanitizeRow(row: any, _collectionKey: string): any {
+//   4. Per-collection quirks: e.g. User.password is required by schema but
+//      the export route strips passwords for security. During restore we
+//      substitute a placeholder so Mongoose validation doesn't reject the
+//      entire users collection. The admin can reset passwords later via
+//      the User Management screen.
+function sanitizeRow(row: any, collectionKey: string): any {
   if (!row || typeof row !== 'object') return row
   const out: any = { ...row }
 
@@ -276,6 +281,19 @@ function sanitizeRow(row: any, _collectionKey: string): any {
       const d = new Date(out[k])
       if (!isNaN(d.getTime())) out[k] = d
     }
+  }
+
+  // Per-collection quirks
+  if (collectionKey === 'users') {
+    // User schema requires `password`. Export strips it for security.
+    // Restore with a placeholder so the row passes validation — admin
+    // can reset passwords later. We use a recognisable placeholder so
+    // it's obvious in the DB which accounts need a password reset.
+    if (!out.password || typeof out.password !== 'string' || out.password.length === 0) {
+      out.password = 'veda-reset-' + Math.random().toString(36).slice(2, 10)
+    }
+    // Also ensure `active` defaults to true if missing
+    if (out.active === undefined) out.active = true
   }
 
   return out

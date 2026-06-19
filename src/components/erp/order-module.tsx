@@ -51,14 +51,25 @@ import {
   IndianRupee,
   Upload,
   Search,
+  X,
 } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
+import CustomerSearchInput from '@/components/erp/customer-search-input'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
 interface Customer {
   id: string
   name: string
+}
+
+interface OrderItem {
+  description: string
+  hsn: string
+  quantity: number
+  unit: string
+  rate: number
+  amount: number
 }
 
 interface Order {
@@ -69,6 +80,7 @@ interface Order {
   quantity: number
   rate: number
   amount: number
+  items?: OrderItem[]
   deliveryDate: string
   status: string
   createdAt: string
@@ -82,6 +94,7 @@ interface OrderFormData {
   rate: number | string
   deliveryDate: string
   status: string
+  items: OrderItem[]
 }
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -121,7 +134,13 @@ const emptyForm: OrderFormData = {
   rate: '',
   deliveryDate: '',
   status: 'Pending',
+  items: [],
 }
+
+// Default new line item — used when user clicks "Add Item"
+const newItem = (): OrderItem => ({
+  description: '', hsn: '', quantity: 1, unit: 'pcs', rate: 0, amount: 0,
+})
 
 // ── Component ───────────────────────────────────────────────────────────────
 
@@ -152,11 +171,35 @@ export function OrderModule() {
   const [deleting, setDeleting] = React.useState(false)
 
   // ── Computed amount ─────────────────────────────────────────────────────
+  // If items[] are present, total amount = sum of item amounts.
+  // Otherwise fall back to top-level qty * rate.
   const computedAmount = React.useMemo(() => {
+    if (formData.items.length > 0) {
+      return formData.items.reduce((s, it) => s + (Number(it.amount) || 0), 0)
+    }
     const qty = Number(formData.quantity) || 0
     const rate = Number(formData.rate) || 0
     return qty * rate
-  }, [formData.quantity, formData.rate])
+  }, [formData.quantity, formData.rate, formData.items])
+
+  // ── Item management ──────────────────────────────────────────────────────
+  const updateItem = (idx: number, field: keyof OrderItem, value: string | number) => {
+    setFormData((prev) => {
+      const items = [...prev.items]
+      const item = { ...items[idx] }
+      if (field === 'description' || field === 'hsn' || field === 'unit') {
+        (item as any)[field] = value as string
+      } else {
+        (item as any)[field] = Number(value) || 0
+      }
+      item.amount = item.quantity * item.rate
+      items[idx] = item
+      return { ...prev, items }
+    })
+  }
+  const addItem = () => setFormData((prev) => ({ ...prev, items: [...prev.items, newItem()] }))
+  const removeItem = (idx: number) =>
+    setFormData((prev) => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) }))
 
   // ── Fetch orders ────────────────────────────────────────────────────────
   const fetchOrders = React.useCallback(async () => {
@@ -242,16 +285,28 @@ export function OrderModule() {
       return
     }
 
+    // Either items[] OR brickType+qty+rate must be present
+    const hasItems = formData.items.length > 0 && formData.items.some((i) => i.description.trim())
+    if (!hasItems && (!formData.brickType || !formData.quantity || !formData.rate)) {
+      toast({
+        title: 'Validation Error',
+        description: 'Add at least one item, OR fill brick type + quantity + rate',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setFormSubmitting(true)
     try {
       const payload = {
         customerId: formData.customerId,
         brickType: formData.brickType,
-        quantity: Number(formData.quantity),
-        rate: Number(formData.rate),
+        quantity: Number(formData.quantity) || 0,
+        rate: Number(formData.rate) || 0,
         amount: computedAmount,
         deliveryDate: formData.deliveryDate,
         status: formData.status,
+        items: formData.items.filter((i) => i.description.trim()),
       }
 
       await api.createOrder(payload)
@@ -344,48 +399,36 @@ export function OrderModule() {
   // ── Render: Create Order dialog ─────────────────────────────────────────
   const renderCreateDialog = () => (
     <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Order</DialogTitle>
           <DialogDescription>
-            Fill in the details to create a new order.
+            Fill in the details to create a new order. You can add multiple items below the brick type.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
-          {/* Customer */}
-          <div className="grid gap-2">
-            <Label htmlFor="order-customer">
-              Customer <span className="text-destructive">*</span>
-            </Label>
-            <Select
-              value={formData.customerId}
-              onValueChange={(val) => handleFormChange('customerId', val)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select customer" />
-              </SelectTrigger>
-              <SelectContent>
-                {customers.map((customer) => (
-                  <SelectItem key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Customer — SEARCHABLE (replaces old dropdown) */}
+          <CustomerSearchInput
+            value={formData.customerId}
+            onSelect={(c) => handleFormChange('customerId', c.id)}
+            onClear={() => handleFormChange('customerId', '')}
+            required
+            label="Customer"
+            placeholder="Type customer name or mobile to search..."
+          />
 
-          {/* Brick Type */}
+          {/* Brick Type — now optional since items[] can replace it */}
           <div className="grid gap-2">
             <Label htmlFor="order-brick">
-              Brick Type <span className="text-destructive">*</span>
+              Brick Type <span className="text-muted-foreground text-xs font-normal">(optional when items are added below)</span>
             </Label>
             <Select
               value={formData.brickType}
               onValueChange={(val) => handleFormChange('brickType', val)}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select brick type" />
+                <SelectValue placeholder="Select brick type (or skip if using items)" />
               </SelectTrigger>
               <SelectContent>
                 {BRICK_TYPES.map((type) => (
@@ -397,11 +440,85 @@ export function OrderModule() {
             </Select>
           </div>
 
-          {/* Quantity & Rate */}
+          {/* Items section — multi-line item entry */}
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <Label>Items <span className="text-muted-foreground text-xs font-normal">(add multiple products / brick types)</span></Label>
+              <Button type="button" size="sm" variant="outline" onClick={addItem}>
+                <Plus className="h-3 w-3 mr-1" /> Add Item
+              </Button>
+            </div>
+            <div className="border rounded-md p-2 space-y-2 bg-muted/20">
+              {formData.items.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-2">
+                  No items added. Use "Add Item" to add multiple products, OR skip this section and use brick type + qty + rate above.
+                </p>
+              ) : (
+                <>
+                  <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-muted-foreground px-1">
+                    <div className="col-span-5">Description</div>
+                    <div className="col-span-2">Qty</div>
+                    <div className="col-span-2">Unit</div>
+                    <div className="col-span-2">Rate (₹)</div>
+                    <div className="col-span-1">Amount</div>
+                  </div>
+                  {formData.items.map((item, idx) => (
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                      <Input
+                        className="col-span-12 md:col-span-5"
+                        placeholder="Item description"
+                        value={item.description}
+                        onChange={(e) => updateItem(idx, 'description', e.target.value)}
+                      />
+                      <Input
+                        type="number"
+                        className="col-span-4 md:col-span-2"
+                        placeholder="Qty"
+                        value={item.quantity}
+                        onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
+                      />
+                      <Input
+                        className="col-span-4 md:col-span-2"
+                        placeholder="Unit"
+                        value={item.unit}
+                        onChange={(e) => updateItem(idx, 'unit', e.target.value)}
+                      />
+                      <Input
+                        type="number"
+                        className="col-span-4 md:col-span-2"
+                        placeholder="Rate"
+                        value={item.rate}
+                        onChange={(e) => updateItem(idx, 'rate', e.target.value)}
+                      />
+                      <div className="col-span-11 md:col-span-1 flex items-center gap-1">
+                        <span className="text-xs font-medium flex-1">₹{(item.amount || 0).toLocaleString('en-IN')}</span>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive shrink-0"
+                          onClick={() => removeItem(idx)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+              {formData.items.length > 0 && (
+                <div className="flex justify-end pt-1 border-t text-sm font-medium">
+                  Total: ₹{computedAmount.toLocaleString('en-IN')}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Quantity & Rate — kept for backward compat / quick single-item orders */}
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="order-qty">
-                Quantity <span className="text-destructive">*</span>
+                Quantity <span className="text-muted-foreground text-xs font-normal">(if no items)</span>
               </Label>
               <Input
                 id="order-qty"
@@ -414,7 +531,7 @@ export function OrderModule() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="order-rate">
-                Rate (₹) <span className="text-destructive">*</span>
+                Rate (₹) <span className="text-muted-foreground text-xs font-normal">(if no items)</span>
               </Label>
               <div className="relative">
                 <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -668,6 +785,11 @@ export function OrderModule() {
                       <TableCell>{order.customer?.name || '—'}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{order.brickType}</Badge>
+                        {order.items && order.items.length > 0 && (
+                          <Badge variant="secondary" className="ml-1 text-[10px]">
+                            {order.items.length} item{order.items.length > 1 ? 's' : ''}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {new Intl.NumberFormat('en-IN').format(order.quantity)}
