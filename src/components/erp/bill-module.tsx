@@ -24,7 +24,7 @@ interface BillItem {
 }
 
 interface Bill {
-  _id: string
+  id: string
   billNumber: string
   billType: string
   date: string
@@ -256,7 +256,7 @@ export default function BillModule() {
                 </TableRow>
               ) : (
                 filteredBills.map((bill) => (
-                  <TableRow key={bill._id}>
+                  <TableRow key={bill.id}>
                     <TableCell className="font-medium">{bill.billNumber}</TableCell>
                     <TableCell>{bill.date}</TableCell>
                     <TableCell>
@@ -281,7 +281,7 @@ export default function BillModule() {
                         <Button size="icon" variant="ghost" onClick={() => { setEditingBill(bill); setShowForm(true) }} title="Edit">
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="text-destructive" onClick={() => handleDelete(bill._id)} title="Delete">
+                        <Button size="icon" variant="ghost" className="text-destructive" onClick={() => handleDelete(bill.id)} title="Delete">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -379,7 +379,7 @@ function BillForm({ bill, onSave, onCancel }: { bill: Bill | null; onSave: () =>
         terms,
       }
       if (bill) {
-        await api.updateBill(bill._id, payload)
+        await api.updateBill(bill.id, payload)
         toast({ title: 'Updated', description: 'Bill updated successfully' })
       } else {
         await api.createBill(payload)
