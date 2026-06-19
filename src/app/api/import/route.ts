@@ -29,6 +29,7 @@ export async function POST(request: Request) {
     let imported = 0
     let skipped = 0
     const errors: string[] = []
+    const skippedReasons: string[] = []
 
     for (let i = 0; i < data.length; i++) {
       try {
@@ -44,7 +45,11 @@ export async function POST(request: Request) {
             }
             // Dedupe by mobile (same customer exists → skip)
             const exists = await Customer.findOne({ mobile: String(row.mobile).trim() })
-            if (exists) { skipped++; continue }
+            if (exists) {
+              skipped++
+              skippedReasons.push(`Row ${i + 1}: Customer "${String(row.name).trim()}" (mobile ${row.mobile}) already exists — skipped`)
+              continue
+            }
 
             await Customer.create({
               name: String(row.name).trim(),
@@ -389,12 +394,16 @@ export async function POST(request: Request) {
       }
     }
 
+    // Merge errors and skippedReasons so the UI can show every reason a row
+    // was not imported (validation error OR duplicate OR anything else).
+    const allReasons = [...errors, ...skippedReasons]
+
     return NextResponse.json({
       success: true,
       imported,
       skipped,
       total: data.length,
-      errors: errors.length > 0 ? errors.slice(0, 20) : undefined,
+      errors: allReasons.length > 0 ? allReasons.slice(0, 50) : undefined,
     })
   } catch (error) {
     console.error('Error importing data:', error)

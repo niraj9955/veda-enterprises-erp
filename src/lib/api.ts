@@ -44,7 +44,7 @@ export const api = {
 
   // Customers
   getCustomers: (search?: string) =>
-    request<{ customers: unknown[] }>(`/customers${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+    request<{ customers: unknown[]; total?: number; page?: number; limit?: number; totalPages?: number }>(`/customers${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   createCustomer: (data: Record<string, unknown>) =>
     request<{ customer: unknown }>('/customers', { method: 'POST', body: JSON.stringify(data) }),
   updateCustomer: (id: string, data: Record<string, unknown>) =>

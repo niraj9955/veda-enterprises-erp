@@ -43,6 +43,14 @@ const CustomerSchema = new mongoose.Schema({
   creditLimit: { type: Number, default: 0 },
 }, { timestamps: true });
 
+// Indexes — speed up the most common queries
+// mobile: used for dedup check during import + customer search by mobile
+CustomerSchema.index({ mobile: 1 });
+// name: used for search by name (case-insensitive regex)
+CustomerSchema.index({ name: 1 });
+// createdAt: used for default sort (newest first)
+CustomerSchema.index({ createdAt: -1 });
+
 // ─── Production (Product-wise with customer & transport) ────────────────────
 const ProductionSchema = new mongoose.Schema({
   date: { type: String, required: true },
@@ -60,6 +68,8 @@ const ProductionSchema = new mongoose.Schema({
   transportationCharge: { type: Number, default: 0 },
   remarks: { type: String, default: '' },
 }, { timestamps: true });
+ProductionSchema.index({ date: -1 });
+ProductionSchema.index({ customerName: 1 });
 
 // ─── Stock (Product-wise tracking) ─────────────────────────────────────────
 const StockSchema = new mongoose.Schema({
@@ -77,6 +87,7 @@ const StockSchema = new mongoose.Schema({
   dumbleRed80: { type: Number, default: 0 },
   dumbleYellow80: { type: Number, default: 0 },
 }, { timestamps: true });
+StockSchema.index({ date: -1 });
 
 // ─── Daily Sell ────────────────────────────────────────────────────────────
 const DailySellSchema = new mongoose.Schema({
@@ -87,6 +98,8 @@ const DailySellSchema = new mongoose.Schema({
   remarks: { type: String, default: '' },
   contactNumber: { type: String, default: '' },
 }, { timestamps: true });
+DailySellSchema.index({ date: -1 });
+DailySellSchema.index({ customerName: 1 });
 
 // ─── Customer Payment ──────────────────────────────────────────────────────
 const CustomerPaymentSchema = new mongoose.Schema({
@@ -96,6 +109,8 @@ const CustomerPaymentSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   remarks: { type: String, default: '' },
 }, { timestamps: true });
+CustomerPaymentSchema.index({ date: -1 });
+CustomerPaymentSchema.index({ name: 1 });
 
 // ─── Labour Payment ────────────────────────────────────────────────────────
 const LabourPaymentSchema = new mongoose.Schema({
@@ -105,6 +120,8 @@ const LabourPaymentSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   remarks: { type: String, default: '' },
 }, { timestamps: true });
+LabourPaymentSchema.index({ date: -1 });
+LabourPaymentSchema.index({ name: 1 });
 
 // ─── Tractor Payment ───────────────────────────────────────────────────────
 const TractorPaymentSchema = new mongoose.Schema({
@@ -117,6 +134,8 @@ const TractorPaymentSchema = new mongoose.Schema({
   remainingAmount: { type: Number, default: 0 },
   remarks: { type: String, default: '' },
 }, { timestamps: true });
+TractorPaymentSchema.index({ date: -1 });
+TractorPaymentSchema.index({ vendorName: 1 });
 
 // ─── Dust Purchase ─────────────────────────────────────────────────────────
 const DustPurchaseSchema = new mongoose.Schema({
@@ -131,6 +150,8 @@ const DustPurchaseSchema = new mongoose.Schema({
   gst: { type: Number, default: 0 },
   remarks: { type: String, default: '' },
 }, { timestamps: true });
+DustPurchaseSchema.index({ date: -1 });
+DustPurchaseSchema.index({ vendorName: 1 });
 
 // ─── Cement Purchase ───────────────────────────────────────────────────────
 const CementPurchaseSchema = new mongoose.Schema({
@@ -145,12 +166,15 @@ const CementPurchaseSchema = new mongoose.Schema({
   gst: { type: Number, default: 0 },
   remarks: { type: String, default: '' },
 }, { timestamps: true });
+CementPurchaseSchema.index({ date: -1 });
+CementPurchaseSchema.index({ vendorName: 1 });
 
 // ─── Hardner ───────────────────────────────────────────────────────────────
 const HardnerSchema = new mongoose.Schema({
   date: { type: String, required: true },
   amount: { type: Number, required: true },
 }, { timestamps: true });
+HardnerSchema.index({ date: -1 });
 
 // ─── Electricity ───────────────────────────────────────────────────────────
 const ElectricitySchema = new mongoose.Schema({
@@ -160,6 +184,7 @@ const ElectricitySchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   remarks: { type: String, default: '' },
 }, { timestamps: true });
+ElectricitySchema.index({ date: -1 });
 
 // ─── Factory Stuff ─────────────────────────────────────────────────────────
 const FactoryStuffSchema = new mongoose.Schema({
@@ -169,6 +194,7 @@ const FactoryStuffSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   remarks: { type: String, default: '' },
 }, { timestamps: true });
+FactoryStuffSchema.index({ date: -1 });
 
 // ─── Legacy Models (kept for backward compatibility with existing API routes) ─
 const OrderSchema = new mongoose.Schema({
@@ -273,6 +299,9 @@ const BillSchema = new mongoose.Schema({
   },
   createdBy: { type: String, default: '' },
 }, { timestamps: true });
+BillSchema.index({ billNumber: 1 });
+BillSchema.index({ date: -1 });
+BillSchema.index({ billType: 1, status: 1 });
 
 // ─── Models ─────────────────────────────────────────────────────────────────
 export const Company = mongoose.models.Company || mongoose.model('Company', CompanySchema);

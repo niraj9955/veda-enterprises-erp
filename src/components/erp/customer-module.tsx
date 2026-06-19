@@ -110,6 +110,7 @@ const emptyForm: CustomerFormData = {
 export function CustomerModule() {
   // State
   const [customers, setCustomers] = React.useState<Customer[]>([])
+  const [totalCount, setTotalCount] = React.useState(0)
   const [loading, setLoading] = React.useState(true)
   const [search, setSearch] = React.useState('')
   const [debouncedSearch, setDebouncedSearch] = React.useState('')
@@ -146,6 +147,12 @@ export function CustomerModule() {
     try {
       const res = await api.getCustomers(debouncedSearch || undefined)
       setCustomers(res.customers as Customer[])
+      // Track total count separately so the badge can show "X of Y" when
+      // pagination is in effect (the API now returns `total` alongside
+      // the page slice). If `total` is missing (older deployments), fall
+      // back to the slice length.
+      const r = res as { total?: number; customers: Customer[] }
+      setTotalCount(r.total ?? r.customers.length)
     } catch (err) {
       toast({
         title: 'Error',
@@ -545,7 +552,11 @@ export function CustomerModule() {
           <CardTitle className="flex items-center justify-between">
             <span>Customers</span>
             <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
-              {customers.length} record{customers.length !== 1 ? 's' : ''}
+              {loading
+                ? 'Loading…'
+                : totalCount > customers.length
+                  ? `Showing ${customers.length} of ${totalCount} records`
+                  : `${customers.length} record${customers.length !== 1 ? 's' : ''}`}
             </Badge>
           </CardTitle>
         </CardHeader>

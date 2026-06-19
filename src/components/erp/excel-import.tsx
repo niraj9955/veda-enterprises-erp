@@ -567,27 +567,41 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
     setImporting(true)
     try {
       const res = await api.importData(module, transformedData)
+      const skipped = res.total - res.imported
       setResult({ imported: res.imported, total: res.total, errors: res.errors })
-      if (res.imported > 0) {
+
+      if (res.imported > 0 && skipped === 0) {
+        // Full success — every row imported
         toast({
           title: 'Import successful',
-          description: `${res.imported} of ${res.total} rows imported. Refreshing list...`,
+          description: `All ${res.imported} row(s) imported. List refreshed.`,
         })
-        // Refresh the parent module's data FIRST so the new rows appear,
-        // then auto-close this dialog after a short delay so the user can
-        // see the "Imported X of Y" success banner briefly.
         onSuccess()
-        setTimeout(() => {
-          handleClose()
-        }, 1200)
+        // Auto-close after short delay so user sees the green banner
+        setTimeout(() => { handleClose() }, 1500)
+      } else if (res.imported > 0 && skipped > 0) {
+        // Partial success — some imported, some skipped
+        toast({
+          title: 'Partial import',
+          description: `${res.imported} imported, ${skipped} skipped (likely duplicates). List refreshed.`,
+        })
+        onSuccess()
+        // Keep dialog open longer so user can see the error list, then close
+        setTimeout(() => { handleClose() }, 3500)
       } else {
+        // Zero imported — DON'T auto-close. Force user to see what went wrong.
+        const reason = res.errors?.length
+          ? `${res.errors.length} row(s) skipped. Reasons are listed below.`
+          : skipped > 0
+            ? `All ${skipped} row(s) were skipped — they likely already exist in the database (duplicate mobile numbers).`
+            : 'No rows were imported. Please check your file and column mapping.'
         toast({
           title: 'No rows imported',
-          description: res.errors?.length
-            ? `${res.errors.length} row(s) were skipped. Check the errors below.`
-            : 'All rows were skipped (possibly duplicates).',
+          description: reason,
           variant: 'destructive',
         })
+        // Do NOT call onSuccess — nothing changed, no need to refresh.
+        // Do NOT auto-close — user needs to read the errors below.
       }
     } catch (err) {
       toast({
