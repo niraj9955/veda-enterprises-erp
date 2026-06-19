@@ -210,3 +210,55 @@ Stage Summary:
 - Customer link is preserved: paidAmount auto-syncs to Payments module when a customer is linked
 - Admin restore (from Task 5) confirmed working by user
 - Three view states (list/create/edit) replace the old Dialog approach — much more reliable, no z-index issues, full screen space for the form
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: Add items section to Order form + make customer boxes searchable everywhere + fix restore (password validation bug)
+
+Work Log:
+- ROOT CAUSE of "restore still not working": TWO issues
+  1. Local commits from Task 5 (restore fix) and Task 6 (bill page) were NEVER pushed to GitHub — Vercel was still running the OLD broken restore endpoint! User was testing the deployed site which had the pre-Task-5 code.
+  2. Even after Task 5 fix, there was a SECOND hidden bug: UserSchema has `password: { type: String, required: true }`, but the export route strips passwords for security. So when restoring, Mongoose validation rejected the entire users collection because every user doc was missing `password`. The error was caught per-collection, but if any other collection also had validation issues, nothing would restore.
+- FIX for restore password bug: updated sanitizeRow in /api/database/route.ts to detect `users` collection and inject a placeholder password (`veda-reset-<random>`) when password is missing. Admin can reset passwords later via User Management screen. Also ensures `active` defaults to true.
+- PUSHED all 3 commits (Task 5, 6, 7) to GitHub origin/main. Vercel will auto-deploy within 2-3 minutes.
+
+- NEW: CustomerSearchInput component (src/components/erp/customer-search-input.tsx)
+  * Reusable searchable customer picker — replaces slow <Select> dropdowns
+  * Live debounced search against /api/customers?search=... (350ms delay)
+  * Dropdown shows name, mobile, address, GST badge
+  * Outside-click closes dropdown
+  * When customer selected: shows green "Linked" badge + "Change" button to pick a different customer
+  * Props: value, onSelect, onClear, placeholder, label, required, disabled, initialSelectedName
+  * Works with thousands of customer records — no more scrolling through giant dropdowns
+
+- UPDATED Order module (order-module.tsx):
+  * Replaced customer <Select> dropdown with CustomerSearchInput (searchable)
+  * Added items[] section BELOW brick type for multi-line orders
+    - Each item: description, quantity, unit, rate, amount (auto-computed)
+    - "Add Item" button adds new row, X button removes
+    - Total amount auto-sums from items
+    - Brick Type field now shows "(optional when items are added below)"
+    - Validation: either items[] OR brickType+qty+rate must be present
+  * Dialog widened to sm:max-w-3xl to fit items section
+  * Orders table: added item count badge next to brick type ("3 items")
+  * Updated OrderFormData interface to include items[]
+
+- UPDATED Order schema (models.ts):
+  * Added OrderItemSchema: description, hsn, quantity, unit, rate, amount
+  * Added items: [OrderItemSchema] to OrderSchema
+  * Made brickType, quantity, rate, amount fields optional (default 0/empty) for backward compat
+
+- UPDATED POST /api/orders: accepts items array, normalizes each item, computes summary qty/rate/amount from items (so legacy dispatch module + reports still work)
+- UPDATED PUT /api/orders/[id]: accepts items array, recomputes summary fields when items change
+
+- UPDATED Dispatch module: replaced customer <Select> with CustomerSearchInput
+- UPDATED Payment module: replaced customer <Select> with CustomerSearchInput
+
+- BUILD passes cleanly. TypeScript: zero errors in modified files. Pushed to GitHub.
+
+Stage Summary:
+- Order create form now has searchable customer box (type name/mobile → live results) + items section below brick type for multi-product orders
+- All 3 modules that had customer dropdowns (Order, Dispatch, Payment) now use the searchable CustomerSearchInput — no more slow scrolling through long customer lists
+- Restore bug FIXED (root causes: unpushed commits + password validation). All 3 commits pushed to GitHub so Vercel will deploy the working version.
+- After Vercel deploys (~2-3 min), user should: hard-refresh browser (Ctrl+Shift+R) to clear cached old JS bundle, then test restore with a FRESH backup file (old backup files only have 9 collections — export a new one with all 19 collections)
