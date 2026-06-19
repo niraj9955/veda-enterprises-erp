@@ -50,6 +50,7 @@ import {
   Loader2,
   IndianRupee,
   Upload,
+  Search,
 } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 
@@ -127,6 +128,8 @@ const emptyForm: OrderFormData = {
 export function OrderModule() {
   // State
   const [orders, setOrders] = React.useState<Order[]>([])
+  const [search, setSearch] = React.useState('')
+  const [debouncedSearch, setDebouncedSearch] = React.useState('')
   const [customers, setCustomers] = React.useState<Customer[]>([])
   const [loading, setLoading] = React.useState(true)
 
@@ -184,6 +187,23 @@ export function OrderModule() {
       // Silently fail — customer dropdown will just be empty
     }
   }, [])
+
+  // Debounced search
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Client-side filter
+  const filteredOrders = React.useMemo(() => {
+    if (!debouncedSearch.trim()) return orders
+    const q = debouncedSearch.toLowerCase()
+    return orders.filter((item: any) =>
+      ['orderNumber', 'brickType', 'status', 'deliveryDate'].some((f) =>
+        String((item as any)[f] ?? '').toLowerCase().includes(q)
+      )
+    )
+  }, [orders, debouncedSearch])
 
   React.useEffect(() => {
     fetchOrders()
@@ -589,20 +609,35 @@ export function OrderModule() {
         </div>
       </div>
 
+      {/* Search */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search across all fields (date, name, remarks, etc.)..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Table */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Orders</span>
             <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
-              {orders.length} record{orders.length !== 1 ? 's' : ''}
+              {filteredOrders.length} of {orders.length} record{orders.length !== 1 ? 's' : ''}
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="max-h-[60vh] overflow-auto rounded-md border">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
                   <TableHead>Order No.</TableHead>
                   <TableHead>Customer</TableHead>
@@ -618,14 +653,14 @@ export function OrderModule() {
               <TableBody>
                 {loading ? (
                   renderSkeletons()
-                ) : orders.length === 0 ? (
+                ) : filteredOrders.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
                       No orders yet. Click &quot;Create Order&quot; to get started.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  orders.map((order) => (
+                  filteredOrders.map((order) => (
                     <TableRow key={order.id}>
                       <TableCell className="font-medium whitespace-nowrap">
                         {order.orderNumber}

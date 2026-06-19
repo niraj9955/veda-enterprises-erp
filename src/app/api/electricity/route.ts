@@ -2,10 +2,14 @@ import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { Electricity } from '@/lib/models'
 
+// Force dynamic — never cache list responses
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET() {
   try {
     await connectDB()
-    const records = await Electricity.find({}).sort({ date: -1 })
+    const records = await Electricity.find({}).sort({ date: -1 }).lean()
     return NextResponse.json({ electricitys: records.map(toObject) })
   } catch (error) {
     console.error('Error fetching electricity:', error)

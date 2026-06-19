@@ -53,6 +53,7 @@ import {
   Receipt,
   IndianRupee,
   Upload,
+  Search,
 } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 
@@ -129,6 +130,8 @@ function getDateFilter(dateFilter: string): string {
 export default function ExpenseModule() {
   // State
   const [expenses, setExpenses] = React.useState<Expense[]>([])
+  const [search, setSearch] = React.useState('')
+  const [debouncedSearch, setDebouncedSearch] = React.useState('')
   const [loading, setLoading] = React.useState(true)
   const [categoryFilter, setCategoryFilter] = React.useState('all')
   const [dateFilter, setDateFilter] = React.useState('this-month')
@@ -168,6 +171,23 @@ export default function ExpenseModule() {
       setLoading(false)
     }
   }, [categoryFilter, dateFilter])
+
+  // Debounced search
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Client-side filter
+  const filteredExpenses = React.useMemo(() => {
+    if (!debouncedSearch.trim()) return expenses
+    const q = debouncedSearch.toLowerCase()
+    return expenses.filter((item: any) =>
+      ['date', 'category', 'description'].some((f) =>
+        String((item as any)[f] ?? '').toLowerCase().includes(q)
+      )
+    )
+  }, [expenses, debouncedSearch])
 
   React.useEffect(() => {
     fetchExpenses()
@@ -356,6 +376,15 @@ export default function ExpenseModule() {
           <Wallet className="text-muted-foreground h-4 w-4" />
           <span className="text-sm font-medium whitespace-nowrap">Filters:</span>
         </div>
+        <div className="relative flex-1 sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by category, description, date..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
           <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="Category" />
@@ -383,9 +412,9 @@ export default function ExpenseModule() {
       </div>
 
       {/* ── Expense Table ───────────────────────────────────────────────── */}
-      <div className="rounded-md border">
+      <div className="rounded-md border max-h-[60vh] overflow-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>
               <TableHead>Category</TableHead>
               <TableHead className="text-right">Amount</TableHead>
@@ -405,14 +434,14 @@ export default function ExpenseModule() {
                   <TableCell><Skeleton className="ml-auto h-5 w-20" /></TableCell>
                 </TableRow>
               ))
-            ) : expenses.length === 0 ? (
+            ) : filteredExpenses.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-muted-foreground py-12 text-center">
                   No expenses found. Click &quot;Add Expense&quot; to get started.
                 </TableCell>
               </TableRow>
             ) : (
-              expenses.map((expense) => (
+              filteredExpenses.map((expense) => (
                 <TableRow key={expense.id}>
                   <TableCell>
                     <Badge

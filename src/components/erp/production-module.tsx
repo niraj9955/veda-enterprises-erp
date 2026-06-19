@@ -36,7 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Factory, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload } from 'lucide-react'
+import { Factory, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload , Search} from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -126,6 +126,8 @@ const PRODUCT_FIELDS: { key: keyof ProductionFormData; label: string }[] = [
 
 export function ProductionModule() {
   const [productions, setProductions] = React.useState<Production[]>([])
+  const [search, setSearch] = React.useState('')
+  const [debouncedSearch, setDebouncedSearch] = React.useState('')
   const [loading, setLoading] = React.useState(true)
   const [formOpen, setFormOpen] = React.useState(false)
   const [editingProduction, setEditingProduction] = React.useState<Production | null>(null)
@@ -152,6 +154,23 @@ export function ProductionModule() {
       setLoading(false)
     }
   }, [])
+
+  // Debounced search
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Client-side filter
+  const filteredProductions = React.useMemo(() => {
+    if (!debouncedSearch.trim()) return productions
+    const q = debouncedSearch.toLowerCase()
+    return productions.filter((item: any) =>
+      ['date', 'customerName', 'address', 'remarks'].some((f) =>
+        String((item as any)[f] ?? '').toLowerCase().includes(q)
+      )
+    )
+  }, [productions, debouncedSearch])
 
   React.useEffect(() => {
     fetchProductions()
@@ -304,20 +323,35 @@ export function ProductionModule() {
         </div>
       </div>
 
+      {/* Search */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search across all fields (date, name, remarks, etc.)..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Table */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Production Records</span>
             <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
-              {productions.length} record{productions.length !== 1 ? 's' : ''}
+              {filteredProductions.length} of {productions.length} record{productions.length !== 1 ? 's' : ''}
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="max-h-[60vh] overflow-auto rounded-md border">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
                   <TableHead className="sticky left-0 bg-background z-10">Date</TableHead>
                   <TableHead>Customer Name</TableHead>
@@ -333,14 +367,14 @@ export function ProductionModule() {
               <TableBody>
                 {loading ? (
                   renderSkeletons()
-                ) : productions.length === 0 ? (
+                ) : filteredProductions.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={PRODUCT_FIELDS.length + 6} className="h-32 text-center text-muted-foreground">
                       No production entries yet. Click &quot;Add Production Entry&quot; to get started.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  productions.map((prod) => (
+                  filteredProductions.map((prod) => (
                     <TableRow key={prod.id}>
                       <TableCell className="font-medium whitespace-nowrap sticky left-0 bg-background z-10">
                         {formatDate(prod.date)}

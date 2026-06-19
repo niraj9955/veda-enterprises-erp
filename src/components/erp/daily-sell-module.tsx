@@ -36,7 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { ShoppingCart, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload } from 'lucide-react'
+import { ShoppingCart, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload , Search} from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -92,6 +92,8 @@ const emptyForm: DailySellFormData = {
 
 export function DailySellModule() {
   const [dailySells, setDailySells] = React.useState<DailySell[]>([])
+  const [search, setSearch] = React.useState('')
+  const [debouncedSearch, setDebouncedSearch] = React.useState('')
   const [loading, setLoading] = React.useState(true)
   const [formOpen, setFormOpen] = React.useState(false)
   const [editingItem, setEditingItem] = React.useState<DailySell | null>(null)
@@ -118,6 +120,23 @@ export function DailySellModule() {
       setLoading(false)
     }
   }, [])
+
+  // Debounced search
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Client-side filter
+  const filteredDailySells = React.useMemo(() => {
+    if (!debouncedSearch.trim()) return dailySells
+    const q = debouncedSearch.toLowerCase()
+    return dailySells.filter((item: any) =>
+      ['date', 'customerName', 'address', 'contactNumber', 'remarks'].some((f) =>
+        String((item as any)[f] ?? '').toLowerCase().includes(q)
+      )
+    )
+  }, [dailySells, debouncedSearch])
 
   React.useEffect(() => {
     fetchData()
@@ -277,20 +296,35 @@ export function DailySellModule() {
         </Card>
       </div>
 
+      {/* Search */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search across all fields (date, name, remarks, etc.)..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Table */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Daily Sell Records</span>
             <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
-              {dailySells.length} record{dailySells.length !== 1 ? 's' : ''}
+              {filteredDailySells.length} of {dailySells.length} record{dailySells.length !== 1 ? 's' : ''}
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="max-h-[60vh] overflow-auto rounded-md border">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Customer Name</TableHead>
@@ -304,14 +338,14 @@ export function DailySellModule() {
               <TableBody>
                 {loading ? (
                   renderSkeletons()
-                ) : dailySells.length === 0 ? (
+                ) : filteredDailySells.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                       No daily sell entries yet. Click &quot;Add Daily Sell&quot; to get started.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  dailySells.map((item) => (
+                  filteredDailySells.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium whitespace-nowrap">{formatDate(item.date)}</TableCell>
                       <TableCell className="font-medium">{item.customerName}</TableCell>

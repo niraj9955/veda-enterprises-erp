@@ -55,6 +55,7 @@ import {
   Landmark,
   Users,
   Upload,
+  Search,
 } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 
@@ -147,6 +148,8 @@ const emptyForm: PaymentFormData = {
 export function PaymentModule() {
   // State
   const [payments, setPayments] = React.useState<Payment[]>([])
+  const [search, setSearch] = React.useState('')
+  const [debouncedSearch, setDebouncedSearch] = React.useState('')
   const [customers, setCustomers] = React.useState<Customer[]>([])
   const [orders, setOrders] = React.useState<Order[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -271,6 +274,23 @@ export function PaymentModule() {
       // Silently fail — outstanding section will just be empty
     }
   }, [])
+
+  // Debounced search
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Client-side filter
+  const filteredPayments = React.useMemo(() => {
+    if (!debouncedSearch.trim()) return payments
+    const q = debouncedSearch.toLowerCase()
+    return payments.filter((item: any) =>
+      ['date', 'paymentType', 'remarks'].some((f) =>
+        String((item as any)[f] ?? '').toLowerCase().includes(q)
+      )
+    )
+  }, [payments, debouncedSearch])
 
   React.useEffect(() => {
     fetchPayments()
@@ -637,19 +657,34 @@ export function PaymentModule() {
       </div>
 
       {/* Payment Table */}
+      {/* Search */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search across all fields (date, name, remarks, etc.)..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Payments</span>
             <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
-              {payments.length} record{payments.length !== 1 ? 's' : ''}
+              {filteredPayments.length} of {payments.length} record{payments.length !== 1 ? 's' : ''}
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="max-h-[60vh] overflow-auto rounded-md border">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
                   <TableHead>Customer Name</TableHead>
                   <TableHead>Payment Type</TableHead>
@@ -662,14 +697,14 @@ export function PaymentModule() {
               <TableBody>
                 {loading ? (
                   renderSkeletons()
-                ) : payments.length === 0 ? (
+                ) : filteredPayments.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                       No payments yet. Click &quot;Receive Payment&quot; to get started.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  payments.map((payment) => (
+                  filteredPayments.map((payment) => (
                     <TableRow key={payment.id}>
                       <TableCell className="font-medium whitespace-nowrap">
                         {payment.customer?.name || '—'}
@@ -736,9 +771,9 @@ export function PaymentModule() {
               <p className="text-sm">No outstanding balances. All customers are paid up!</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="max-h-[60vh] overflow-auto rounded-md border">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 bg-background z-10">
                   <TableRow>
                     <TableHead>Customer</TableHead>
                     <TableHead className="text-right">Total Orders (₹)</TableHead>

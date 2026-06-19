@@ -36,7 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Truck, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload } from 'lucide-react'
+import { Truck, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload , Search} from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 
 interface TractorPayment {
@@ -72,6 +72,8 @@ const emptyForm: TractorPaymentFormData = { date: '', vendorName: '', quantityTo
 
 export function TractorPaymentModule() {
   const [items, setItems] = React.useState<TractorPayment[]>([])
+  const [search, setSearch] = React.useState('')
+  const [debouncedSearch, setDebouncedSearch] = React.useState('')
   const [loading, setLoading] = React.useState(true)
   const [formOpen, setFormOpen] = React.useState(false)
   const [editingItem, setEditingItem] = React.useState<TractorPayment | null>(null)
@@ -92,6 +94,23 @@ export function TractorPaymentModule() {
       toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to fetch data', variant: 'destructive' })
     } finally { setLoading(false) }
   }, [])
+
+  // Debounced search
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Client-side filter
+  const filteredItems = React.useMemo(() => {
+    if (!debouncedSearch.trim()) return items
+    const q = debouncedSearch.toLowerCase()
+    return items.filter((item: any) =>
+      ['date', 'vendorName', 'remarks'].some((f) =>
+        String((item as any)[f] ?? '').toLowerCase().includes(q)
+      )
+    )
+  }, [items, debouncedSearch])
 
   React.useEffect(() => { fetchData() }, [fetchData])
 
@@ -191,16 +210,31 @@ export function TractorPaymentModule() {
         <Card className="border-l-4 border-l-rose-500"><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Remaining</p>{loading ? <Skeleton className="h-6 w-32 mt-1" /> : <p className="text-xl font-bold text-rose-700">{formatCurrency(grandRemaining)}</p>}</CardContent></Card>
       </div>
 
+      {/* Search */}
       <Card>
-        <CardHeader><CardTitle className="flex items-center justify-between"><span>Tractor Payment Records</span><Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">{items.length} record{items.length !== 1 ? 's' : ''}</Badge></CardTitle></CardHeader>
+        <CardContent className="pt-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search across all fields (date, name, remarks, etc.)..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="flex items-center justify-between"><span>Tractor Payment Records</span><Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">{filteredItems.length} of {items.length} record{items.length !== 1 ? 's' : ''}</Badge></CardTitle></CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="max-h-[60vh] overflow-auto rounded-md border">
             <Table>
-              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Vendor Name</TableHead><TableHead className="text-right">Qty (Ton)</TableHead><TableHead className="text-right">Rate</TableHead><TableHead className="text-right">Total (₹)</TableHead><TableHead className="text-right">Paid (₹)</TableHead><TableHead className="text-right">Remaining (₹)</TableHead><TableHead>Remarks</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+              <TableHeader className="sticky top-0 bg-background z-10"><TableRow><TableHead>Date</TableHead><TableHead>Vendor Name</TableHead><TableHead className="text-right">Qty (Ton)</TableHead><TableHead className="text-right">Rate</TableHead><TableHead className="text-right">Total (₹)</TableHead><TableHead className="text-right">Paid (₹)</TableHead><TableHead className="text-right">Remaining (₹)</TableHead><TableHead>Remarks</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
               <TableBody>
                 {loading ? Array.from({ length: 5 }).map((_, i) => <TableRow key={i}>{Array.from({ length: 9 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-20" /></TableCell>)}</TableRow>)
-                : items.length === 0 ? <TableRow><TableCell colSpan={9} className="h-32 text-center text-muted-foreground">No tractor payments yet. Click &quot;Add Payment&quot; to get started.</TableCell></TableRow>
-                : items.map((item) => (
+                : filteredItems.length === 0 ? <TableRow><TableCell colSpan={9} className="h-32 text-center text-muted-foreground">No tractor payments yet. Click &quot;Add Payment&quot; to get started.</TableCell></TableRow>
+                : filteredItems.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell className="font-medium whitespace-nowrap">{formatDate(item.date)}</TableCell>
                     <TableCell className="font-medium">{item.vendorName}</TableCell>

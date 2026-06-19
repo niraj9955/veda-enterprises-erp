@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { Production } from '@/lib/models'
 
+// Force dynamic — never cache list responses
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET(request: Request) {
   try {
     await connectDB()
@@ -9,7 +13,7 @@ export async function GET(request: Request) {
     const date = searchParams.get('date')
     const filter: any = {}
     if (date) filter.date = date
-    const productions = await Production.find(filter).sort({ date: -1 })
+    const productions = await Production.find(filter).sort({ date: -1 }).lean()
     return NextResponse.json({ productions: productions.map(toObject) })
   } catch (error) {
     console.error('Error fetching production:', error)

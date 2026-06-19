@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server'
 import { connectDB, toObject, extractCustomer } from '@/lib/db'
 import { Order } from '@/lib/models'
 
+// Force dynamic — never cache list responses
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET() {
   try {
     await connectDB()

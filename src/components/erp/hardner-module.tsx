@@ -35,7 +35,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Droplets, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload } from 'lucide-react'
+import { Droplets, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload , Search} from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 
 interface Hardner {
@@ -61,6 +61,8 @@ const emptyForm: HardnerFormData = { date: '', amount: '' }
 
 export function HardnerModule() {
   const [items, setItems] = React.useState<Hardner[]>([])
+  const [search, setSearch] = React.useState('')
+  const [debouncedSearch, setDebouncedSearch] = React.useState('')
   const [loading, setLoading] = React.useState(true)
   const [formOpen, setFormOpen] = React.useState(false)
   const [editingItem, setEditingItem] = React.useState<Hardner | null>(null)
@@ -81,6 +83,23 @@ export function HardnerModule() {
       toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to fetch data', variant: 'destructive' })
     } finally { setLoading(false) }
   }, [])
+
+  // Debounced search
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Client-side filter
+  const filteredItems = React.useMemo(() => {
+    if (!debouncedSearch.trim()) return items
+    const q = debouncedSearch.toLowerCase()
+    return items.filter((item: any) =>
+      ['date'].some((f) =>
+        String((item as any)[f] ?? '').toLowerCase().includes(q)
+      )
+    )
+  }, [items, debouncedSearch])
 
   React.useEffect(() => { fetchData() }, [fetchData])
 
@@ -153,16 +172,31 @@ export function HardnerModule() {
         <Card className="border-l-4 border-l-amber-500"><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Records</p>{loading ? <Skeleton className="h-6 w-16 mt-1" /> : <p className="text-xl font-bold text-amber-700">{items.length}</p>}</CardContent></Card>
       </div>
 
+      {/* Search */}
       <Card>
-        <CardHeader><CardTitle className="flex items-center justify-between"><span>Hardner Records</span><Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">{items.length} record{items.length !== 1 ? 's' : ''}</Badge></CardTitle></CardHeader>
+        <CardContent className="pt-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search across all fields (date, name, remarks, etc.)..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="flex items-center justify-between"><span>Hardner Records</span><Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">{filteredItems.length} of {items.length} record{items.length !== 1 ? 's' : ''}</Badge></CardTitle></CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="max-h-[60vh] overflow-auto rounded-md border">
             <Table>
-              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead className="text-right">Amount (₹)</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+              <TableHeader className="sticky top-0 bg-background z-10"><TableRow><TableHead>Date</TableHead><TableHead className="text-right">Amount (₹)</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
               <TableBody>
                 {loading ? Array.from({ length: 5 }).map((_, i) => <TableRow key={i}><TableCell><Skeleton className="h-4 w-24" /></TableCell><TableCell><Skeleton className="h-4 w-24" /></TableCell><TableCell><Skeleton className="h-8 w-20" /></TableCell></TableRow>)
-                : items.length === 0 ? <TableRow><TableCell colSpan={3} className="h-32 text-center text-muted-foreground">No hardner entries yet. Click &quot;Add Entry&quot; to get started.</TableCell></TableRow>
-                : items.map((item) => (
+                : filteredItems.length === 0 ? <TableRow><TableCell colSpan={3} className="h-32 text-center text-muted-foreground">No hardner entries yet. Click &quot;Add Entry&quot; to get started.</TableCell></TableRow>
+                : filteredItems.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell className="font-medium whitespace-nowrap">{formatDate(item.date)}</TableCell>
                     <TableCell className="text-right font-medium whitespace-nowrap">{formatCurrency(item.amount)}</TableCell>

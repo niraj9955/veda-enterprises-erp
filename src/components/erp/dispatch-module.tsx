@@ -54,6 +54,7 @@ import {
   Phone,
   MapPin,
   Upload,
+  Search,
 } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 
@@ -142,6 +143,8 @@ const formatDate = (dateStr: string): string => {
 export function DispatchModule() {
   // ── State ─────────────────────────────────────────────────────────────
   const [dispatches, setDispatches] = React.useState<Dispatch[]>([])
+  const [search, setSearch] = React.useState('')
+  const [debouncedSearch, setDebouncedSearch] = React.useState('')
   const [loading, setLoading] = React.useState(true)
 
   // Create dialog
@@ -180,6 +183,23 @@ export function DispatchModule() {
       setLoading(false)
     }
   }, [])
+
+  // Debounced search
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Client-side filter
+  const filteredDispatches = React.useMemo(() => {
+    if (!debouncedSearch.trim()) return dispatches
+    const q = debouncedSearch.toLowerCase()
+    return dispatches.filter((item: any) =>
+      ['dispatchNumber', 'truckNumber', 'driverName', 'brickType', 'date'].some((f) =>
+        String((item as any)[f] ?? '').toLowerCase().includes(q)
+      )
+    )
+  }, [dispatches, debouncedSearch])
 
   React.useEffect(() => {
     fetchDispatches()
@@ -744,20 +764,35 @@ export function DispatchModule() {
         </div>
       </div>
 
+      {/* Search */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search across all fields (date, name, remarks, etc.)..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Table */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Dispatches</span>
             <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
-              {dispatches.length} record{dispatches.length !== 1 ? 's' : ''}
+              {filteredDispatches.length} of {dispatches.length} record{dispatches.length !== 1 ? 's' : ''}
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="max-h-[60vh] overflow-auto rounded-md border">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
                   <TableHead>Dispatch No.</TableHead>
                   <TableHead>Customer</TableHead>
@@ -772,7 +807,7 @@ export function DispatchModule() {
               <TableBody>
                 {loading ? (
                   renderSkeletons()
-                ) : dispatches.length === 0 ? (
+                ) : filteredDispatches.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
@@ -782,7 +817,7 @@ export function DispatchModule() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  dispatches.map((dispatch) => (
+                  filteredDispatches.map((dispatch) => (
                     <TableRow key={dispatch.id}>
                       <TableCell className="font-medium font-mono text-xs">
                         {dispatch.dispatchNumber}

@@ -48,6 +48,7 @@ import {
   Upload,
 } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
+import { CustomerHistoryModal } from '@/components/erp/customer-history-modal'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -132,6 +133,9 @@ export function CustomerModule() {
   const [ledgerCustomer, setLedgerCustomer] = React.useState<Customer | null>(null)
   const [ledgerPayments, setLedgerPayments] = React.useState<Payment[]>([])
   const [ledgerLoading, setLedgerLoading] = React.useState(false)
+
+  // Full customer history modal
+  const [historyCustomerId, setHistoryCustomerId] = React.useState<string | null>(null)
 
   // ── Debounced search ────────────────────────────────────────────────────
   React.useEffect(() => {
@@ -561,9 +565,9 @@ export function CustomerModule() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="max-h-[60vh] overflow-auto rounded-md border">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Mobile</TableHead>
@@ -586,8 +590,20 @@ export function CustomerModule() {
                   </TableRow>
                 ) : (
                   customers.map((customer) => (
-                    <TableRow key={customer.id}>
-                      <TableCell className="font-medium">{customer.name}</TableCell>
+                    <TableRow key={customer.id} className="cursor-pointer hover:bg-emerald-50/40" onClick={() => setHistoryCustomerId(customer.id)}>
+                      <TableCell className="font-medium">
+                        <button
+                          type="button"
+                          className="text-emerald-700 hover:text-emerald-900 hover:underline text-left"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setHistoryCustomerId(customer.id)
+                          }}
+                          title="Click to view full customer history"
+                        >
+                          {customer.name}
+                        </button>
+                      </TableCell>
                       <TableCell className="whitespace-nowrap">{customer.mobile}</TableCell>
                       <TableCell>
                         {customer.gstNumber ? (
@@ -606,13 +622,13 @@ export function CustomerModule() {
                       <TableCell className="text-right font-medium whitespace-nowrap">
                         {formatCurrency(customer.creditLimit)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => openLedger(customer)}
-                            title="View Ledger"
+                            onClick={() => setHistoryCustomerId(customer.id)}
+                            title="View Full History"
                             className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                           >
                             <BookOpen className="size-4" />
@@ -642,6 +658,9 @@ export function CustomerModule() {
               </TableBody>
             </Table>
           </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            💡 Tip: Click on a customer's name or the book icon to view their complete transaction history (orders, dispatch, payments, sells, production, balance).
+          </p>
         </CardContent>
       </Card>
 
@@ -651,6 +670,13 @@ export function CustomerModule() {
       {renderLedgerDialog()}
 
       <ExcelImport module="customers" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchCustomers} />
+
+      {/* Full customer history modal */}
+      <CustomerHistoryModal
+        customerId={historyCustomerId}
+        open={!!historyCustomerId}
+        onClose={() => setHistoryCustomerId(null)}
+      />
     </div>
   )
 }

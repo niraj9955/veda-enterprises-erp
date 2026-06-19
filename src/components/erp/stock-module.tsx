@@ -35,7 +35,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Package, Plus, Trash2, Pencil, Loader2, Upload } from 'lucide-react'
+import { Package, Plus, Trash2, Pencil, Loader2, Upload , Search} from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -121,6 +121,8 @@ const PRODUCT_FIELDS: { key: keyof StockFormData; label: string }[] = [
 
 export function StockModule() {
   const [stocks, setStocks] = React.useState<Stock[]>([])
+  const [search, setSearch] = React.useState('')
+  const [debouncedSearch, setDebouncedSearch] = React.useState('')
   const [loading, setLoading] = React.useState(true)
   const [formOpen, setFormOpen] = React.useState(false)
   const [editingStock, setEditingStock] = React.useState<Stock | null>(null)
@@ -148,6 +150,23 @@ export function StockModule() {
       setLoading(false)
     }
   }, [])
+
+  // Debounced search
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Client-side filter
+  const filteredStocks = React.useMemo(() => {
+    if (!debouncedSearch.trim()) return stocks
+    const q = debouncedSearch.toLowerCase()
+    return stocks.filter((item: any) =>
+      ['date'].some((f) =>
+        String((item as any)[f] ?? '').toLowerCase().includes(q)
+      )
+    )
+  }, [stocks, debouncedSearch])
 
   React.useEffect(() => {
     fetchStocks()
@@ -300,20 +319,35 @@ export function StockModule() {
         </div>
       </div>
 
+      {/* Search */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search across all fields (date, name, remarks, etc.)..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Table */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Stock Records</span>
             <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
-              {stocks.length} record{stocks.length !== 1 ? 's' : ''}
+              {filteredStocks.length} of {stocks.length} record{stocks.length !== 1 ? 's' : ''}
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="max-h-[60vh] overflow-auto rounded-md border">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
                   <TableHead className="sticky left-0 bg-background z-10">Date</TableHead>
                   {PRODUCT_FIELDS.map((f) => (
@@ -325,14 +359,14 @@ export function StockModule() {
               <TableBody>
                 {loading ? (
                   renderSkeletons()
-                ) : stocks.length === 0 ? (
+                ) : filteredStocks.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={PRODUCT_FIELDS.length + 2} className="h-32 text-center text-muted-foreground">
                       No stock entries yet. Click &quot;Add Stock Entry&quot; to get started.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  stocks.map((stock) => (
+                  filteredStocks.map((stock) => (
                     <TableRow key={stock.id}>
                       <TableCell className="font-medium whitespace-nowrap sticky left-0 bg-background z-10">
                         {formatDate(stock.date)}

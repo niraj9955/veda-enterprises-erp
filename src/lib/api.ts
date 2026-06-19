@@ -51,6 +51,8 @@ export const api = {
     request<{ customer: unknown }>(`/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCustomer: (id: string) =>
     request<{ message: string }>(`/customers/${id}`, { method: 'DELETE' }),
+  getCustomerHistory: (id: string) =>
+    request<{ customer: Record<string, unknown>; summary: Record<string, number>; productionTotals: Record<string, number>; productions: unknown[]; orders: unknown[]; dispatches: unknown[]; payments: unknown[]; customerPayments: unknown[]; dailySells: unknown[]; timeline: unknown[] }>(`/customers/${id}/history`),
 
   // Production
   getProduction: (filters?: { date?: string; brickType?: string }) => {

@@ -227,8 +227,9 @@ export default function BillModule() {
       {/* Bills table */}
       <Card>
         <CardContent className="p-0">
+          <div className="max-h-[60vh] overflow-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 bg-background z-10">
               <TableRow>
                 <TableHead>Bill No.</TableHead>
                 <TableHead>Date</TableHead>
@@ -290,6 +291,7 @@ export default function BillModule() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
