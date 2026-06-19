@@ -21,102 +21,21 @@ import {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface StockItem {
-  id: string
-  date: string
-  cement: number
-  zigZagGrey80mm: number
-  zigZagRed80mm: number
-  zigZagYellow80mm: number
-  zigZagGrey60mm: number
-  zigZagRed60mm: number
-  zigZagYellow60mm: number
-  chequreTile: number
-  curveStone: number
-  dumbleGrey80mm: number
-  dumbleRed80mm: number
-  dumbleYellow80mm: number
-}
-
-interface ProductionItem {
-  id: string
-  date: string
-  customerName: string
-  address: string
-  zigZagWhite80mm: number
-  zigZagRed80mm: number
-  zigZagYellow80mm: number
-  zigZagWhite60mm: number
-  zigZagRed60mm: number
-  zigZagYellow60mm: number
-  curveStone: number
-  chequreTile: number
-  transportationCharge: number
-  remarks: string
-}
-
-interface DailySellItem {
-  id: string
-  date: string
-  customerName: string
-  amount: number
-}
-
-interface LabourPaymentItem {
-  id: string
-  date: string
-  name: string
-  amount: number
-}
-
-interface CustomerPaymentItem {
-  id: string
-  date: string
-  name: string
-  amount: number
-}
-
-interface TractorPaymentItem {
-  id: string
-  date: string
-  vendorName: string
-  totalAmount: number
-  paidAmount: number
-  remainingAmount: number
-}
-
-interface DustPurchaseItem {
-  id: string
-  date: string
-  vendorName: string
-  totalAmount: number
-}
-
-interface CementPurchaseItem {
-  id: string
-  date: string
-  vendorName: string
-  totalAmount: number
-}
-
-interface HardnerItem {
-  id: string
-  date: string
-  amount: number
-}
-
-interface ElectricityItem {
-  id: string
-  date: string
-  name: string
-  amount: number
-}
-
-interface FactoryStuffItem {
-  id: string
-  date: string
-  itemName: string
-  amount: number
+interface DashboardStats {
+  todayProduction: number
+  todaySales: number
+  todayLabourPayments: number
+  todayCustomerPayments: number
+  totalTractorRemaining: number
+  todayDustPurchase: number
+  todayCementPurchase: number
+  todayHardner: number
+  todayElectricity: number
+  todayFactoryStuff: number
+  totalStock: number
+  totalStockCement: number
+  totalExpensesToday: number
+  netCashFlow: number
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -126,179 +45,42 @@ const formatCurrency = (value: number): string =>
     style: 'currency',
     currency: 'INR',
     maximumFractionDigits: 0,
-  }).format(value)
+  }).format(value || 0)
 
 const formatNumber = (value: number): string =>
-  new Intl.NumberFormat('en-IN').format(value)
-
-const today = () => new Date().toISOString().split('T')[0]
+  new Intl.NumberFormat('en-IN').format(value || 0)
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function DashboardModule() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  // Stats
-  const [todayProduction, setTodayProduction] = useState(0)
-  const [todaySales, setTodaySales] = useState(0)
-  const [todayLabourPayments, setTodayLabourPayments] = useState(0)
-  const [totalStock, setTotalStock] = useState(0)
-  const [todayCustomerPayments, setTodayCustomerPayments] = useState(0)
-  const [totalTractorRemaining, setTotalTractorRemaining] = useState(0)
-  const [todayDustPurchase, setTodayDustPurchase] = useState(0)
-  const [todayCementPurchase, setTodayCementPurchase] = useState(0)
-  const [todayHardner, setTodayHardner] = useState(0)
-  const [todayElectricity, setTodayElectricity] = useState(0)
-  const [todayFactoryStuff, setTodayFactoryStuff] = useState(0)
-  const [totalStockCement, setTotalStockCement] = useState(0)
+  const [stats, setStats] = useState<DashboardStats | null>(null)
 
   useEffect(() => {
     let cancelled = false
 
-    async function fetchData() {
+    async function fetchStats() {
       try {
         setLoading(true)
         setError(null)
-
-        const todayStr = today()
-
-        // Fetch all data in parallel
-        const [
-          stockRes,
-          productionRes,
-          dailySellRes,
-          labourPaymentRes,
-          customerPaymentRes,
-          tractorPaymentRes,
-          dustPurchaseRes,
-          cementPurchaseRes,
-          hardnerRes,
-          electricityRes,
-          factoryStuffRes,
-        ] = await Promise.allSettled([
-          api.getStock(),
-          api.getProduction(),
-          api.getDailySells(),
-          api.getLabourPayments(),
-          api.getCustomerPayments(),
-          api.getTractorPayments(),
-          api.getDustPurchases(),
-          api.getCementPurchases(),
-          api.getHardners(),
-          api.getElectricitys(),
-          api.getFactoryStuffs(),
-        ])
-
-        if (cancelled) return
-
-        // Process Stock
-        if (stockRes.status === 'fulfilled') {
-          const stocks = stockRes.value.stocks as StockItem[]
-          // Get the latest stock entry
-          if (stocks.length > 0) {
-            const latest = stocks.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
-            const totalPieces = (latest.zigZagGrey80mm || 0) + (latest.zigZagRed80mm || 0) +
-              (latest.zigZagYellow80mm || 0) + (latest.zigZagGrey60mm || 0) +
-              (latest.zigZagRed60mm || 0) + (latest.zigZagYellow60mm || 0) +
-              (latest.chequreTile || 0) + (latest.curveStone || 0) +
-              (latest.dumbleGrey80mm || 0) + (latest.dumbleRed80mm || 0) +
-              (latest.dumbleYellow80mm || 0)
-            setTotalStock(totalPieces)
-            setTotalStockCement(latest.cement || 0)
-          }
-        }
-
-        // Process Production - today's total
-        if (productionRes.status === 'fulfilled') {
-          const prods = productionRes.value.productions as ProductionItem[]
-          const todayProds = prods.filter((p) => p.date && p.date.split('T')[0] === todayStr)
-          const totalPieces = todayProds.reduce((sum, p) =>
-            sum + (p.zigZagWhite80mm || 0) + (p.zigZagRed80mm || 0) +
-            (p.zigZagYellow80mm || 0) + (p.zigZagWhite60mm || 0) +
-            (p.zigZagRed60mm || 0) + (p.zigZagYellow60mm || 0) +
-            (p.curveStone || 0) + (p.chequreTile || 0), 0)
-          setTodayProduction(totalPieces)
-        }
-
-        // Process Daily Sell - today's total
-        if (dailySellRes.status === 'fulfilled') {
-          const sells = dailySellRes.value.dailySells as DailySellItem[]
-          const todaySells = sells.filter((s) => s.date && s.date.split('T')[0] === todayStr)
-          setTodaySales(todaySells.reduce((sum, s) => sum + (s.amount || 0), 0))
-        }
-
-        // Process Labour Payments - today's total
-        if (labourPaymentRes.status === 'fulfilled') {
-          const payments = labourPaymentRes.value.labourPayments as LabourPaymentItem[]
-          const todayPayments = payments.filter((p) => p.date && p.date.split('T')[0] === todayStr)
-          setTodayLabourPayments(todayPayments.reduce((sum, p) => sum + (p.amount || 0), 0))
-        }
-
-        // Process Customer Payments - today's total
-        if (customerPaymentRes.status === 'fulfilled') {
-          const payments = customerPaymentRes.value.customerPayments as CustomerPaymentItem[]
-          const todayPayments = payments.filter((p) => p.date && p.date.split('T')[0] === todayStr)
-          setTodayCustomerPayments(todayPayments.reduce((sum, p) => sum + (p.amount || 0), 0))
-        }
-
-        // Process Tractor Payments - total remaining
-        if (tractorPaymentRes.status === 'fulfilled') {
-          const payments = tractorPaymentRes.value.tractorPayments as TractorPaymentItem[]
-          setTotalTractorRemaining(payments.reduce((sum, p) => sum + (p.remainingAmount || 0), 0))
-        }
-
-        // Process Dust Purchase - today's total
-        if (dustPurchaseRes.status === 'fulfilled') {
-          const purchases = dustPurchaseRes.value.dustPurchases as DustPurchaseItem[]
-          const todayPurchases = purchases.filter((p) => p.date && p.date.split('T')[0] === todayStr)
-          setTodayDustPurchase(todayPurchases.reduce((sum, p) => sum + (p.totalAmount || 0), 0))
-        }
-
-        // Process Cement Purchase - today's total
-        if (cementPurchaseRes.status === 'fulfilled') {
-          const purchases = cementPurchaseRes.value.cementPurchases as CementPurchaseItem[]
-          const todayPurchases = purchases.filter((p) => p.date && p.date.split('T')[0] === todayStr)
-          setTodayCementPurchase(todayPurchases.reduce((sum, p) => sum + (p.totalAmount || 0), 0))
-        }
-
-        // Process Hardner - today's total
-        if (hardnerRes.status === 'fulfilled') {
-          const items = hardnerRes.value.hardners as HardnerItem[]
-          const todayItems = items.filter((i) => i.date && i.date.split('T')[0] === todayStr)
-          setTodayHardner(todayItems.reduce((sum, i) => sum + (i.amount || 0), 0))
-        }
-
-        // Process Electricity - today's total
-        if (electricityRes.status === 'fulfilled') {
-          const items = electricityRes.value.electricitys as ElectricityItem[]
-          const todayItems = items.filter((i) => i.date && i.date.split('T')[0] === todayStr)
-          setTodayElectricity(todayItems.reduce((sum, i) => sum + (i.amount || 0), 0))
-        }
-
-        // Process Factory Stuff - today's total
-        if (factoryStuffRes.status === 'fulfilled') {
-          const items = factoryStuffRes.value.factoryStuffs as FactoryStuffItem[]
-          const todayItems = items.filter((i) => i.date && i.date.split('T')[0] === todayStr)
-          setTodayFactoryStuff(todayItems.reduce((sum, i) => sum + (i.amount || 0), 0))
-        }
-
+        // Single round-trip — server does ALL aggregation via MongoDB pipelines.
+        // This replaced 11 parallel API calls each returning ALL records.
+        const data = (await api.getDashboardStats()) as unknown as DashboardStats
+        if (!cancelled) setStats(data)
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
+        if (!cancelled) setLoading(false)
       }
     }
-
-    fetchData()
+    fetchStats()
     return () => { cancelled = true }
   }, [])
 
-  if (loading) return <DashboardSkeleton />
+  if (loading || !stats) return <DashboardSkeleton />
 
   if (error) {
     return (
@@ -322,8 +104,6 @@ export default function DashboardModule() {
     )
   }
 
-  const totalExpensesToday = todayLabourPayments + todayDustPurchase + todayCementPurchase + todayHardner + todayElectricity + todayFactoryStuff
-
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -340,7 +120,7 @@ export default function DashboardModule() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4">
         <KpiCard
           label="Today's Production"
-          value={formatNumber(todayProduction)}
+          value={formatNumber(stats.todayProduction)}
           icon={<Factory className="h-5 w-5" />}
           iconBg="bg-emerald-100 dark:bg-emerald-900/30"
           iconColor="text-emerald-600 dark:text-emerald-400"
@@ -349,7 +129,7 @@ export default function DashboardModule() {
         />
         <KpiCard
           label="Today's Sales"
-          value={formatCurrency(todaySales)}
+          value={formatCurrency(stats.todaySales)}
           icon={<ShoppingCart className="h-5 w-5" />}
           iconBg="bg-amber-100 dark:bg-amber-900/30"
           iconColor="text-amber-600 dark:text-amber-400"
@@ -358,7 +138,7 @@ export default function DashboardModule() {
         />
         <KpiCard
           label="Labour Payments Today"
-          value={formatCurrency(todayLabourPayments)}
+          value={formatCurrency(stats.todayLabourPayments)}
           icon={<HardHat className="h-5 w-5" />}
           iconBg="bg-rose-100 dark:bg-rose-900/30"
           iconColor="text-rose-600 dark:text-rose-400"
@@ -367,12 +147,12 @@ export default function DashboardModule() {
         />
         <KpiCard
           label="Stock Summary"
-          value={formatNumber(totalStock)}
+          value={formatNumber(stats.totalStock)}
           icon={<Package className="h-5 w-5" />}
           iconBg="bg-sky-100 dark:bg-sky-900/30"
           iconColor="text-sky-600 dark:text-sky-400"
           borderColor="border-l-sky-500"
-          sublabel={`${formatNumber(totalStockCement)} cement bags`}
+          sublabel={`${formatNumber(stats.totalStockCement)} cement bags`}
         />
       </div>
 
@@ -380,7 +160,7 @@ export default function DashboardModule() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4">
         <KpiCard
           label="Customer Payments Today"
-          value={formatCurrency(todayCustomerPayments)}
+          value={formatCurrency(stats.todayCustomerPayments)}
           icon={<CreditCard className="h-5 w-5" />}
           iconBg="bg-emerald-100 dark:bg-emerald-900/30"
           iconColor="text-emerald-600 dark:text-emerald-400"
@@ -389,7 +169,7 @@ export default function DashboardModule() {
         />
         <KpiCard
           label="Tractor Dues"
-          value={formatCurrency(totalTractorRemaining)}
+          value={formatCurrency(stats.totalTractorRemaining)}
           icon={<Truck className="h-5 w-5" />}
           iconBg="bg-orange-100 dark:bg-orange-900/30"
           iconColor="text-orange-600 dark:text-orange-400"
@@ -398,7 +178,7 @@ export default function DashboardModule() {
         />
         <KpiCard
           label="Today's Expenses"
-          value={formatCurrency(totalExpensesToday)}
+          value={formatCurrency(stats.totalExpensesToday)}
           icon={<IndianRupee className="h-5 w-5" />}
           iconBg="bg-violet-100 dark:bg-violet-900/30"
           iconColor="text-violet-600 dark:text-violet-400"
@@ -407,7 +187,7 @@ export default function DashboardModule() {
         />
         <KpiCard
           label="Net Cash Flow"
-          value={formatCurrency(todaySales + todayCustomerPayments - totalExpensesToday)}
+          value={formatCurrency(stats.netCashFlow)}
           icon={<TrendingUp className="h-5 w-5" />}
           iconBg="bg-teal-100 dark:bg-teal-900/30"
           iconColor="text-teal-600 dark:text-teal-400"
@@ -422,18 +202,18 @@ export default function DashboardModule() {
           <CardTitle className="text-base font-semibold">Today&apos;s Expense Breakdown</CardTitle>
         </CardHeader>
         <CardContent>
-          {totalExpensesToday === 0 ? (
+          {stats.totalExpensesToday === 0 ? (
             <div className="py-8 text-center text-muted-foreground text-sm">
               No expenses recorded today
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-              <ExpenseCard icon={<HardHat className="h-4 w-4" />} label="Labour" amount={todayLabourPayments} total={totalExpensesToday} color="text-rose-600" />
-              <ExpenseCard icon={<Mountain className="h-4 w-4" />} label="Dust Purchase" amount={todayDustPurchase} total={totalExpensesToday} color="text-amber-600" />
-              <ExpenseCard icon={<Construction className="h-4 w-4" />} label="Cement Purchase" amount={todayCementPurchase} total={totalExpensesToday} color="text-sky-600" />
-              <ExpenseCard icon={<Droplets className="h-4 w-4" />} label="Hardner" amount={todayHardner} total={totalExpensesToday} color="text-violet-600" />
-              <ExpenseCard icon={<Zap className="h-4 w-4" />} label="Electricity" amount={todayElectricity} total={totalExpensesToday} color="text-yellow-600" />
-              <ExpenseCard icon={<Wrench className="h-4 w-4" />} label="Factory Stuff" amount={todayFactoryStuff} total={totalExpensesToday} color="text-emerald-600" />
+              <ExpenseCard icon={<HardHat className="h-4 w-4" />} label="Labour" amount={stats.todayLabourPayments} total={stats.totalExpensesToday} color="text-rose-600" />
+              <ExpenseCard icon={<Mountain className="h-4 w-4" />} label="Dust Purchase" amount={stats.todayDustPurchase} total={stats.totalExpensesToday} color="text-amber-600" />
+              <ExpenseCard icon={<Construction className="h-4 w-4" />} label="Cement Purchase" amount={stats.todayCementPurchase} total={stats.totalExpensesToday} color="text-sky-600" />
+              <ExpenseCard icon={<Droplets className="h-4 w-4" />} label="Hardner" amount={stats.todayHardner} total={stats.totalExpensesToday} color="text-violet-600" />
+              <ExpenseCard icon={<Zap className="h-4 w-4" />} label="Electricity" amount={stats.todayElectricity} total={stats.totalExpensesToday} color="text-yellow-600" />
+              <ExpenseCard icon={<Wrench className="h-4 w-4" />} label="Factory Stuff" amount={stats.todayFactoryStuff} total={stats.totalExpensesToday} color="text-emerald-600" />
             </div>
           )}
         </CardContent>

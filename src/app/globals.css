@@ -120,3 +120,42 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ─── Print styles for Customer History page ─────────────────────────────
+   When the user clicks "Print History" inside the customer ledger, we
+   hide the entire app chrome (sidebar, header, scrollbars) and show
+   ONLY the customer history content. We also force black text on white
+   background so the printed page is readable on paper.
+   ---------------------------------------------------------------------- */
+@media print {
+  /* Hide the app sidebar (desktop) */
+  aside,
+  /* Hide the top app header bar */
+  header,
+  /* Hide any Sheet/mobile menu leftovers */
+  [data-state="open"][role="dialog"] {
+    display: none !important;
+  }
+
+  /* Make the main content take the full page width */
+  body, main, main > div {
+    display: block !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Force black-on-white for ink-friendliness */
+  * {
+    color: #000 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  /* Page setup */
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+}

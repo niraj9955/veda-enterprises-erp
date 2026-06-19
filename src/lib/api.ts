@@ -41,6 +41,7 @@ export const api = {
 
   // Dashboard
   getDashboard: () => request<Record<string, unknown>>('/dashboard'),
+  getDashboardStats: () => request<Record<string, number>>('/dashboard/stats'),
 
   // Customers
   getCustomers: (search?: string) =>
@@ -52,7 +53,7 @@ export const api = {
   deleteCustomer: (id: string) =>
     request<{ message: string }>(`/customers/${id}`, { method: 'DELETE' }),
   getCustomerHistory: (id: string) =>
-    request<{ customer: Record<string, unknown>; summary: Record<string, number>; productionTotals: Record<string, number>; productions: unknown[]; orders: unknown[]; dispatches: unknown[]; payments: unknown[]; customerPayments: unknown[]; dailySells: unknown[]; timeline: unknown[] }>(`/customers/${id}/history`),
+    request<{ customer: Record<string, unknown>; summary: Record<string, number>; orders: unknown[]; dispatches: unknown[]; payments: unknown[]; customerPayments: unknown[]; timeline: unknown[] }>(`/customers/${id}/history`),
 
   // Production
   getProduction: (filters?: { date?: string; brickType?: string }) => {

@@ -48,7 +48,7 @@ import {
   Upload,
 } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
-import { CustomerHistoryModal } from '@/components/erp/customer-history-modal'
+import { CustomerHistoryPage } from '@/components/erp/customer-history-page'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -134,7 +134,7 @@ export function CustomerModule() {
   const [ledgerPayments, setLedgerPayments] = React.useState<Payment[]>([])
   const [ledgerLoading, setLedgerLoading] = React.useState(false)
 
-  // Full customer history modal
+  // Full customer history PAGE (full-screen, not modal)
   const [historyCustomerId, setHistoryCustomerId] = React.useState<string | null>(null)
 
   // ── Debounced search ────────────────────────────────────────────────────
@@ -501,6 +501,17 @@ export function CustomerModule() {
   )
 
   // ── Render: Main ────────────────────────────────────────────────────────
+  // If a customer is selected for history view, render the full-screen history page
+  // INSTEAD of the customer list — user requested this be a separate page, not a modal.
+  if (historyCustomerId) {
+    return (
+      <CustomerHistoryPage
+        customerId={historyCustomerId}
+        onBack={() => setHistoryCustomerId(null)}
+      />
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -670,13 +681,6 @@ export function CustomerModule() {
       {renderLedgerDialog()}
 
       <ExcelImport module="customers" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchCustomers} />
-
-      {/* Full customer history modal */}
-      <CustomerHistoryModal
-        customerId={historyCustomerId}
-        open={!!historyCustomerId}
-        onClose={() => setHistoryCustomerId(null)}
-      />
     </div>
   )
 }
