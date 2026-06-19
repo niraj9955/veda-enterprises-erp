@@ -477,7 +477,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({})
   const [excelColumns, setExcelColumns] = useState<string[]>([])
   const [importing, setImporting] = useState(false)
-  const [result, setResult] = useState<{ imported: number; total: number; errors?: string[] } | null>(null)
+  const [result, setResult] = useState<{ imported: number; total: number; duplicatesSkipped?: number; errors?: string[] } | null>(null)
   const [fileName, setFileName] = useState('')
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -568,7 +568,8 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
     try {
       const res = await api.importData(module, transformedData)
       const skipped = res.total - res.imported
-      setResult({ imported: res.imported, total: res.total, errors: res.errors })
+      const dups = (res as { duplicatesSkipped?: number }).duplicatesSkipped || 0
+      setResult({ imported: res.imported, total: res.total, duplicatesSkipped: dups, errors: res.errors })
 
       if (res.imported > 0 && skipped === 0) {
         // Full success — every row imported
@@ -581,24 +582,28 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
         setTimeout(() => { handleClose() }, 1500)
       } else if (res.imported > 0 && skipped > 0) {
         // Partial success — some imported, some skipped
+        const dupText = dups > 0 ? ` (${dups} duplicate${dups !== 1 ? 's' : ''} skipped)` : ''
         toast({
           title: 'Partial import',
-          description: `${res.imported} imported, ${skipped} skipped (likely duplicates). List refreshed.`,
+          description: `${res.imported} imported, ${skipped} skipped${dupText}. List refreshed.`,
         })
         onSuccess()
         // Keep dialog open longer so user can see the error list, then close
         setTimeout(() => { handleClose() }, 3500)
       } else {
         // Zero imported — DON'T auto-close. Force user to see what went wrong.
-        const reason = res.errors?.length
-          ? `${res.errors.length} row(s) skipped. Reasons are listed below.`
-          : skipped > 0
-            ? `All ${skipped} row(s) were skipped — they likely already exist in the database (duplicate mobile numbers).`
-            : 'No rows were imported. Please check your file and column mapping.'
+        const allDuplicates = dups > 0 && dups === skipped
+        const reason = allDuplicates
+          ? `All ${skipped} row(s) were duplicates — they already exist in records. Nothing new to import.`
+          : res.errors?.length
+            ? `${res.errors.length} row(s) skipped. Reasons are listed below.`
+            : skipped > 0
+              ? `All ${skipped} row(s) were skipped.`
+              : 'No rows were imported. Please check your file and column mapping.'
         toast({
-          title: 'No rows imported',
+          title: allDuplicates ? 'All rows were duplicates' : 'No rows imported',
           description: reason,
-          variant: 'destructive',
+          variant: allDuplicates ? 'default' : 'destructive',
         })
         // Do NOT call onSuccess — nothing changed, no need to refresh.
         // Do NOT auto-close — user needs to read the errors below.
@@ -831,6 +836,11 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                 <AlertDescription>
                   <p className="font-medium">
                     Imported {result.imported} of {result.total} rows successfully
+                    {result.duplicatesSkipped && result.duplicatesSkipped > 0 ? (
+                      <span className="text-amber-700 dark:text-amber-400 font-normal">
+                        {' '}— {result.duplicatesSkipped} duplicate{result.duplicatesSkipped !== 1 ? 's' : ''} skipped
+                      </span>
+                    ) : null}
                   </p>
                   {result.errors && result.errors.length > 0 && (
                     <ScrollArea className="max-h-32 mt-2">

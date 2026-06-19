@@ -9,6 +9,219 @@ import {
 // Force dynamic — this route must never be cached/previewed as a static asset.
 export const dynamic = 'force-dynamic'
 
+// ─── Duplicate detection ────────────────────────────────────────────────────
+//
+// Per user request: "jo duplicate ho use skip kre or uska mess de but jo
+// duplicate nhi h usko import kre record me" — when an Excel row matches an
+// existing record in the DB (by a natural key), SKIP it with a clear message
+// but still IMPORT every non-duplicate row.
+//
+// To keep this fast, for each module we run ONE batched `find()` that
+// returns every existing row whose date falls within the dates seen in
+// the import payload, then build a Set of natural-key strings. Per-row
+// lookup then becomes an O(1) Set.has() check instead of a findOne().
+//
+// APPEND-ONLY semantics are preserved — we never wipe existing rows.
+
+// Build a stable natural-key string for a row, per module.
+function rowKey(module: string, row: Record<string, unknown>): string {
+  const s = (v: unknown) => String(v ?? '').trim().toLowerCase()
+  switch (module) {
+    case 'customers':
+      return s(row.mobile)
+    case 'production':
+      return `${s(row.date)}|${s(row.customerName || row.customer)}|${s(row.address)}`
+    case 'stock':
+      // One stock entry per date — same date = duplicate
+      return s(row.date)
+    case 'dailySell':
+      return `${s(row.date)}|${s(row.customerName)}|${s(row.amount)}`
+    case 'customerPayment':
+      return `${s(row.date)}|${s(row.name)}|${s(row.amount)}`
+    case 'labourPayment':
+      return `${s(row.date)}|${s(row.name)}|${s(row.amount)}`
+    case 'tractorPayment':
+      return `${s(row.date)}|${s(row.vendorName)}|${s(row.quantityTon)}|${s(row.rate)}`
+    case 'dustPurchase':
+      return `${s(row.date)}|${s(row.vendorName)}|${s(row.quantity)}|${s(row.rate)}`
+    case 'cementPurchase':
+      return `${s(row.date)}|${s(row.vendorName)}|${s(row.itemName)}|${s(row.quantity)}|${s(row.rate)}`
+    case 'hardner':
+      // Only date+amount available — same date AND same amount = duplicate
+      return `${s(row.date)}|${s(row.amount)}`
+    case 'electricity':
+      return `${s(row.date)}|${s(row.name)}|${s(row.work)}|${s(row.amount)}`
+    case 'factoryStuff':
+      return `${s(row.date)}|${s(row.itemName)}|${s(row.amount)}`
+    case 'orders':
+      return `${s(row.customerId)}|${s(row.brickType)}|${s(row.quantity)}|${s(row.rate)}|${s(row.deliveryDate || row.date)}`
+    case 'dispatch':
+      return `${s(row.customerId)}|${s(row.truckNumber)}|${s(row.brickType)}|${s(row.quantity)}|${s(row.date)}`
+    case 'payments':
+      return `${s(row.customerId)}|${s(row.paymentType)}|${s(row.amount)}|${s(row.date)}`
+    case 'expenses':
+      return `${s(row.category)}|${s(row.amount)}|${s(row.date)}|${s(row.description)}`
+    default:
+      return ''
+  }
+}
+
+// Map a DB record back into the same natural-key shape as a row.
+function dbKey(module: string, doc: Record<string, unknown>): string {
+  const s = (v: unknown) => String(v ?? '').trim().toLowerCase()
+  switch (module) {
+    case 'customers':
+      return s(doc.mobile)
+    case 'production':
+      return `${s(doc.date)}|${s(doc.customerName)}|${s(doc.address)}`
+    case 'stock':
+      return s(doc.date)
+    case 'dailySell':
+      return `${s(doc.date)}|${s(doc.customerName)}|${s(doc.amount)}`
+    case 'customerPayment':
+      return `${s(doc.date)}|${s(doc.name)}|${s(doc.amount)}`
+    case 'labourPayment':
+      return `${s(doc.date)}|${s(doc.name)}|${s(doc.amount)}`
+    case 'tractorPayment':
+      return `${s(doc.date)}|${s(doc.vendorName)}|${s(doc.quantityTon)}|${s(doc.rate)}`
+    case 'dustPurchase':
+      return `${s(doc.date)}|${s(doc.vendorName)}|${s(doc.quantity)}|${s(doc.rate)}`
+    case 'cementPurchase':
+      return `${s(doc.date)}|${s(doc.vendorName)}|${s(doc.itemName)}|${s(doc.quantity)}|${s(doc.rate)}`
+    case 'hardner':
+      return `${s(doc.date)}|${s(doc.amount)}`
+    case 'electricity':
+      return `${s(doc.date)}|${s(doc.name)}|${s(doc.work)}|${s(doc.amount)}`
+    case 'factoryStuff':
+      return `${s(doc.date)}|${s(doc.itemName)}|${s(doc.amount)}`
+    case 'orders':
+      return `${s(doc.customerId)}|${s(doc.brickType)}|${s(doc.quantity)}|${s(doc.rate)}|${s(doc.deliveryDate)}`
+    case 'dispatch':
+      return `${s(doc.customerId)}|${s(doc.truckNumber)}|${s(doc.brickType)}|${s(doc.quantity)}|${s(doc.date)}`
+    case 'payments':
+      return `${s(doc.customerId)}|${s(doc.paymentType)}|${s(doc.amount)}|${s(doc.date)}`
+    case 'expenses':
+      return `${s(doc.category)}|${s(doc.amount)}|${s(doc.date)}|${s(doc.description)}`
+    default:
+      return ''
+  }
+}
+
+// Pre-fetch existing DB records that could collide with any row in `data`.
+// Returns a Set of natural-key strings.
+async function buildExistingKeys(module: string, data: Record<string, unknown>[]): Promise<Set<string>> {
+  const keys = new Set<string>()
+  if (data.length === 0) return keys
+
+  // Collect unique dates and customerIds from the import payload so we can
+  // narrow the DB query. This keeps the result set small.
+  const dates = new Set<string>()
+  const mobiles = new Set<string>()
+  const customerIds = new Set<string>()
+  for (const row of data) {
+    const d = String(row.date ?? '').split('T')[0]
+    if (d) dates.add(d)
+    const dd = String(row.deliveryDate ?? '').split('T')[0]
+    if (dd) dates.add(dd)
+    const m = String(row.mobile ?? '').trim()
+    if (m) mobiles.add(m)
+    const cid = String(row.customerId ?? '').trim()
+    if (cid) customerIds.add(cid)
+  }
+
+  let docs: Record<string, unknown>[] = []
+
+  switch (module) {
+    case 'customers':
+      docs = mobiles.size > 0
+        ? await Customer.find({ mobile: { $in: Array.from(mobiles) } }).lean() as any
+        : []
+      break
+    case 'production':
+      docs = dates.size > 0
+        ? await Production.find({ date: { $in: Array.from(dates) } }).lean() as any
+        : []
+      break
+    case 'stock':
+      docs = dates.size > 0
+        ? await Stock.find({ date: { $in: Array.from(dates) } }).lean() as any
+        : []
+      break
+    case 'dailySell':
+      docs = dates.size > 0
+        ? await DailySell.find({ date: { $in: Array.from(dates) } }).lean() as any
+        : []
+      break
+    case 'customerPayment':
+      docs = dates.size > 0
+        ? await CustomerPayment.find({ date: { $in: Array.from(dates) } }).lean() as any
+        : []
+      break
+    case 'labourPayment':
+      docs = dates.size > 0
+        ? await LabourPayment.find({ date: { $in: Array.from(dates) } }).lean() as any
+        : []
+      break
+    case 'tractorPayment':
+      docs = dates.size > 0
+        ? await TractorPayment.find({ date: { $in: Array.from(dates) } }).lean() as any
+        : []
+      break
+    case 'dustPurchase':
+      docs = dates.size > 0
+        ? await DustPurchase.find({ date: { $in: Array.from(dates) } }).lean() as any
+        : []
+      break
+    case 'cementPurchase':
+      docs = dates.size > 0
+        ? await CementPurchase.find({ date: { $in: Array.from(dates) } }).lean() as any
+        : []
+      break
+    case 'hardner':
+      docs = dates.size > 0
+        ? await Hardner.find({ date: { $in: Array.from(dates) } }).lean() as any
+        : []
+      break
+    case 'electricity':
+      docs = dates.size > 0
+        ? await Electricity.find({ date: { $in: Array.from(dates) } }).lean() as any
+        : []
+      break
+    case 'factoryStuff':
+      docs = dates.size > 0
+        ? await FactoryStuff.find({ date: { $in: Array.from(dates) } }).lean() as any
+        : []
+      break
+    case 'orders':
+      docs = customerIds.size > 0
+        ? await Order.find({ customerId: { $in: Array.from(customerIds) } }).lean() as any
+        : []
+      break
+    case 'dispatch':
+      docs = customerIds.size > 0
+        ? await Dispatch.find({ customerId: { $in: Array.from(customerIds) } }).lean() as any
+        : []
+      break
+    case 'payments':
+      docs = customerIds.size > 0
+        ? await Payment.find({ customerId: { $in: Array.from(customerIds) } }).lean() as any
+        : []
+      break
+    case 'expenses':
+      // Expenses dedupe by category+amount+date — narrow by date
+      docs = dates.size > 0
+        ? await Expense.find({ date: { $in: Array.from(dates) } }).lean() as any
+        : []
+      break
+  }
+
+  for (const d of docs) {
+    const k = dbKey(module, d as Record<string, unknown>)
+    if (k) keys.add(k)
+  }
+  return keys
+}
+
 export async function POST(request: Request) {
   try {
     await connectDB()
@@ -19,21 +232,41 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Module and data array are required' }, { status: 400 })
     }
 
-    // IMPORTANT — APPEND-ONLY import semantics:
-    // This route NEVER calls deleteMany / replaceOne / updateOne to wipe
-    // existing rows before inserting. Every iteration only calls Model.create()
-    // (or upsert-by-natural-key for Customers). Importing Jan 11-20 after
-    // Jan 1-10 will therefore LEAVE the Jan 1-10 rows in place and ADD the
-    // new rows on top. This is intentional and required by the business.
+    // ── Pre-fetch existing keys (1 DB query for the whole batch) ──────────
+    const existingKeys = await buildExistingKeys(module, data as Record<string, unknown>[])
+    // Track keys we've already seen WITHIN this batch so a duplicate Excel
+    // row doesn't get inserted twice in the same import run.
+    const seenInBatch = new Set<string>()
 
     let imported = 0
     let skipped = 0
+    let duplicatesSkipped = 0
     const errors: string[] = []
     const skippedReasons: string[] = []
 
     for (let i = 0; i < data.length; i++) {
       try {
         const row = data[i]
+
+        // ── Duplicate check (against DB AND within this batch) ──────────
+        const key = rowKey(module, row as Record<string, unknown>)
+        if (key) {
+          if (existingKeys.has(key)) {
+            skipped++
+            duplicatesSkipped++
+            const label = duplicateRowLabel(module, row as Record<string, unknown>)
+            skippedReasons.push(`Row ${i + 1}: Duplicate — ${label} already exists in records, skipped`)
+            continue
+          }
+          if (seenInBatch.has(key)) {
+            skipped++
+            duplicatesSkipped++
+            const label = duplicateRowLabel(module, row as Record<string, unknown>)
+            skippedReasons.push(`Row ${i + 1}: Duplicate — ${label} appears more than once in this Excel file, only first occurrence imported`)
+            continue
+          }
+          seenInBatch.add(key)
+        }
 
         switch (module) {
           // ─── Customers ──────────────────────────────────────────────
@@ -43,14 +276,6 @@ export async function POST(request: Request) {
               skipped++
               continue
             }
-            // Dedupe by mobile (same customer exists → skip)
-            const exists = await Customer.findOne({ mobile: String(row.mobile).trim() })
-            if (exists) {
-              skipped++
-              skippedReasons.push(`Row ${i + 1}: Customer "${String(row.name).trim()}" (mobile ${row.mobile}) already exists — skipped`)
-              continue
-            }
-
             await Customer.create({
               name: String(row.name).trim(),
               mobile: String(row.mobile).trim(),
@@ -402,12 +627,53 @@ export async function POST(request: Request) {
       success: true,
       imported,
       skipped,
+      duplicatesSkipped,
       total: data.length,
       errors: allReasons.length > 0 ? allReasons.slice(0, 50) : undefined,
     })
   } catch (error) {
     console.error('Error importing data:', error)
     return NextResponse.json({ error: 'Failed to import data' }, { status: 500 })
+  }
+}
+
+// Human-readable label for a duplicate row, used in the skip reason.
+function duplicateRowLabel(module: string, row: Record<string, unknown>): string {
+  switch (module) {
+    case 'customers':
+      return `customer "${row.name}" (mobile ${row.mobile})`
+    case 'production':
+      return `production for "${row.customerName || row.customer}" on ${row.date}`
+    case 'stock':
+      return `stock entry for ${row.date}`
+    case 'dailySell':
+      return `daily sell for "${row.customerName}" on ${row.date} (₹${row.amount})`
+    case 'customerPayment':
+      return `payment by "${row.name}" on ${row.date} (₹${row.amount})`
+    case 'labourPayment':
+      return `payment to "${row.name}" on ${row.date} (₹${row.amount})`
+    case 'tractorPayment':
+      return `tractor payment to "${row.vendorName}" on ${row.date}`
+    case 'dustPurchase':
+      return `dust purchase from "${row.vendorName}" on ${row.date}`
+    case 'cementPurchase':
+      return `cement purchase from "${row.vendorName}" on ${row.date}`
+    case 'hardner':
+      return `hardner entry on ${row.date} (₹${row.amount})`
+    case 'electricity':
+      return `electricity entry on ${row.date} (₹${row.amount})`
+    case 'factoryStuff':
+      return `factory stuff "${row.itemName}" on ${row.date} (₹${row.amount})`
+    case 'orders':
+      return `order for customer ${row.customerId} on ${row.deliveryDate || row.date}`
+    case 'dispatch':
+      return `dispatch to customer ${row.customerId} on ${row.date}`
+    case 'payments':
+      return `payment for customer ${row.customerId} on ${row.date}`
+    case 'expenses':
+      return `expense "${row.category}" on ${row.date} (₹${row.amount})`
+    default:
+      return 'record'
   }
 }
 
