@@ -244,8 +244,20 @@ export const api = {
     request<{ message: string }>(`/users/${id}`, { method: 'DELETE' }),
 
   // Database Management
-  exportBackup: () => request<Record<string, unknown>>('/database'),
-  clearData: () => request<{ message: string }>('/database', { method: 'DELETE' }),
+  exportBackup: () => request<{
+    version?: number
+    exportedAt?: string
+    data: Record<string, unknown[]>
+    counts: Record<string, number>
+  }>('/database'),
+  clearData: () => request<{
+    message: string
+    cleared?: Record<string, number>
+  }>('/database', { method: 'DELETE' }),
   restoreBackup: (data: Record<string, unknown>) =>
-    request<{ message: string; counts: Record<string, number> }>('/database', { method: 'PUT', body: JSON.stringify({ data }) }),
+    request<{
+      message: string
+      counts: Record<string, number>
+      errors?: Record<string, string>
+    }>('/database', { method: 'PUT', body: JSON.stringify({ data }) }),
 }

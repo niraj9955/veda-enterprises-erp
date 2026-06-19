@@ -1,0 +1,1060 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useRef } from 'react'
+     4→import { api } from '@/lib/api'
+     5→import { Button } from '@/components/ui/button'
+     6→import { Input } from '@/components/ui/input'
+     7→import { Label } from '@/components/ui/label'
+     8→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+     9→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+    10→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+    11→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+    12→import { Badge } from '@/components/ui/badge'
+    13→import { Textarea } from '@/components/ui/textarea'
+    14→import { toast } from '@/hooks/use-toast'
+    15→import { Plus, Trash2, Edit, Printer, FileText, IndianRupee, Search, UserCheck, X } from 'lucide-react'
+    16→
+    17→interface BillItem {
+    18→  description: string
+    19→  hsn: string
+    20→  quantity: number
+    21→  unit: string
+    22→  rate: number
+    23→  amount: number
+    24→}
+    25→
+    26→interface Bill {
+    27→  id: string
+    28→  billNumber: string
+    29→  billType: string
+    30→  date: string
+    31→  dueDate?: string
+    32→  customerId?: string | null
+    33→  fromName: string
+    34→  fromAddress: string
+    35→  fromGst: string
+    36→  fromPhone: string
+    37→  toName: string
+    38→  toAddress: string
+    39→  toGst: string
+    40→  toPhone: string
+    41→  items: BillItem[]
+    42→  subTotal: number
+    43→  discountPercent: number
+    44→  discountAmount: number
+    45→  taxableAmount: number
+    46→  cgstPercent: number
+    47→  cgstAmount: number
+    48→  sgstPercent: number
+    49→  sgstAmount: number
+    50→  igstPercent: number
+    51→  igstAmount: number
+    52→  roundOff: number
+    53→  grandTotal: number
+    54→  paidAmount: number
+    55→  balanceAmount: number
+    56→  paymentMode: string
+    57→  notes: string
+    58→  terms: string
+    59→  status: string
+    60→}
+    61→
+    62→const PRODUCT_PRESETS = [
+    63→  'Zig Zag White 80mm',
+    64→  'Zig Zag Red 80mm',
+    65→  'Zig Zag Yellow 80mm',
+    66→  'Zig Zag White 60mm',
+    67→  'Zig Zag Red 60mm',
+    68→  'Zig Zag Yellow 60mm',
+    69→  'Curve Stone',
+    70→  'Chequre Tile',
+    71→  'Dumble Grey 80mm',
+    72→  'Dumble Red 80mm',
+    73→  'Dumble Yellow 80mm',
+    74→  'Cement',
+    75→  'Dust',
+    76→  'Hardner',
+    77→  'Other',
+    78→]
+    79→
+    80→const BILL_TYPES = [
+    81→  { value: 'sales', label: 'Sales Invoice' },
+    82→  { value: 'purchase', label: 'Purchase Bill' },
+    83→  { value: 'quotation', label: 'Quotation' },
+    84→  { value: 'service', label: 'Service Bill' },
+    85→  { value: 'other', label: 'Other Bill' },
+    86→]
+    87→
+    88→const STATUS_COLORS: Record<string, string> = {
+    89→  draft: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+    90→  sent: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+    91→  paid: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+    92→  partial: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+    93→  overdue: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+    94→  cancelled: 'bg-gray-100 text-gray-500 line-through',
+    95→}
+    96→
+    97→export default function BillModule() {
+    98→  const [bills, setBills] = useState<Bill[]>([])
+    99→  const [loading, setLoading] = useState(true)
+   100→  const [showForm, setShowForm] = useState(false)
+   101→  const [editingBill, setEditingBill] = useState<Bill | null>(null)
+   102→  const [printBill, setPrintBill] = useState<Bill | null>(null)
+   103→  const [search, setSearch] = useState('')
+   104→  const [filterType, setFilterType] = useState('all')
+   105→
+   106→  const loadBills = async () => {
+   107→    setLoading(true)
+   108→    try {
+   109→      const data = await api.getBills()
+   110→      setBills(data.bills as Bill[])
+   111→    } catch {
+   112→      toast({ title: 'Error', description: 'Failed to load bills', variant: 'destructive' })
+   113→    } finally {
+   114→      setLoading(false)
+   115→    }
+   116→  }
+   117→
+   118→  useEffect(() => {
+   119→    loadBills()
+   120→  }, [])
+   121→
+   122→  const handleDelete = async (id: string) => {
+   123→    if (!confirm('Are you sure you want to delete this bill?')) return
+   124→    try {
+   125→      await api.deleteBill(id)
+   126→      toast({ title: 'Deleted', description: 'Bill deleted successfully' })
+   127→      loadBills()
+   128→    } catch {
+   129→      toast({ title: 'Error', description: 'Failed to delete bill', variant: 'destructive' })
+   130→    }
+   131→  }
+   132→
+   133→  const filteredBills = bills.filter((b) => {
+   134→    const matchSearch = b.billNumber.toLowerCase().includes(search.toLowerCase()) ||
+   135→      b.toName.toLowerCase().includes(search.toLowerCase())
+   136→    const matchType = filterType === 'all' || b.billType === filterType
+   137→    return matchSearch && matchType
+   138→  })
+   139→
+   140→  const totalAmount = filteredBills.reduce((sum, b) => sum + (b.grandTotal || 0), 0)
+   141→  const totalPaid = filteredBills.reduce((sum, b) => sum + (b.paidAmount || 0), 0)
+   142→  const totalDue = filteredBills.reduce((sum, b) => sum + (b.balanceAmount || 0), 0)
+   143→
+   144→  if (printBill) {
+   145→    return <PrintBill bill={printBill} onClose={() => setPrintBill(null)} />
+   146→  }
+   147→
+   148→  return (
+   149→    <div className="space-y-4">
+   150→      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+   151→        <div>
+   152→          <h1 className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">Billing System</h1>
+   153→          <p className="text-sm text-muted-foreground">Generate invoices, quotations, and bills for any transaction</p>
+   154→        </div>
+   155→        <Dialog open={showForm} onOpenChange={setShowForm}>
+   156→          <DialogTrigger asChild>
+   157→            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setEditingBill(null)}>
+   158→              <Plus className="h-4 w-4 mr-2" /> Create New Bill
+   159→            </Button>
+   160→          </DialogTrigger>
+   161→          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+   162→            <DialogHeader>
+   163→              <DialogTitle>{editingBill ? 'Edit Bill' : 'Create New Bill'}</DialogTitle>
+   164→            </DialogHeader>
+   165→            <BillForm
+   166→              bill={editingBill}
+   167→              onSave={async () => {
+   168→                setShowForm(false)
+   169→                setEditingBill(null)
+   170→                await loadBills()
+   171→              }}
+   172→              onCancel={() => {
+   173→                setShowForm(false)
+   174→                setEditingBill(null)
+   175→              }}
+   176→            />
+   177→          </DialogContent>
+   178→        </Dialog>
+   179→      </div>
+   180→
+   181→      {/* Summary cards */}
+   182→      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+   183→        <Card>
+   184→          <CardContent className="p-4">
+   185→            <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Billed</p>
+   186→            <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">₹{totalAmount.toLocaleString('en-IN')}</p>
+   187→            <p className="text-xs text-muted-foreground mt-1">{filteredBills.length} bills</p>
+   188→          </CardContent>
+   189→        </Card>
+   190→        <Card>
+   191→          <CardContent className="p-4">
+   192→            <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Received</p>
+   193→            <p className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">₹{totalPaid.toLocaleString('en-IN')}</p>
+   194→          </CardContent>
+   195→        </Card>
+   196→        <Card>
+   197→          <CardContent className="p-4">
+   198→            <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Outstanding</p>
+   199→            <p className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">₹{totalDue.toLocaleString('en-IN')}</p>
+   200→          </CardContent>
+   201→        </Card>
+   202→      </div>
+   203→
+   204→      {/* Filters */}
+   205→      <div className="flex flex-col md:flex-row gap-3">
+   206→        <div className="relative flex-1">
+   207→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   208→          <Input
+   209→            placeholder="Search by bill number or party name..."
+   210→            value={search}
+   211→            onChange={(e) => setSearch(e.target.value)}
+   212→            className="pl-9"
+   213→          />
+   214→        </div>
+   215→        <Select value={filterType} onValueChange={setFilterType}>
+   216→          <SelectTrigger className="w-full md:w-48">
+   217→            <SelectValue placeholder="All Types" />
+   218→          </SelectTrigger>
+   219→          <SelectContent>
+   220→            <SelectItem value="all">All Types</SelectItem>
+   221→            {BILL_TYPES.map((t) => (
+   222→              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+   223→            ))}
+   224→          </SelectContent>
+   225→        </Select>
+   226→      </div>
+   227→
+   228→      {/* Bills table */}
+   229→      <Card>
+   230→        <CardContent className="p-0">
+   231→          <div className="max-h-[60vh] overflow-auto">
+   232→          <Table>
+   233→            <TableHeader className="sticky top-0 bg-background z-10">
+   234→              <TableRow>
+   235→                <TableHead>Bill No.</TableHead>
+   236→                <TableHead>Date</TableHead>
+   237→                <TableHead>Type</TableHead>
+   238→                <TableHead>Party Name</TableHead>
+   239→                <TableHead className="text-right">Amount</TableHead>
+   240→                <TableHead className="text-right">Paid</TableHead>
+   241→                <TableHead className="text-right">Balance</TableHead>
+   242→                <TableHead>Status</TableHead>
+   243→                <TableHead className="text-right">Actions</TableHead>
+   244→              </TableRow>
+   245→            </TableHeader>
+   246→            <TableBody>
+   247→              {loading ? (
+   248→                <TableRow>
+   249→                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Loading bills...</TableCell>
+   250→                </TableRow>
+   251→              ) : filteredBills.length === 0 ? (
+   252→                <TableRow>
+   253→                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+   254→                    <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
+   255→                    No bills yet. Click "Create New Bill" to generate your first invoice.
+   256→                  </TableCell>
+   257→                </TableRow>
+   258→              ) : (
+   259→                filteredBills.map((bill) => (
+   260→                  <TableRow key={bill.id}>
+   261→                    <TableCell className="font-medium">{bill.billNumber}</TableCell>
+   262→                    <TableCell>{bill.date}</TableCell>
+   263→                    <TableCell>
+   264→                      <Badge variant="outline" className="text-xs">
+   265→                        {BILL_TYPES.find((t) => t.value === bill.billType)?.label || bill.billType}
+   266→                      </Badge>
+   267→                    </TableCell>
+   268→                    <TableCell>{bill.toName}</TableCell>
+   269→                    <TableCell className="text-right font-medium">₹{(bill.grandTotal || 0).toLocaleString('en-IN')}</TableCell>
+   270→                    <TableCell className="text-right text-emerald-600 dark:text-emerald-400">₹{(bill.paidAmount || 0).toLocaleString('en-IN')}</TableCell>
+   271→                    <TableCell className="text-right text-amber-600 dark:text-amber-400">₹{(bill.balanceAmount || 0).toLocaleString('en-IN')}</TableCell>
+   272→                    <TableCell>
+   273→                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[bill.status] || STATUS_COLORS.draft}`}>
+   274→                        {bill.status}
+   275→                      </span>
+   276→                    </TableCell>
+   277→                    <TableCell className="text-right">
+   278→                      <div className="flex justify-end gap-1">
+   279→                        <Button size="icon" variant="ghost" onClick={() => setPrintBill(bill)} title="Print/View">
+   280→                          <Printer className="h-4 w-4" />
+   281→                        </Button>
+   282→                        <Button size="icon" variant="ghost" onClick={() => { setEditingBill(bill); setShowForm(true) }} title="Edit">
+   283→                          <Edit className="h-4 w-4" />
+   284→                        </Button>
+   285→                        <Button size="icon" variant="ghost" className="text-destructive" onClick={() => handleDelete(bill.id)} title="Delete">
+   286→                          <Trash2 className="h-4 w-4" />
+   287→                        </Button>
+   288→                      </div>
+   289→                    </TableCell>
+   290→                  </TableRow>
+   291→                ))
+   292→              )}
+   293→            </TableBody>
+   294→          </Table>
+   295→          </div>
+   296→        </CardContent>
+   297→      </Card>
+   298→    </div>
+   299→  )
+   300→}
+   301→
+   302→// ─── Bill Form Component ──────────────────────────────────────────────────────
+   303→function BillForm({ bill, onSave, onCancel }: { bill: Bill | null; onSave: () => void; onCancel: () => void }) {
+   304→  const [billType, setBillType] = useState(bill?.billType || 'sales')
+   305→  const [date, setDate] = useState(bill?.date || new Date().toISOString().split('T')[0])
+   306→  const [dueDate, setDueDate] = useState(bill?.dueDate || '')
+   307→  // Customer link — when set, the bill's paidAmount auto-syncs to a Payment
+   308→  // document for this customer. May be null (manual party entry).
+   309→  const [customerId, setCustomerId] = useState<string | null>(bill?.customerId || null)
+   310→  const [toName, setToName] = useState(bill?.toName || '')
+   311→  const [toAddress, setToAddress] = useState(bill?.toAddress || '')
+   312→  const [toGst, setToGst] = useState(bill?.toGst || '')
+   313→  const [toPhone, setToPhone] = useState(bill?.toPhone || '')
+   314→  const [items, setItems] = useState<BillItem[]>(
+   315→    bill?.items?.length ? bill.items : [{ description: '', hsn: '', quantity: 1, unit: 'pcs', rate: 0, amount: 0 }]
+   316→  )
+   317→  const [discountPercent, setDiscountPercent] = useState(bill?.discountPercent || 0)
+   318→  const [cgstPercent, setCgstPercent] = useState(bill?.cgstPercent || 0)
+   319→  const [sgstPercent, setSgstPercent] = useState(bill?.sgstPercent || 0)
+   320→  const [igstPercent, setIgstPercent] = useState(bill?.igstPercent || 0)
+   321→  const [paidAmount, setPaidAmount] = useState(bill?.paidAmount || 0)
+   322→  const [paymentMode, setPaymentMode] = useState(bill?.paymentMode || 'Cash')
+   323→  const [notes, setNotes] = useState(bill?.notes || '')
+   324→  const [terms, setTerms] = useState(bill?.terms || '')
+   325→  const [saving, setSaving] = useState(false)
+   326→
+   327→  // Recalculate item amount when qty/rate changes
+   328→  const updateItem = (index: number, field: keyof BillItem, value: string | number) => {
+   329→    const newItems = [...items]
+   330→    if (field === 'description' || field === 'hsn' || field === 'unit') {
+   331→      newItems[index][field] = value as string
+   332→    } else {
+   333→      newItems[index][field] = Number(value) || 0
+   334→    }
+   335→    newItems[index].amount = newItems[index].quantity * newItems[index].rate
+   336→    setItems(newItems)
+   337→  }
+   338→
+   339→  const addItem = () => {
+   340→    setItems([...items, { description: '', hsn: '', quantity: 1, unit: 'pcs', rate: 0, amount: 0 }])
+   341→  }
+   342→
+   343→  const removeItem = (index: number) => {
+   344→    if (items.length > 1) setItems(items.filter((_, i) => i !== index))
+   345→  }
+   346→
+   347→  // Calculations
+   348→  const subTotal = items.reduce((sum, item) => sum + (item.amount || 0), 0)
+   349→  const discountAmount = (subTotal * discountPercent) / 100
+   350→  const taxableAmount = subTotal - discountAmount
+   351→  const cgstAmount = (taxableAmount * cgstPercent) / 100
+   352→  const sgstAmount = (taxableAmount * sgstPercent) / 100
+   353→  const igstAmount = (taxableAmount * igstPercent) / 100
+   354→  const totalBeforeRound = taxableAmount + cgstAmount + sgstAmount + igstAmount
+   355→  const grandTotal = Math.round(totalBeforeRound)
+   356→  const roundOff = grandTotal - totalBeforeRound
+   357→  const balanceAmount = grandTotal - paidAmount
+   358→
+   359→  const handleSubmit = async (e: React.FormEvent) => {
+   360→    e.preventDefault()
+   361→    if (!toName.trim()) {
+   362→      toast({ title: 'Error', description: 'Party name is required', variant: 'destructive' })
+   363→      return
+   364→    }
+   365→    if (items.length === 0 || items.every((i) => !i.description.trim())) {
+   366→      toast({ title: 'Error', description: 'Add at least one item', variant: 'destructive' })
+   367→      return
+   368→    }
+   369→
+   370→    setSaving(true)
+   371→    try {
+   372→      const payload = {
+   373→        billType,
+   374→        date,
+   375→        dueDate,
+   376→        customerId: customerId || null,
+   377→        toName, toAddress, toGst, toPhone,
+   378→        items: items.filter((i) => i.description.trim()),
+   379→        discountPercent,
+   380→        cgstPercent, sgstPercent, igstPercent,
+   381→        paidAmount,
+   382→        paymentMode,
+   383→        notes,
+   384→        terms,
+   385→      }
+   386→      if (bill) {
+   387→        await api.updateBill(bill.id, payload)
+   388→        toast({ title: 'Updated', description: 'Bill updated successfully' })
+   389→      } else {
+   390→        await api.createBill(payload)
+   391→        toast({ title: 'Created', description: 'Bill created successfully' })
+   392→      }
+   393→      onSave()
+   394→    } catch (err) {
+   395→      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to save bill', variant: 'destructive' })
+   396→    } finally {
+   397→      setSaving(false)
+   398→    }
+   399→  }
+   400→
+   401→  return (
+   402→    <form onSubmit={handleSubmit} className="space-y-4">
+   403→      {/* Bill Type & Date */}
+   404→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   405→        <div>
+   406→          <Label className="text-xs">Bill Type</Label>
+   407→          <Select value={billType} onValueChange={setBillType}>
+   408→            <SelectTrigger><SelectValue /></SelectTrigger>
+   409→            <SelectContent>
+   410→              {BILL_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+   411→            </SelectContent>
+   412→          </Select>
+   413→        </div>
+   414→        <div>
+   415→          <Label className="text-xs">Date</Label>
+   416→          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+   417→        </div>
+   418→        <div>
+   419→          <Label className="text-xs">Due Date (optional)</Label>
+   420→          <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+   421→        </div>
+   422→        <div>
+   423→          <Label className="text-xs">Payment Mode</Label>
+   424→          <Select value={paymentMode} onValueChange={setPaymentMode}>
+   425→            <SelectTrigger><SelectValue /></SelectTrigger>
+   426→            <SelectContent>
+   427→              <SelectItem value="Cash">Cash</SelectItem>
+   428→              <SelectItem value="UPI">UPI</SelectItem>
+   429→              <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+   430→              <SelectItem value="Cheque">Cheque</SelectItem>
+   431→              <SelectItem value="Credit">Credit</SelectItem>
+   432→            </SelectContent>
+   433→          </Select>
+   434→        </div>
+   435→      </div>
+   436→
+   437→      {/* Customer + Previous-Bill search & auto-fill */}
+   438→      <CustomerSearchCard
+   439→        selectedCustomerId={customerId}
+   440→        onSelectCustomer={(c) => {
+   441→          setCustomerId(c.id)
+   442→          setToName(c.name)
+   443→          setToPhone(c.mobile || '')
+   444→          setToAddress(c.address || '')
+   445→          setToGst(c.gstNumber || '')
+   446→        }}
+   447→        onSelectBill={(b) => {
+   448→          // Duplicate-from-previous-bill: pre-fill everything except paid
+   449→          // amount and notes (those belong to the new transaction). Link
+   450→          // the customer too so the new bill's paidAmount auto-syncs.
+   451→          setCustomerId(b.customerId || null)
+   452→          setToName(b.toName || '')
+   453→          setToPhone(b.toPhone || '')
+   454→          setToAddress(b.toAddress || '')
+   455→          setToGst(b.toGst || '')
+   456→          if (b.items?.length) {
+   457→            setItems(b.items.map((it) => ({
+   458→              description: it.description || '',
+   459→              hsn: it.hsn || '',
+   460→              quantity: Number(it.quantity) || 0,
+   461→              unit: it.unit || 'pcs',
+   462→              rate: Number(it.rate) || 0,
+   463→              amount: Number(it.amount) || 0,
+   464→            })))
+   465→          }
+   466→          if (typeof b.discountPercent === 'number') setDiscountPercent(b.discountPercent)
+   467→          if (typeof b.cgstPercent === 'number') setCgstPercent(b.cgstPercent)
+   468→          if (typeof b.sgstPercent === 'number') setSgstPercent(b.sgstPercent)
+   469→          if (typeof b.igstPercent === 'number') setIgstPercent(b.igstPercent)
+   470→          if (b.paymentMode) setPaymentMode(b.paymentMode)
+   471→          if (b.terms) setTerms(b.terms)
+   472→          toast({
+   473→            title: 'Bill data loaded',
+   474→            description: `Pre-filled from ${b.billNumber}. Review and update the paid amount before saving.`,
+   475→          })
+   476→        }}
+   477→        onClear={() => setCustomerId(null)}
+   478→      />
+   479→
+   480→      {/* Bill To */}
+   481→      <Card>
+   482→        <CardHeader className="pb-3"><CardTitle className="text-sm">Bill To (Party Details)</CardTitle></CardHeader>
+   483→        <CardContent className="space-y-3">
+   484→          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+   485→            <div>
+   486→              <Label className="text-xs">Party Name *</Label>
+   487→              <Input value={toName} onChange={(e) => {
+   488→                setToName(e.target.value)
+   489→                // Manual edits break the customer link so we don't accidentally
+   490→                // sync payments to the wrong customer.
+   491→                if (customerId) setCustomerId(null)
+   492→              }} placeholder="Customer / Vendor name" required />
+   493→            </div>
+   494→            <div>
+   495→              <Label className="text-xs">Phone</Label>
+   496→              <Input value={toPhone} onChange={(e) => {
+   497→                setToPhone(e.target.value)
+   498→                if (customerId) setCustomerId(null)
+   499→              }} placeholder="Contact number" />
+   500→            </div>
+   501→          </div>
+   502→          <div>
+   503→            <Label className="text-xs">Address</Label>
+   504→            <Textarea value={toAddress} onChange={(e) => {
+   505→              setToAddress(e.target.value)
+   506→              if (customerId) setCustomerId(null)
+   507→            }} placeholder="Full address" rows={2} />
+   508→          </div>
+   509→          <div>
+   510→            <Label className="text-xs">GST Number</Label>
+   511→            <Input value={toGst} onChange={(e) => {
+   512→              setToGst(e.target.value)
+   513→              if (customerId) setCustomerId(null)
+   514→            }} placeholder="GSTIN (optional)" />
+   515→          </div>
+   516→          {customerId && (
+   517→            <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+   518→              <UserCheck className="h-3 w-3" />
+   519→              Linked to customer record — paid amount will auto-sync to Payments module.
+   520→            </p>
+   521→          )}
+   522→        </CardContent>
+   523→      </Card>
+   524→
+   525→      {/* Items */}
+   526→      <Card>
+   527→        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+   528→          <CardTitle className="text-sm">Items</CardTitle>
+   529→          <Button type="button" size="sm" variant="outline" onClick={addItem}>
+   530→            <Plus className="h-3 w-3 mr-1" /> Add Item
+   531→          </Button>
+   532→        </CardHeader>
+   533→        <CardContent className="space-y-2">
+   534→          <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-muted-foreground px-2">
+   535→            <div className="col-span-4">Description</div>
+   536→            <div className="col-span-2">HSN</div>
+   537→            <div className="col-span-2">Qty</div>
+   538→            <div className="col-span-2">Rate</div>
+   539→            <div className="col-span-1">Amount</div>
+   540→            <div className="col-span-1"></div>
+   541→          </div>
+   542→          {items.map((item, idx) => (
+   543→            <div key={idx} className="grid grid-cols-12 gap-2 items-start">
+   544→              <Input
+   545→                list="product-list"
+   546→                className="col-span-12 md:col-span-4"
+   547→                placeholder="Item description"
+   548→                value={item.description}
+   549→                onChange={(e) => updateItem(idx, 'description', e.target.value)}
+   550→              />
+   551→              <datalist id="product-list">
+   552→                {PRODUCT_PRESETS.map((p) => <option key={p} value={p} />)}
+   553→              </datalist>
+   554→              <Input
+   555→                className="col-span-4 md:col-span-2"
+   556→                placeholder="HSN"
+   557→                value={item.hsn}
+   558→                onChange={(e) => updateItem(idx, 'hsn', e.target.value)}
+   559→              />
+   560→              <Input
+   561→                type="number"
+   562→                className="col-span-3 md:col-span-2"
+   563→                placeholder="Qty"
+   564→                value={item.quantity}
+   565→                onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
+   566→              />
+   567→              <Input
+   568→                type="number"
+   569→                className="col-span-3 md:col-span-2"
+   570→                placeholder="Rate"
+   571→                value={item.rate}
+   572→                onChange={(e) => updateItem(idx, 'rate', e.target.value)}
+   573→              />
+   574→              <div className="col-span-2 md:col-span-1 flex items-center h-9 text-sm font-medium">
+   575→                ₹{(item.amount || 0).toLocaleString('en-IN')}
+   576→              </div>
+   577→              <Button
+   578→                type="button"
+   579→                size="icon"
+   580→                variant="ghost"
+   581→                className="col-span-1 h-9 w-9 text-destructive"
+   582→                onClick={() => removeItem(idx)}
+   583→                disabled={items.length === 1}
+   584→              >
+   585→                <Trash2 className="h-3 w-3" />
+   586→              </Button>
+   587→            </div>
+   588→          ))}
+   589→        </CardContent>
+   590→      </Card>
+   591→
+   592→      {/* Tax & Discount */}
+   593→      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+   594→        <Card>
+   595→          <CardHeader className="pb-3"><CardTitle className="text-sm">Tax & Discount</CardTitle></CardHeader>
+   596→          <CardContent className="space-y-3">
+   597→            <div className="grid grid-cols-3 gap-2">
+   598→              <div>
+   599→                <Label className="text-xs">Discount %</Label>
+   600→                <Input type="number" value={discountPercent} onChange={(e) => setDiscountPercent(Number(e.target.value) || 0)} />
+   601→              </div>
+   602→              <div>
+   603→                <Label className="text-xs">CGST %</Label>
+   604→                <Input type="number" value={cgstPercent} onChange={(e) => setCgstPercent(Number(e.target.value) || 0)} />
+   605→              </div>
+   606→              <div>
+   607→                <Label className="text-xs">SGST %</Label>
+   608→                <Input type="number" value={sgstPercent} onChange={(e) => setSgstPercent(Number(e.target.value) || 0)} />
+   609→              </div>
+   610→            </div>
+   611→            <div>
+   612→              <Label className="text-xs">IGST % (for inter-state)</Label>
+   613→              <Input type="number" value={igstPercent} onChange={(e) => setIgstPercent(Number(e.target.value) || 0)} />
+   614→            </div>
+   615→          </CardContent>
+   616→        </Card>
+   617→
+   618→        <Card>
+   619→          <CardHeader className="pb-3"><CardTitle className="text-sm">Summary</CardTitle></CardHeader>
+   620→          <CardContent className="space-y-2 text-sm">
+   621→            <div className="flex justify-between"><span className="text-muted-foreground">Sub Total</span><span>₹{subTotal.toLocaleString('en-IN')}</span></div>
+   622→            <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span className="text-red-600">-₹{discountAmount.toLocaleString('en-IN')}</span></div>
+   623→            <div className="flex justify-between"><span className="text-muted-foreground">Taxable Amount</span><span>₹{taxableAmount.toLocaleString('en-IN')}</span></div>
+   624→            {cgstPercent > 0 && <div className="flex justify-between"><span className="text-muted-foreground">CGST ({cgstPercent}%)</span><span>₹{cgstAmount.toFixed(2)}</span></div>}
+   625→            {sgstPercent > 0 && <div className="flex justify-between"><span className="text-muted-foreground">SGST ({sgstPercent}%)</span><span>₹{sgstAmount.toFixed(2)}</span></div>}
+   626→            {igstPercent > 0 && <div className="flex justify-between"><span className="text-muted-foreground">IGST ({igstPercent}%)</span><span>₹{igstAmount.toFixed(2)}</span></div>}
+   627→            {Math.abs(roundOff) > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Round Off</span><span>₹{roundOff.toFixed(2)}</span></div>}
+   628→            <div className="border-t pt-2 flex justify-between font-bold text-base"><span>Grand Total</span><span className="text-emerald-600 dark:text-emerald-400">₹{grandTotal.toLocaleString('en-IN')}</span></div>
+   629→            <div className="flex justify-between"><span className="text-muted-foreground">Paid Amount</span><span>₹{paidAmount.toLocaleString('en-IN')}</span></div>
+   630→            <div className="flex justify-between font-medium"><span>Balance Due</span><span className={balanceAmount > 0 ? 'text-amber-600' : 'text-emerald-600'}>₹{balanceAmount.toLocaleString('en-IN')}</span></div>
+   631→          </CardContent>
+   632→        </Card>
+   633→      </div>
+   634→
+   635→      {/* Payment & Notes */}
+   636→      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+   637→        <div>
+   638→          <Label className="text-xs">Paid Amount (₹)</Label>
+   639→          <Input type="number" value={paidAmount} onChange={(e) => setPaidAmount(Number(e.target.value) || 0)} />
+   640→        </div>
+   641→        <div className="md:col-span-2">
+   642→          <Label className="text-xs">Notes</Label>
+   643→          <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Additional notes (optional)" />
+   644→        </div>
+   645→      </div>
+   646→      <div>
+   647→        <Label className="text-xs">Terms & Conditions</Label>
+   648→        <Textarea value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="Terms and conditions" rows={2} />
+   649→      </div>
+   650→
+   651→      {/* Action buttons */}
+   652→      <div className="flex gap-2 justify-end pt-2 border-t">
+   653→        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+   654→        <Button type="submit" disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
+   655→          {saving ? 'Saving...' : (bill ? 'Update Bill' : 'Create Bill')}
+   656→        </Button>
+   657→      </div>
+   658→    </form>
+   659→  )
+   660→}
+   661→
+   662→// ─── Print Bill Component ─────────────────────────────────────────────────────
+   663→function PrintBill({ bill, onClose }: { bill: Bill; onClose: () => void }) {
+   664→  useEffect(() => {
+   665→    // Auto-trigger print dialog on mount
+   666→    setTimeout(() => window.print(), 300)
+   667→  }, [])
+   668→
+   669→  return (
+   670→    <div className="space-y-4">
+   671→      <div className="flex justify-end gap-2 print:hidden">
+   672→        <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-2" /> Print</Button>
+   673→        <Button variant="ghost" onClick={onClose}>Close</Button>
+   674→      </div>
+   675→
+   676→      <div className="bg-white text-black p-8 shadow-lg print:shadow-none print:p-0 max-w-4xl mx-auto" id="print-area">
+   677→        {/* Header */}
+   678→        <div className="flex justify-between items-start border-b-2 border-emerald-600 pb-4 mb-6">
+   679→          <div>
+   680→            <h1 className="text-2xl font-bold text-emerald-700">{bill.fromName || 'Veda Enterprises'}</h1>
+   681→            {bill.fromAddress && <p className="text-sm text-gray-600 mt-1 max-w-md">{bill.fromAddress}</p>}
+   682→            {bill.fromGst && <p className="text-sm text-gray-600">GST: {bill.fromGst}</p>}
+   683→            {bill.fromPhone && <p className="text-sm text-gray-600">Phone: {bill.fromPhone}</p>}
+   684→          </div>
+   685→          <div className="text-right">
+   686→            <h2 className="text-3xl font-bold uppercase text-emerald-700">
+   687→              {BILL_TYPES.find((t) => t.value === bill.billType)?.label || 'Invoice'}
+   688→            </h2>
+   689→            <p className="text-sm font-medium mt-1">{bill.billNumber}</p>
+   690→            <p className="text-sm text-gray-600">Date: {bill.date}</p>
+   691→            {bill.dueDate && <p className="text-sm text-gray-600">Due: {bill.dueDate}</p>}
+   692→          </div>
+   693→        </div>
+   694→
+   695→        {/* Bill To */}
+   696→        <div className="grid grid-cols-2 gap-4 mb-6">
+   697→          <div>
+   698→            <p className="text-xs font-bold uppercase text-gray-500 mb-1">Bill To</p>
+   699→            <p className="font-bold text-lg">{bill.toName}</p>
+   700→            {bill.toAddress && <p className="text-sm text-gray-600 whitespace-pre-line">{bill.toAddress}</p>}
+   701→            {bill.toPhone && <p className="text-sm text-gray-600">Phone: {bill.toPhone}</p>}
+   702→            {bill.toGst && <p className="text-sm text-gray-600">GST: {bill.toGst}</p>}
+   703→          </div>
+   704→          <div className="text-right">
+   705→            <p className="text-xs font-bold uppercase text-gray-500 mb-1">Payment Status</p>
+   706→            <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase ${STATUS_COLORS[bill.status]}`}>
+   707→              {bill.status}
+   708→            </span>
+   709→            <p className="text-sm text-gray-600 mt-2">Payment Mode: {bill.paymentMode}</p>
+   710→          </div>
+   711→        </div>
+   712→
+   713→        {/* Items Table */}
+   714→        <table className="w-full border-collapse mb-6">
+   715→          <thead>
+   716→            <tr className="bg-emerald-600 text-white">
+   717→              <th className="text-left p-2 text-sm">#</th>
+   718→              <th className="text-left p-2 text-sm">Description</th>
+   719→              <th className="text-center p-2 text-sm">HSN</th>
+   720→              <th className="text-right p-2 text-sm">Qty</th>
+   721→              <th className="text-right p-2 text-sm">Rate</th>
+   722→              <th className="text-right p-2 text-sm">Amount</th>
+   723→            </tr>
+   724→          </thead>
+   725→          <tbody>
+   726→            {bill.items.map((item, idx) => (
+   727→              <tr key={idx} className="border-b border-gray-200">
+   728→                <td className="p-2 text-sm">{idx + 1}</td>
+   729→                <td className="p-2 text-sm">{item.description}</td>
+   730→                <td className="p-2 text-sm text-center">{item.hsn || '-'}</td>
+   731→                <td className="p-2 text-sm text-right">{item.quantity} {item.unit}</td>
+   732→                <td className="p-2 text-sm text-right">₹{item.rate.toLocaleString('en-IN')}</td>
+   733→                <td className="p-2 text-sm text-right font-medium">₹{item.amount.toLocaleString('en-IN')}</td>
+   734→              </tr>
+   735→            ))}
+   736→          </tbody>
+   737→        </table>
+   738→
+   739→        {/* Totals */}
+   740→        <div className="flex justify-end">
+   741→          <div className="w-full max-w-xs space-y-1 text-sm">
+   742→            <div className="flex justify-between"><span className="text-gray-600">Sub Total:</span><span>₹{bill.subTotal.toLocaleString('en-IN')}</span></div>
+   743→            {bill.discountAmount > 0 && <div className="flex justify-between"><span className="text-gray-600">Discount ({bill.discountPercent}%):</span><span>-₹{bill.discountAmount.toFixed(2)}</span></div>}
+   744→            {bill.cgstAmount > 0 && <div className="flex justify-between"><span className="text-gray-600">CGST ({bill.cgstPercent}%):</span><span>₹{bill.cgstAmount.toFixed(2)}</span></div>}
+   745→            {bill.sgstAmount > 0 && <div className="flex justify-between"><span className="text-gray-600">SGST ({bill.sgstPercent}%):</span><span>₹{bill.sgstAmount.toFixed(2)}</span></div>}
+   746→            {bill.igstAmount > 0 && <div className="flex justify-between"><span className="text-gray-600">IGST ({bill.igstPercent}%):</span><span>₹{bill.igstAmount.toFixed(2)}</span></div>}
+   747→            {Math.abs(bill.roundOff) > 0 && <div className="flex justify-between"><span className="text-gray-600">Round Off:</span><span>₹{bill.roundOff.toFixed(2)}</span></div>}
+   748→            <div className="flex justify-between font-bold text-lg border-t-2 border-emerald-600 pt-2">
+   749→              <span>Grand Total:</span><span className="text-emerald-700">₹{bill.grandTotal.toLocaleString('en-IN')}</span>
+   750→            </div>
+   751→            <div className="flex justify-between"><span className="text-gray-600">Paid:</span><span className="text-emerald-600">₹{bill.paidAmount.toLocaleString('en-IN')}</span></div>
+   752→            <div className="flex justify-between font-bold"><span>Balance Due:</span><span className="text-amber-600">₹{bill.balanceAmount.toLocaleString('en-IN')}</span></div>
+   753→          </div>
+   754→        </div>
+   755→
+   756→        {/* Notes & Terms */}
+   757→        {(bill.notes || bill.terms) && (
+   758→          <div className="mt-8 pt-4 border-t border-gray-200 grid grid-cols-2 gap-4 text-xs">
+   759→            {bill.notes && (
+   760→              <div>
+   761→                <p className="font-bold uppercase text-gray-500 mb-1">Notes</p>
+   762→                <p className="text-gray-600">{bill.notes}</p>
+   763→              </div>
+   764→            )}
+   765→            {bill.terms && (
+   766→              <div>
+   767→                <p className="font-bold uppercase text-gray-500 mb-1">Terms & Conditions</p>
+   768→                <p className="text-gray-600 whitespace-pre-line">{bill.terms}</p>
+   769→              </div>
+   770→            )}
+   771→          </div>
+   772→        )}
+   773→
+   774→        {/* Footer */}
+   775→        <div className="mt-12 pt-6 border-t border-gray-200 flex justify-between items-end">
+   776→          <div className="text-xs text-gray-500">
+   777→            <p>This is a computer-generated document.</p>
+   778→          </div>
+   779→          <div className="text-center">
+   780→            <div className="border-t border-gray-400 w-48 mt-12 pt-1">
+   781→              <p className="text-sm font-medium">Authorized Signature</p>
+   782→            </div>
+   783→          </div>
+   784→        </div>
+   785→      </div>
+   786→    </div>
+   787→  )
+   788→}
+   789→
+   790→// ─── Customer + Bill Search Card ─────────────────────────────────────────────
+   791→// Dual-source live search:
+   792→//   • Section 1: customers (click → fills party details, links customer)
+   793→//   • Section 2: previous bills (click → fills party + items + tax + payment
+   794→//     mode + terms — like a "duplicate bill" shortcut)
+   795→//
+   796→// Both sections fire in parallel on the same query so the user sees results
+   797→// from either source instantly.
+   798→interface CustomerSearchResult {
+   799→  id: string
+   800→  name: string
+   801→  mobile?: string
+   802→  address?: string
+   803→  gstNumber?: string
+   804→}
+   805→
+   806→interface BillSearchResult {
+   807→  id: string
+   808→  billNumber: string
+   809→  billType: string
+   810→  date: string
+   811→  customerId?: string | null
+   812→  toName: string
+   813→  toPhone?: string
+   814→  toAddress?: string
+   815→  toGst?: string
+   816→  items?: Array<{
+   817→    description: string
+   818→    hsn?: string
+   819→    quantity: number
+   820→    unit?: string
+   821→    rate: number
+   822→    amount: number
+   823→  }>
+   824→  discountPercent?: number
+   825→  cgstPercent?: number
+   826→  sgstPercent?: number
+   827→  igstPercent?: number
+   828→  grandTotal?: number
+   829→  paymentMode?: string
+   830→  terms?: string
+   831→}
+   832→
+   833→function CustomerSearchCard({
+   834→  selectedCustomerId,
+   835→  onSelectCustomer,
+   836→  onSelectBill,
+   837→  onClear,
+   838→}: {
+   839→  selectedCustomerId: string | null
+   840→  onSelectCustomer: (c: CustomerSearchResult) => void
+   841→  onSelectBill: (b: BillSearchResult) => void
+   842→  onClear: () => void
+   843→}) {
+   844→  const [query, setQuery] = useState('')
+   845→  const [customers, setCustomers] = useState<CustomerSearchResult[]>([])
+   846→  const [bills, setBills] = useState<BillSearchResult[]>([])
+   847→  const [loading, setLoading] = useState(false)
+   848→  const [open, setOpen] = useState(false)
+   849→  const boxRef = useRef<HTMLDivElement>(null)
+   850→
+   851→  // Debounced dual-source search — fires 350ms after the user stops typing.
+   852→  // Runs both API calls in parallel via Promise.allSettled so a failure in
+   853→  // one source doesn't hide results from the other.
+   854→  useEffect(() => {
+   855→    if (!query.trim()) {
+   856→      setCustomers([])
+   857→      setBills([])
+   858→      setOpen(false)
+   859→      return
+   860→    }
+   861→    setLoading(true)
+   862→    const t = setTimeout(async () => {
+   863→      const [custRes, billRes] = await Promise.allSettled([
+   864→        api.getCustomers(query.trim()),
+   865→        api.getBills({ search: query.trim() }),
+   866→      ])
+   867→
+   868→      const custList: CustomerSearchResult[] =
+   869→        custRes.status === 'fulfilled'
+   870→          ? (custRes.value.customers as any[]).map((c) => ({
+   871→              id: c.id,
+   872→              name: c.name,
+   873→              mobile: c.mobile || '',
+   874→              address: c.address || '',
+   875→              gstNumber: c.gstNumber || '',
+   876→            }))
+   877→          : []
+   878→
+   879→      const billList: BillSearchResult[] =
+   880→        billRes.status === 'fulfilled'
+   881→          ? (billRes.value.bills as any[]).map((b) => ({
+   882→              id: b.id,
+   883→              billNumber: b.billNumber,
+   884→              billType: b.billType,
+   885→              date: b.date,
+   886→              customerId: b.customerId || null,
+   887→              toName: b.toName || '',
+   888→              toPhone: b.toPhone || '',
+   889→              toAddress: b.toAddress || '',
+   890→              toGst: b.toGst || '',
+   891→              items: b.items || [],
+   892→              discountPercent: b.discountPercent,
+   893→              cgstPercent: b.cgstPercent,
+   894→              sgstPercent: b.sgstPercent,
+   895→              igstPercent: b.igstPercent,
+   896→              grandTotal: b.grandTotal,
+   897→              paymentMode: b.paymentMode,
+   898→              terms: b.terms,
+   899→            }))
+   900→          : []
+   901→
+   902→      setCustomers(custList)
+   903→      setBills(billList)
+   904→      setOpen(custList.length > 0 || billList.length > 0)
+   905→      setLoading(false)
+   906→    }, 350)
+   907→    return () => clearTimeout(t)
+   908→  }, [query])
+   909→
+   910→  // Close the dropdown on outside click
+   911→  useEffect(() => {
+   912→    const handler = (e: MouseEvent) => {
+   913→      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+   914→        setOpen(false)
+   915→      }
+   916→    }
+   917→    document.addEventListener('mousedown', handler)
+   918→    return () => document.removeEventListener('mousedown', handler)
+   919→  }, [])
+   920→
+   921→  const handlePickCustomer = (c: CustomerSearchResult) => {
+   922→    onSelectCustomer(c)
+   923→    setQuery('')
+   924→    setCustomers([])
+   925→    setBills([])
+   926→    setOpen(false)
+   927→  }
+   928→
+   929→  const handlePickBill = (b: BillSearchResult) => {
+   930→    onSelectBill(b)
+   931→    setQuery('')
+   932→    setCustomers([])
+   933→    setBills([])
+   934→    setOpen(false)
+   935→  }
+   936→
+   937→  const handleClear = () => {
+   938→    onClear()
+   939→    setQuery('')
+   940→    setCustomers([])
+   941→    setBills([])
+   942→  }
+   943→
+   944→  const hasAny = customers.length > 0 || bills.length > 0
+   945→
+   946→  return (
+   947→    <Card className="border-emerald-200 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/10">
+   948→      <CardHeader className="pb-3">
+   949→        <CardTitle className="text-sm flex items-center gap-2">
+   950→          <Search className="h-4 w-4 text-emerald-600" />
+   951→          Search Customer or Previous Bill (auto-fill)
+   952→        </CardTitle>
+   953→      </CardHeader>
+   954→      <CardContent>
+   955→        {selectedCustomerId ? (
+   956→          <div className="flex items-center justify-between gap-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-md px-3 py-2">
+   957→            <div className="flex items-center gap-2 text-sm">
+   958→              <UserCheck className="h-4 w-4 text-emerald-600" />
+   959→              <span className="font-medium">Customer linked</span>
+   960→              <Badge variant="outline" className="text-xs">{selectedCustomerId.slice(-6)}</Badge>
+   961→            </div>
+   962→            <Button type="button" size="sm" variant="ghost" onClick={handleClear}>
+   963→              <X className="h-3 w-3 mr-1" /> Unlink
+   964→            </Button>
+   965→          </div>
+   966→        ) : (
+   967→          <div ref={boxRef} className="relative">
+   968→            <div className="relative">
+   969→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   970→              <Input
+   971→                placeholder="Type customer name, mobile, address, OR previous bill number..."
+   972→                value={query}
+   973→                onChange={(e) => setQuery(e.target.value)}
+   974→                onFocus={() => hasAny && setOpen(true)}
+   975→                className="pl-9"
+   976→              />
+   977→              {loading && (
+   978→                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">Searching...</span>
+   979→              )}
+   980→            </div>
+   981→
+   982→            {open && (
+   983→              <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg max-h-80 overflow-auto">
+   984→                {/* Section: Customers */}
+   985→                {customers.length > 0 && (
+   986→                  <div>
+   987→                    <div className="px-3 py-1.5 text-[11px] uppercase tracking-wide font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/30 border-b">
+   988→                      Customers ({customers.length})
+   989→                    </div>
+   990→                    {customers.map((c) => (
+   991→                      <button
+   992→                        type="button"
+   993→                        key={`c-${c.id}`}
+   994→                        onClick={() => handlePickCustomer(c)}
+   995→                        className="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-b transition-colors"
+   996→                      >
+   997→                        <div className="flex items-center justify-between gap-2">
+   998→                          <div className="min-w-0 flex-1">
+   999→                            <p className="text-sm font-medium truncate">{c.name}</p>
+  1000→                            <p className="text-xs text-muted-foreground truncate">
+  1001→                              {[c.mobile, c.address].filter(Boolean).join(' • ') || 'No contact info'}
+  1002→                            </p>
+  1003→                          </div>
+  1004→                          {c.gstNumber && (
+  1005→                            <Badge variant="outline" className="text-xs shrink-0">GST</Badge>
+  1006→                          )}
+  1007→                        </div>
+  1008→                      </button>
+  1009→                    ))}
+  1010→                  </div>
+  1011→                )}
+  1012→
+  1013→                {/* Section: Previous Bills */}
+  1014→                {bills.length > 0 && (
+  1015→                  <div>
+  1016→                    <div className="px-3 py-1.5 text-[11px] uppercase tracking-wide font-semibold text-violet-700 dark:text-violet-400 bg-violet-50/60 dark:bg-violet-950/30 border-b">
+  1017→                      Previous Bills ({bills.length}) — click to duplicate
+  1018→                    </div>
+  1019→                    {bills.map((b) => (
+  1020→                      <button
+  1021→                        type="button"
+  1022→                        key={`b-${b.id}`}
+  1023→                        onClick={() => handlePickBill(b)}
+  1024→                        className="w-full text-left px-3 py-2 hover:bg-violet-50 dark:hover:bg-violet-950/30 border-b last:border-0 transition-colors"
+  1025→                      >
+  1026→                        <div className="flex items-center justify-between gap-2">
+  1027→                          <div className="min-w-0 flex-1">
+  1028→                            <p className="text-sm font-medium truncate">
+  1029→                              {b.toName} <span className="text-xs text-muted-foreground">— {b.billNumber}</span>
+  1030→                            </p>
+  1031→                            <p className="text-xs text-muted-foreground truncate">
+  1032→                              {b.date} • ₹{(b.grandTotal || 0).toLocaleString('en-IN')} • {(b.items?.length || 0)} items
+  1033→                            </p>
+  1034→                          </div>
+  1035→                          <Badge variant="outline" className="text-xs shrink-0 capitalize">{b.billType}</Badge>
+  1036→                        </div>
+  1037→                      </button>
+  1038→                    ))}
+  1039→                  </div>
+  1040→                )}
+  1041→
+  1042→                {/* No results at all */}
+  1043→                {!hasAny && !loading && query.trim() && (
+  1044→                  <div className="px-3 py-3 text-sm text-muted-foreground">
+  1045→                    No matching customers or previous bills. You can still enter party details manually below.
+  1046→                  </div>
+  1047→                )}
+  1048→              </div>
+  1049→            )}
+  1050→
+  1051→            <p className="text-xs text-muted-foreground mt-2">
+  1052→              Tip: pick a customer to auto-fill party details, or pick a previous bill to duplicate the entire bill (items + tax + terms).
+  1053→            </p>
+  1054→          </div>
+  1055→        )}
+  1056→      </CardContent>
+  1057→    </Card>
+  1058→  )
+  1059→}
+  1060→

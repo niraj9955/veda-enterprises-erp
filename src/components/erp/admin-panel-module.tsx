@@ -432,8 +432,15 @@ export default function AdminPanelModule() {
   const handleClearData = async () => {
     setDbLoading(true)
     try {
-      await api.clearData()
-      toast({ title: 'Data cleared', description: 'All data has been cleared from the system' })
+      const result = await api.clearData() as any
+      const cleared = result?.cleared || {}
+      const total = Object.values(cleared).reduce((s: number, n: any) => s + (Number(n) || 0), 0)
+      toast({
+        title: 'Data cleared',
+        description: total > 0
+          ? `${total} records deleted. Users and company profile preserved.`
+          : 'All data has been cleared from the system',
+      })
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to clear data', variant: 'destructive' })
     } finally {
@@ -452,11 +459,38 @@ export default function AdminPanelModule() {
       setDbLoading(true)
       try {
         const text = await file.text()
-        const data = JSON.parse(text)
-        await api.restoreBackup(data)
-        toast({ title: 'Backup restored', description: 'Database has been restored from backup' })
+        const parsed = JSON.parse(text)
+        // Backup files exported by the v2 export route are wrapped as
+        // { version, exportedAt, data: { ...collections... }, counts }.
+        // Older / hand-crafted backups may pass the collections map directly.
+        // Normalise both shapes here so the backend always sees the inner
+        // collections object regardless of file format.
+        const payload = parsed?.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)
+          ? parsed.data
+          : parsed
+
+        const result = await api.restoreBackup(payload)
+        // Show what was actually restored — useful when the user wants to
+        // verify their customers came back, or debug a partial restore.
+        const counts = (result as any)?.counts || {}
+        const total = Object.values(counts).reduce((s: number, n: any) => s + (Number(n) || 0), 0)
+        const summary = Object.entries(counts)
+          .filter(([, n]) => Number(n) > 0)
+          .map(([k, n]) => `${k}: ${n}`)
+          .join(' • ')
+        toast({
+          title: 'Backup restored',
+          description: summary
+            ? `${total} records restored (${summary})`
+            : 'Database has been restored from backup',
+        })
       } catch (err) {
-        toast({ title: 'Restore failed', description: 'Could not restore backup', variant: 'destructive' })
+        console.error('Restore failed:', err)
+        toast({
+          title: 'Restore failed',
+          description: err instanceof Error ? err.message : 'Could not restore backup',
+          variant: 'destructive',
+        })
       } finally {
         setDbLoading(false)
       }

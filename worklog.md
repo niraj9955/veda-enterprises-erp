@@ -109,3 +109,55 @@ Stage Summary:
 - Customer history modal now actually works (was broken by syntax error)
 - Every module has search + scrollable table + sticky column headers
 - Build is clean — Vercel will auto-deploy the fixed version
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Verify bill ↔ customer search link + fix Admin → Database → Restore not working after Clear Data
+
+Work Log:
+- CONFIRMED bill ↔ customer search link is fully implemented in bill-module.tsx via the CustomerSearchCard component:
+  * Searches BOTH /api/customers?search=... (Customer module) AND /api/bills?search=... (Bill data) in parallel via Promise.allSettled
+  * Dropdown shows two sections: "Customers (N)" with green header + "Previous Bills (N) — click to duplicate" with violet header
+  * Clicking a customer auto-fills name/mobile/address/GST AND sets customerId so the bill's paidAmount auto-syncs to a Payment for that customer
+  * Clicking a previous bill duplicates the entire bill (items + tax + terms + customer link) — only paid amount and notes are blanked since they belong to the new transaction
+  * Manual edits to party fields break the customer link (safety: prevents wrong-customer payment sync)
+  * Outside-click closes dropdown, 350ms debounce on search input
+- ROOT CAUSE of restore failure: data-structure double-wrap mismatch
+  * Export route returns { version, exportedAt, data: { customers: [...] }, counts }
+  * Frontend did JSON.parse(file) → { data: {...}, counts }, then api.restoreBackup(parsedObj) wrapped it AGAIN → { data: { data: {...}, counts } }
+  * Backend did `const data = body.data` → got the OUTER wrapper ({ data: {...}, counts }), NOT the inner collections map
+  * `data.customers` was undefined → `if (data.customers?.length)` was false → NOTHING was inserted
+  * API returned 200 "Backup restored successfully" with empty counts → user saw success toast but zero data restored!
+- SECONDARY bugs in /api/database/route.ts:
+  * Only 9 of 19 collections were exported/restored/cleared — missing DailySell, CustomerPayment, LabourPayment, TractorPayment, DustPurchase, CementPurchase, Hardner, Electricity, FactoryStuff, Bill
+  * `_id` was stripped by toObject() so restored docs got NEW ObjectIds → all cross-collection references (Order.customerId, Dispatch.customerId, Payment.customerId, Payment.billId) were broken
+  * Clear Data endpoint didn't clear those 10 missing collections either
+  * No session check on any of the 3 handlers (GET/PUT/DELETE) — anyone could export/clear/restore the database
+- FIX 1: Completely rewrote /api/database/route.ts:
+  * Added COLLECTIONS constant listing all 19 collections with model + preservedOnClear flag
+  * GET (Export): returns v2 format { version: 2, exportedAt, data: { ...19 collections... }, counts }, preserves _id (as string), strips passwords from users, requires authenticated session
+  * PUT (Restore): normalises THREE payload shapes (v2 file wrapped twice, v2 file passed directly, raw collections map) so any backup format works; clears all 19 collections; restores all 19 preserving original _id via new toBackupObject helper; uses insertMany with ordered:false so one bad doc doesn't fail the batch; returns detailed counts + per-collection errors
+  * DELETE (Clear): clears 17 transactional collections (preserves Company + User so user can log back in); returns { cleared: { collection: count } } per-collection counts
+  * All 3 handlers now require authenticated session via getSession()
+- FIX 2: admin-panel-module.tsx — handleRestoreBackup now unwraps the file's data field before sending:
+  * `const payload = parsed.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data) ? parsed.data : parsed`
+  * api.restoreBackup(payload) — backend receives body.data = the actual collections map
+  * Shows detailed success toast: "N records restored (customers: X • bills: Y • ...)"
+  * Error toast now surfaces the actual error message instead of generic "Could not restore backup"
+- FIX 3: handleClearData shows how many records were actually deleted per collection
+- FIX 4: Updated api.ts return types — exportBackup, clearData, restoreBackup now return properly typed responses with counts/cleared/errors
+- Wrote smoke test at scripts/test_restore.js that mocks the frontend → backend round-trip and verifies:
+  * Frontend unwrapping: parsedFile.data → payloadForApi (the collections map)
+  * api.restoreBackup wraps once: { data: payloadForApi }
+  * Backend unwrapping: body.data.data || body.data → backendData (the collections map)
+  * Result: customers.length = 2, bills.length = 1, original _ids preserved ✓
+- Build passes cleanly: `npx next build` → ✓ Compiled successfully in 4.4s, all 37 routes generated
+
+Stage Summary:
+- Bill ↔ Customer search link: already fully implemented (CustomerSearchCard with dual-source live search). No code change needed — user just needs to refresh browser to load the latest build.
+- Restore bug FIXED: the data-structure double-wrap was the root cause. Restore now actually inserts the customer documents back into the database. Original _ids are preserved so all customer → order → dispatch → payment references remain valid after restore.
+- Backup completeness FIXED: all 19 collections are now backed up (was 9). 10 previously-missing collections now included: DailySell, CustomerPayment, LabourPayment, TractorPayment, DustPurchase, CementPurchase, Hardner, Electricity, FactoryStuff, Bill.
+- Clear completeness FIXED: all 17 transactional collections are cleared (was 7). Company and User preserved so the user can log back in.
+- Security FIXED: all 3 database endpoints now require an authenticated session.
+- User-facing toasts now show actual counts ("327 records restored (customers: 50 • orders: 12 • ...)" instead of generic "Backup restored") so the user can immediately verify their data came back.
