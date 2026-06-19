@@ -88,3 +88,24 @@ Stage Summary:
 - Import flow now 100% transparent: user always knows exactly how many rows were imported vs skipped and WHY each row was skipped
 - Site speed improvements: indexes make DB queries 10-100x faster on large datasets, pagination prevents browser crashes at 500+ records, lazy-loading makes initial page load ~3x faster
 - Still append-only: importing Jan 11-20 after Jan 1-10 still correctly adds new rows (the dedup only kicks in for customer module where same mobile already exists — for production/stock/payments all rows are always added)
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Fix site speed + add customer history view + search & scroll in every module
+
+Work Log:
+- ROOT CAUSE of "site slow + import still broken": customer-module.tsx had a syntax error on line 138 (`const [h[historyCustomerId...]`) introduced during the previous session. This broke `next build`, so the user has been running a STALE deployment that didn't have ANY of the recent fixes (search/scroll, customer history modal, etc.). The "slow" feeling was caused by lazy-loading in page.tsx which made every sidebar click wait for a separate JS chunk fetch.
+- FIXED syntax error: line 138 now correctly reads `const [historyCustomerId, setHistoryCustomerId] = React.useState<string | null>(null)`
+- SPEED FIX: reverted lazy loading in page.tsx — all 22 modules are now eagerly imported. Bundle is cached after first load, so sidebar navigation is INSTANT (zero network round-trip). This is what the user meant by "pehle se fast feel hoga" — earlier (before lazy loading) it was fast, lazy loading made it slow.
+- CUSTOMER HISTORY: confirmed CustomerHistoryModal + /api/customers/[id]/history endpoint already exist and work. Click any customer name OR the book icon next to a customer to open the modal. Modal shows: customer info bar, 4 summary cards (Total Ordered, Total Paid, Dispatched, Balance Due/Advance), production totals strip, and 6 tabs (Timeline, Orders, Dispatches, Payments, Daily Sells, Production). Aggregates across 6 MongoDB collections in parallel.
+- SEARCH: verified all 16 modules have search inputs. Added missing search input to expense-module (state existed but UI was missing).
+- SCROLL: verified all 16 modules have scrollable table containers (max-h-[60vh] overflow-auto). Added missing scrollable container to bill-module.
+- STICKY HEADERS: patched 8 modules that had scrollable containers but non-sticky headers — customer-payment, labour-payment, tractor-payment, dust-purchase, cement-purchase, hardner, electricity, factory-stuff. Now column headers stay visible while scrolling through long lists.
+- Build passes cleanly. Pushed to GitHub (auto-deploys to Vercel).
+
+Stage Summary:
+- Site speed restored: eager imports = instant module switching
+- Customer history modal now actually works (was broken by syntax error)
+- Every module has search + scrollable table + sticky column headers
+- Build is clean — Vercel will auto-deploy the fixed version
