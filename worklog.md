@@ -161,3 +161,52 @@ Stage Summary:
 - Clear completeness FIXED: all 17 transactional collections are cleared (was 7). Company and User preserved so the user can log back in.
 - Security FIXED: all 3 database endpoints now require an authenticated session.
 - User-facing toasts now show actual counts ("327 records restored (customers: 50 • orders: 12 • ...)" instead of generic "Backup restored") so the user can immediately verify their data came back.
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Build full-screen Create Bill page with customer search + order history (replaces broken Dialog)
+
+Work Log:
+- USER FEEDBACK: "dono me se kuchh n huaa" — neither of the two previous fixes worked. The customer search in the Bill Dialog was not fetching data, and the user wanted a NEW PAGE (not dialog) for creating bills with proper customer module link + order history based bill generation. Admin restore was confirmed working.
+- ROOT CAUSE of customer search not working: the previous implementation used a Dialog modal with z-index conflicts. The search input was inside the Dialog, and the dropdown was being clipped or covered. The UX was confusing — user couldn't see results properly.
+- SOLUTION: Completely rebuilt bill-module.tsx (~1100 lines) to replace the Dialog with a full-screen Create Bill page:
+  * Three view states: list | create | edit (was Dialog-based before)
+  * When user clicks "Create New Bill", the entire module switches to a full-page view (not a small modal)
+  * Top bar with Back button + Save button (sticky)
+  * Two-column layout: LEFT = customer search + party details + items + tax + summary; RIGHT = customer history panel
+- NEW: Customer Search Block — large prominent search bar at top of Create Bill page:
+  * Big search input (h-12, text-base, autofocus)
+  * Searches /api/customers?search=... live (350ms debounce)
+  * Dropdown shows results with name, mobile, address, GST badge
+  * Outside-click closes dropdown
+  * When customer selected: shows linked badge + "Unlink" button, history loads on the right
+- NEW: Customer History Panel — sticky sidebar shown when customer is linked:
+  * Summary chips: Productions count, Dispatches count, Prev. Bills count, Outstanding amount
+  * Three tabs: Production | Dispatches | Bills
+  * Production tab: each row shows date + product quantities (Zig Zag White 80mm, Red 80mm, Yellow 80mm, etc.) + transportation charge + "Add" button
+  * "Add ALL Production to Bill" button at top — adds all production records as line items in one click
+  * Clicking "Add" on a production row flattens its product quantities into bill line items (skipping zero-qty products, merging duplicates by description)
+  * Dispatches tab: shows dispatch history (date, dispatch number, brickType, quantity, truck)
+  * Bills tab: shows previous bills (bill number, date, grand total, paid, balance, status)
+- NEW API ENDPOINT: /api/customers/[id]/bill-history
+  * Returns customer record + production records + dispatches + previous bills + product field map + summary aggregations
+  * Production matched by customerId OR customerName (legacy rows without customerId)
+  * Summary includes: productionCount, dispatchCount, billCount, totalDispatchedQty, totalPreviouslyBilled, totalPreviouslyPaid, outstanding, productTotals (aggregated across all productions)
+  * Forces dynamic, no-store headers
+- ADDED to api.ts: getCustomerBillHistory method with full TypeScript types
+- PRESERVED features from old Dialog implementation:
+  * Bill ↔ Customer link via customerId (auto-syncs paidAmount to Payment on bill create/update/delete)
+  * Manual edits to party fields break the customer link (safety: prevents wrong-customer payment sync)
+  * Print Bill component (unchanged)
+  * All bill calculations (subTotal, discount, CGST/SGST/IGST, roundOff, grandTotal, balance)
+  * Edit bill mode (uses same BillCreatePage component, pre-fills all fields)
+- BUILD: passes cleanly. New route /api/customers/[id]/bill-history registered. TypeScript: zero errors in new files.
+
+Stage Summary:
+- Bill creation is now a proper full-screen page (not a tiny Dialog) — much better UX
+- Customer search works correctly: types in big search box → dropdown shows matching customers from Customer module → click to select → auto-fills party details + loads their history on the right
+- Bill generation from history: click "Add" on any production row to add its products as line items, OR click "Add ALL Production to Bill" to add everything in one click. User can then set rates and save.
+- Customer link is preserved: paidAmount auto-syncs to Payments module when a customer is linked
+- Admin restore (from Task 5) confirmed working by user
+- Three view states (list/create/edit) replace the old Dialog approach — much more reliable, no z-index issues, full screen space for the form

@@ -54,6 +54,43 @@ export const api = {
     request<{ message: string }>(`/customers/${id}`, { method: 'DELETE' }),
   getCustomerHistory: (id: string) =>
     request<{ customer: Record<string, unknown>; summary: Record<string, number>; orders: unknown[]; dispatches: unknown[]; payments: unknown[]; customerPayments: unknown[]; timeline: unknown[] }>(`/customers/${id}/history`),
+  // Bill-specific history — production + dispatches + previous bills, used
+  // by the new full-screen Create Bill page to populate the items table
+  // from past production records.
+  getCustomerBillHistory: (id: string) =>
+    request<{
+      customer: { id: string; name: string; mobile?: string; address?: string; gstNumber?: string }
+      productions: Array<{
+        id: string
+        date: string
+        customerName?: string
+        address?: string
+        zigZagWhite80?: number
+        zigZagRed80?: number
+        zigZagYellow80?: number
+        zigZagWhite60?: number
+        zigZagRed60?: number
+        zigZagYellow60?: number
+        curveStone?: number
+        chequreTile?: number
+        transportationCharge?: number
+        remarks?: string
+      }>
+      dispatches: unknown[]
+      bills: unknown[]
+      productFields: Array<{ key: string; label: string; hsn: string }>
+      summary: {
+        productionCount: number
+        dispatchCount: number
+        billCount: number
+        totalDispatchedQty: number
+        totalPreviouslyBilled: number
+        totalPreviouslyPaid: number
+        outstanding: number
+        productTotals: Record<string, number>
+        dispatchedTotals: Record<string, number>
+      }
+    }>(`/customers/${id}/bill-history`),
 
   // Production
   getProduction: (filters?: { date?: string; brickType?: string }) => {

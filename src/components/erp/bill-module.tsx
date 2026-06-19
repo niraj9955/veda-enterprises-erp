@@ -7,13 +7,16 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/hooks/use-toast'
-import { Plus, Trash2, Edit, Printer, FileText, IndianRupee, Search, UserCheck, X } from 'lucide-react'
+import {
+  Plus, Trash2, Edit, Printer, FileText, Search, UserCheck, X,
+  ArrowLeft, Loader2, Package, Truck, FileSpreadsheet, ShoppingCart,
+} from 'lucide-react'
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface BillItem {
   description: string
   hsn: string
@@ -59,6 +62,49 @@ interface Bill {
   status: string
 }
 
+interface CustomerSearchResult {
+  id: string
+  name: string
+  mobile?: string
+  address?: string
+  gstNumber?: string
+}
+
+interface ProductionRow {
+  id: string
+  date: string
+  customerName?: string
+  address?: string
+  zigZagWhite80?: number
+  zigZagRed80?: number
+  zigZagYellow80?: number
+  zigZagWhite60?: number
+  zigZagRed60?: number
+  zigZagYellow60?: number
+  curveStone?: number
+  chequreTile?: number
+  transportationCharge?: number
+  remarks?: string
+}
+
+interface CustomerBillHistory {
+  customer: { id: string; name: string; mobile?: string; address?: string; gstNumber?: string }
+  productions: ProductionRow[]
+  dispatches: any[]
+  bills: any[]
+  productFields: Array<{ key: string; label: string; hsn: string }>
+  summary: {
+    productionCount: number
+    dispatchCount: number
+    billCount: number
+    totalDispatchedQty: number
+    totalPreviouslyBilled: number
+    totalPreviouslyPaid: number
+    outstanding: number
+    productTotals: Record<string, number>
+  }
+}
+
 const PRODUCT_PRESETS = [
   'Zig Zag White 80mm',
   'Zig Zag Red 80mm',
@@ -94,10 +140,29 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-gray-100 text-gray-500 line-through',
 }
 
+// Map a production field key to the matching PRODUCT_PRESETS label
+const PROD_FIELD_TO_LABEL: Record<string, string> = {
+  zigZagWhite80: 'Zig Zag White 80mm',
+  zigZagRed80: 'Zig Zag Red 80mm',
+  zigZagYellow80: 'Zig Zag Yellow 80mm',
+  zigZagWhite60: 'Zig Zag White 60mm',
+  zigZagRed60: 'Zig Zag Red 60mm',
+  zigZagYellow60: 'Zig Zag Yellow 60mm',
+  curveStone: 'Curve Stone',
+  chequreTile: 'Chequre Tile',
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// MAIN MODULE
+// ════════════════════════════════════════════════════════════════════════════
 export default function BillModule() {
   const [bills, setBills] = useState<Bill[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
+  // Three view states:
+  //   list   → bills table + Create button
+  //   create → full-screen Create Bill page
+  //   edit   → full-screen Edit Bill page (uses same component as create)
+  const [view, setView] = useState<'list' | 'create' | 'edit'>('list')
   const [editingBill, setEditingBill] = useState<Bill | null>(null)
   const [printBill, setPrintBill] = useState<Bill | null>(null)
   const [search, setSearch] = useState('')
@@ -141,10 +206,26 @@ export default function BillModule() {
   const totalPaid = filteredBills.reduce((sum, b) => sum + (b.paidAmount || 0), 0)
   const totalDue = filteredBills.reduce((sum, b) => sum + (b.balanceAmount || 0), 0)
 
+  // Print view takes over the entire module area
   if (printBill) {
     return <PrintBill bill={printBill} onClose={() => setPrintBill(null)} />
   }
 
+  // Create / Edit full-screen view
+  if (view === 'create' || view === 'edit') {
+    return (
+      <BillCreatePage
+        editingBill={view === 'edit' ? editingBill : null}
+        onBack={async () => {
+          setView('list')
+          setEditingBill(null)
+          await loadBills()
+        }}
+      />
+    )
+  }
+
+  // Default: list view
   return (
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -152,30 +233,12 @@ export default function BillModule() {
           <h1 className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">Billing System</h1>
           <p className="text-sm text-muted-foreground">Generate invoices, quotations, and bills for any transaction</p>
         </div>
-        <Dialog open={showForm} onOpenChange={setShowForm}>
-          <DialogTrigger asChild>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setEditingBill(null)}>
-              <Plus className="h-4 w-4 mr-2" /> Create New Bill
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingBill ? 'Edit Bill' : 'Create New Bill'}</DialogTitle>
-            </DialogHeader>
-            <BillForm
-              bill={editingBill}
-              onSave={async () => {
-                setShowForm(false)
-                setEditingBill(null)
-                await loadBills()
-              }}
-              onCancel={() => {
-                setShowForm(false)
-                setEditingBill(null)
-              }}
-            />
-          </DialogContent>
-        </Dialog>
+        <Button
+          className="bg-emerald-600 hover:bg-emerald-700"
+          onClick={() => { setEditingBill(null); setView('create') }}
+        >
+          <Plus className="h-4 w-4 mr-2" /> Create New Bill
+        </Button>
       </div>
 
       {/* Summary cards */}
@@ -279,7 +342,7 @@ export default function BillModule() {
                         <Button size="icon" variant="ghost" onClick={() => setPrintBill(bill)} title="Print/View">
                           <Printer className="h-4 w-4" />
                         </Button>
-                        <Button size="icon" variant="ghost" onClick={() => { setEditingBill(bill); setShowForm(true) }} title="Edit">
+                        <Button size="icon" variant="ghost" onClick={() => { setEditingBill(bill); setView('edit') }} title="Edit">
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button size="icon" variant="ghost" className="text-destructive" onClick={() => handleDelete(bill.id)} title="Delete">
@@ -299,32 +362,75 @@ export default function BillModule() {
   )
 }
 
-// ─── Bill Form Component ──────────────────────────────────────────────────────
-function BillForm({ bill, onSave, onCancel }: { bill: Bill | null; onSave: () => void; onCancel: () => void }) {
-  const [billType, setBillType] = useState(bill?.billType || 'sales')
-  const [date, setDate] = useState(bill?.date || new Date().toISOString().split('T')[0])
-  const [dueDate, setDueDate] = useState(bill?.dueDate || '')
-  // Customer link — when set, the bill's paidAmount auto-syncs to a Payment
-  // document for this customer. May be null (manual party entry).
-  const [customerId, setCustomerId] = useState<string | null>(bill?.customerId || null)
-  const [toName, setToName] = useState(bill?.toName || '')
-  const [toAddress, setToAddress] = useState(bill?.toAddress || '')
-  const [toGst, setToGst] = useState(bill?.toGst || '')
-  const [toPhone, setToPhone] = useState(bill?.toPhone || '')
+// ════════════════════════════════════════════════════════════════════════════
+// FULL-SCREEN CREATE / EDIT BILL PAGE
+// ════════════════════════════════════════════════════════════════════════════
+// Replaces the old Dialog-based form. Lives at the top level of BillModule
+// (not in a Dialog) so the user gets a proper full-page experience with
+// plenty of room for the customer search + history + items table.
+function BillCreatePage({
+  editingBill,
+  onBack,
+}: {
+  editingBill: Bill | null
+  onBack: () => void
+}) {
+  const [billType, setBillType] = useState(editingBill?.billType || 'sales')
+  const [date, setDate] = useState(editingBill?.date || new Date().toISOString().split('T')[0])
+  const [dueDate, setDueDate] = useState(editingBill?.dueDate || '')
+  const [customerId, setCustomerId] = useState<string | null>(editingBill?.customerId || null)
+  const [toName, setToName] = useState(editingBill?.toName || '')
+  const [toAddress, setToAddress] = useState(editingBill?.toAddress || '')
+  const [toGst, setToGst] = useState(editingBill?.toGst || '')
+  const [toPhone, setToPhone] = useState(editingBill?.toPhone || '')
   const [items, setItems] = useState<BillItem[]>(
-    bill?.items?.length ? bill.items : [{ description: '', hsn: '', quantity: 1, unit: 'pcs', rate: 0, amount: 0 }]
+    editingBill?.items?.length ? editingBill.items : [{ description: '', hsn: '', quantity: 1, unit: 'pcs', rate: 0, amount: 0 }]
   )
-  const [discountPercent, setDiscountPercent] = useState(bill?.discountPercent || 0)
-  const [cgstPercent, setCgstPercent] = useState(bill?.cgstPercent || 0)
-  const [sgstPercent, setSgstPercent] = useState(bill?.sgstPercent || 0)
-  const [igstPercent, setIgstPercent] = useState(bill?.igstPercent || 0)
-  const [paidAmount, setPaidAmount] = useState(bill?.paidAmount || 0)
-  const [paymentMode, setPaymentMode] = useState(bill?.paymentMode || 'Cash')
-  const [notes, setNotes] = useState(bill?.notes || '')
-  const [terms, setTerms] = useState(bill?.terms || '')
+  const [discountPercent, setDiscountPercent] = useState(editingBill?.discountPercent || 0)
+  const [cgstPercent, setCgstPercent] = useState(editingBill?.cgstPercent || 0)
+  const [sgstPercent, setSgstPercent] = useState(editingBill?.sgstPercent || 0)
+  const [igstPercent, setIgstPercent] = useState(editingBill?.igstPercent || 0)
+  const [paidAmount, setPaidAmount] = useState(editingBill?.paidAmount || 0)
+  const [paymentMode, setPaymentMode] = useState(editingBill?.paymentMode || 'Cash')
+  const [notes, setNotes] = useState(editingBill?.notes || '')
+  const [terms, setTerms] = useState(editingBill?.terms || '')
   const [saving, setSaving] = useState(false)
 
-  // Recalculate item amount when qty/rate changes
+  // History panel state — populated when a customer is selected
+  const [history, setHistory] = useState<CustomerBillHistory | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [activeHistoryTab, setActiveHistoryTab] = useState<'production' | 'dispatches' | 'bills'>('production')
+
+  // ─── Customer selection handler ──────────────────────────────────────────
+  // When a customer is picked from the search dropdown:
+  //   1. Set the customer link (so paidAmount auto-syncs to Payments)
+  //   2. Fill party details from the customer record
+  //   3. Fetch their full production/dispatch/bill history
+  const selectCustomer = async (c: CustomerSearchResult) => {
+    setCustomerId(c.id)
+    setToName(c.name)
+    setToPhone(c.mobile || '')
+    setToAddress(c.address || '')
+    setToGst(c.gstNumber || '')
+    await loadHistory(c.id)
+  }
+
+  const loadHistory = async (id: string) => {
+    setHistoryLoading(true)
+    setHistoryError(null)
+    try {
+      const data = await api.getCustomerBillHistory(id)
+      setHistory(data)
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : 'Failed to load history')
+      setHistory(null)
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  // ─── Item management ─────────────────────────────────────────────────────
   const updateItem = (index: number, field: keyof BillItem, value: string | number) => {
     const newItems = [...items]
     if (field === 'description' || field === 'hsn' || field === 'unit') {
@@ -344,7 +450,114 @@ function BillForm({ bill, onSave, onCancel }: { bill: Bill | null; onSave: () =>
     if (items.length > 1) setItems(items.filter((_, i) => i !== index))
   }
 
-  // Calculations
+  // ─── Add a single production row's products to the bill ──────────────────
+  // Flattens the production's product-wise quantities into individual line
+  // items (skipping zero-quantity products). Transportation charge, if any,
+  // is added as a separate "Transportation" line item.
+  const addProductionToBill = (prod: ProductionRow) => {
+    const newItems: BillItem[] = []
+    for (const [key, label] of Object.entries(PROD_FIELD_TO_LABEL)) {
+      const qty = Number((prod as any)[key]) || 0
+      if (qty > 0) {
+        newItems.push({
+          description: label,
+          hsn: '6810',
+          quantity: qty,
+          unit: 'pcs',
+          rate: 0,
+          amount: 0,
+        })
+      }
+    }
+    if (Number(prod.transportationCharge) > 0) {
+      newItems.push({
+        description: 'Transportation Charge',
+        hsn: '9965',
+        quantity: 1,
+        unit: 'lot',
+        rate: Number(prod.transportationCharge),
+        amount: Number(prod.transportationCharge),
+      })
+    }
+    if (newItems.length === 0) {
+      toast({ title: 'No products', description: 'This production record has no billable quantities.', variant: 'destructive' })
+      return
+    }
+    // Merge into existing items — if an item with the same description already
+    // exists, sum the quantities (so multiple production rows for the same
+    // product combine into one line).
+    setItems((prev) => {
+      const merged = [...prev.filter((i) => i.description.trim() !== '')]
+      for (const ni of newItems) {
+        const existing = merged.find((m) => m.description === ni.description && m.unit === ni.unit)
+        if (existing) {
+          existing.quantity += ni.quantity
+          existing.amount = existing.quantity * existing.rate
+        } else {
+          merged.push(ni)
+        }
+      }
+      // Always ensure at least one editable row at the bottom
+      if (merged.length === 0 || merged[merged.length - 1].description.trim() !== '') {
+        merged.push({ description: '', hsn: '', quantity: 1, unit: 'pcs', rate: 0, amount: 0 })
+      }
+      return merged
+    })
+    toast({
+      title: 'Added to bill',
+      description: `${newItems.length} item${newItems.length > 1 ? 's' : ''} from production dated ${prod.date}. Set the rate for each item to calculate amounts.`,
+    })
+  }
+
+  // ─── Add ALL production rows' products to the bill in one click ──────────
+  // Uses the aggregated product totals from the summary so we get a single
+  // line per product type with the summed quantity.
+  const addAllProductionToBill = () => {
+    if (!history || !history.summary.productTotals) {
+      toast({ title: 'No data', description: 'No production history to add.', variant: 'destructive' })
+      return
+    }
+    const newItems: BillItem[] = []
+    for (const [key, label] of Object.entries(PROD_FIELD_TO_LABEL)) {
+      const qty = Number(history.summary.productTotals[key]) || 0
+      if (qty > 0) {
+        newItems.push({
+          description: label,
+          hsn: '6810',
+          quantity: qty,
+          unit: 'pcs',
+          rate: 0,
+          amount: 0,
+        })
+      }
+    }
+    if (newItems.length === 0) {
+      toast({ title: 'No products', description: 'Customer has no production records to bill.', variant: 'destructive' })
+      return
+    }
+    setItems((prev) => {
+      const merged = [...prev.filter((i) => i.description.trim() !== '')]
+      for (const ni of newItems) {
+        const existing = merged.find((m) => m.description === ni.description && m.unit === ni.unit)
+        if (existing) {
+          existing.quantity += ni.quantity
+          existing.amount = existing.quantity * existing.rate
+        } else {
+          merged.push(ni)
+        }
+      }
+      if (merged.length === 0 || merged[merged.length - 1].description.trim() !== '') {
+        merged.push({ description: '', hsn: '', quantity: 1, unit: 'pcs', rate: 0, amount: 0 })
+      }
+      return merged
+    })
+    toast({
+      title: 'All production added',
+      description: `${newItems.length} product types from ${history.summary.productionCount} production records. Set rates to calculate amounts.`,
+    })
+  }
+
+  // ─── Calculations ────────────────────────────────────────────────────────
   const subTotal = items.reduce((sum, item) => sum + (item.amount || 0), 0)
   const discountAmount = (subTotal * discountPercent) / 100
   const taxableAmount = subTotal - discountAmount
@@ -356,6 +569,7 @@ function BillForm({ bill, onSave, onCancel }: { bill: Bill | null; onSave: () =>
   const roundOff = grandTotal - totalBeforeRound
   const balanceAmount = grandTotal - paidAmount
 
+  // ─── Submit ──────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!toName.trim()) {
@@ -383,14 +597,14 @@ function BillForm({ bill, onSave, onCancel }: { bill: Bill | null; onSave: () =>
         notes,
         terms,
       }
-      if (bill) {
-        await api.updateBill(bill.id, payload)
+      if (editingBill) {
+        await api.updateBill(editingBill.id, payload)
         toast({ title: 'Updated', description: 'Bill updated successfully' })
       } else {
         await api.createBill(payload)
         toast({ title: 'Created', description: 'Bill created successfully' })
       }
-      onSave()
+      onBack()
     } catch (err) {
       toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to save bill', variant: 'destructive' })
     } finally {
@@ -400,7 +614,26 @@ function BillForm({ bill, onSave, onCancel }: { bill: Bill | null; onSave: () =>
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Bill Type & Date */}
+      {/* Top bar */}
+      <div className="flex items-center justify-between gap-3 sticky top-0 bg-background/95 backdrop-blur z-20 pb-2 border-b">
+        <div className="flex items-center gap-3">
+          <Button type="button" variant="ghost" size="sm" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Back
+          </Button>
+          <h1 className="text-xl font-bold text-emerald-700 dark:text-emerald-400">
+            {editingBill ? `Edit Bill ${editingBill.billNumber}` : 'Create New Bill'}
+          </h1>
+        </div>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" onClick={onBack}>Cancel</Button>
+          <Button type="submit" disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
+            {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+            {saving ? 'Saving...' : (editingBill ? 'Update Bill' : 'Create Bill')}
+          </Button>
+        </div>
+      </div>
+
+      {/* Bill meta row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div>
           <Label className="text-xs">Bill Type</Label>
@@ -434,235 +667,615 @@ function BillForm({ bill, onSave, onCancel }: { bill: Bill | null; onSave: () =>
         </div>
       </div>
 
-      {/* Customer + Previous-Bill search & auto-fill */}
-      <CustomerSearchCard
-        selectedCustomerId={customerId}
-        onSelectCustomer={(c) => {
-          setCustomerId(c.id)
-          setToName(c.name)
-          setToPhone(c.mobile || '')
-          setToAddress(c.address || '')
-          setToGst(c.gstNumber || '')
-        }}
-        onSelectBill={(b) => {
-          // Duplicate-from-previous-bill: pre-fill everything except paid
-          // amount and notes (those belong to the new transaction). Link
-          // the customer too so the new bill's paidAmount auto-syncs.
-          setCustomerId(b.customerId || null)
-          setToName(b.toName || '')
-          setToPhone(b.toPhone || '')
-          setToAddress(b.toAddress || '')
-          setToGst(b.toGst || '')
-          if (b.items?.length) {
-            setItems(b.items.map((it) => ({
-              description: it.description || '',
-              hsn: it.hsn || '',
-              quantity: Number(it.quantity) || 0,
-              unit: it.unit || 'pcs',
-              rate: Number(it.rate) || 0,
-              amount: Number(it.amount) || 0,
-            })))
-          }
-          if (typeof b.discountPercent === 'number') setDiscountPercent(b.discountPercent)
-          if (typeof b.cgstPercent === 'number') setCgstPercent(b.cgstPercent)
-          if (typeof b.sgstPercent === 'number') setSgstPercent(b.sgstPercent)
-          if (typeof b.igstPercent === 'number') setIgstPercent(b.igstPercent)
-          if (b.paymentMode) setPaymentMode(b.paymentMode)
-          if (b.terms) setTerms(b.terms)
-          toast({
-            title: 'Bill data loaded',
-            description: `Pre-filled from ${b.billNumber}. Review and update the paid amount before saving.`,
-          })
-        }}
-        onClear={() => setCustomerId(null)}
-      />
+      {/* Customer search + History — two-column layout on desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* LEFT: customer search + party details + items (spans 2 cols) */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Customer Search — BIG and prominent */}
+          <CustomerSearchBlock
+            selectedCustomerId={customerId}
+            selectedCustomerName={toName}
+            onSelectCustomer={selectCustomer}
+            onClear={() => { setCustomerId(null); setHistory(null) }}
+          />
 
-      {/* Bill To */}
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-sm">Bill To (Party Details)</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Party Name *</Label>
-              <Input value={toName} onChange={(e) => {
-                setToName(e.target.value)
-                // Manual edits break the customer link so we don't accidentally
-                // sync payments to the wrong customer.
-                if (customerId) setCustomerId(null)
-              }} placeholder="Customer / Vendor name" required />
-            </div>
-            <div>
-              <Label className="text-xs">Phone</Label>
-              <Input value={toPhone} onChange={(e) => {
-                setToPhone(e.target.value)
-                if (customerId) setCustomerId(null)
-              }} placeholder="Contact number" />
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs">Address</Label>
-            <Textarea value={toAddress} onChange={(e) => {
-              setToAddress(e.target.value)
-              if (customerId) setCustomerId(null)
-            }} placeholder="Full address" rows={2} />
-          </div>
-          <div>
-            <Label className="text-xs">GST Number</Label>
-            <Input value={toGst} onChange={(e) => {
-              setToGst(e.target.value)
-              if (customerId) setCustomerId(null)
-            }} placeholder="GSTIN (optional)" />
-          </div>
-          {customerId && (
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              <UserCheck className="h-3 w-3" />
-              Linked to customer record — paid amount will auto-sync to Payments module.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Items */}
-      <Card>
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <CardTitle className="text-sm">Items</CardTitle>
-          <Button type="button" size="sm" variant="outline" onClick={addItem}>
-            <Plus className="h-3 w-3 mr-1" /> Add Item
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-muted-foreground px-2">
-            <div className="col-span-4">Description</div>
-            <div className="col-span-2">HSN</div>
-            <div className="col-span-2">Qty</div>
-            <div className="col-span-2">Rate</div>
-            <div className="col-span-1">Amount</div>
-            <div className="col-span-1"></div>
-          </div>
-          {items.map((item, idx) => (
-            <div key={idx} className="grid grid-cols-12 gap-2 items-start">
-              <Input
-                list="product-list"
-                className="col-span-12 md:col-span-4"
-                placeholder="Item description"
-                value={item.description}
-                onChange={(e) => updateItem(idx, 'description', e.target.value)}
-              />
-              <datalist id="product-list">
-                {PRODUCT_PRESETS.map((p) => <option key={p} value={p} />)}
-              </datalist>
-              <Input
-                className="col-span-4 md:col-span-2"
-                placeholder="HSN"
-                value={item.hsn}
-                onChange={(e) => updateItem(idx, 'hsn', e.target.value)}
-              />
-              <Input
-                type="number"
-                className="col-span-3 md:col-span-2"
-                placeholder="Qty"
-                value={item.quantity}
-                onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
-              />
-              <Input
-                type="number"
-                className="col-span-3 md:col-span-2"
-                placeholder="Rate"
-                value={item.rate}
-                onChange={(e) => updateItem(idx, 'rate', e.target.value)}
-              />
-              <div className="col-span-2 md:col-span-1 flex items-center h-9 text-sm font-medium">
-                ₹{(item.amount || 0).toLocaleString('en-IN')}
+          {/* Bill To */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                Bill To (Party Details)
+                {customerId && (
+                  <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-xs">
+                    <UserCheck className="h-3 w-3 mr-1" /> Linked
+                  </Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Party Name *</Label>
+                  <Input value={toName} onChange={(e) => {
+                    setToName(e.target.value)
+                    // Manual edits break the customer link so we don't
+                    // accidentally sync payments to the wrong customer.
+                    if (customerId) { setCustomerId(null); setHistory(null) }
+                  }} placeholder="Customer / Vendor name" required />
+                </div>
+                <div>
+                  <Label className="text-xs">Phone</Label>
+                  <Input value={toPhone} onChange={(e) => {
+                    setToPhone(e.target.value)
+                    if (customerId) { setCustomerId(null); setHistory(null) }
+                  }} placeholder="Contact number" />
+                </div>
               </div>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="col-span-1 h-9 w-9 text-destructive"
-                onClick={() => removeItem(idx)}
-                disabled={items.length === 1}
-              >
-                <Trash2 className="h-3 w-3" />
+              <div>
+                <Label className="text-xs">Address</Label>
+                <Textarea value={toAddress} onChange={(e) => {
+                  setToAddress(e.target.value)
+                  if (customerId) { setCustomerId(null); setHistory(null) }
+                }} placeholder="Full address" rows={2} />
+              </div>
+              <div>
+                <Label className="text-xs">GST Number</Label>
+                <Input value={toGst} onChange={(e) => {
+                  setToGst(e.target.value)
+                  if (customerId) { setCustomerId(null); setHistory(null) }
+                }} placeholder="GSTIN (optional)" />
+              </div>
+              {customerId && (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <UserCheck className="h-3 w-3" />
+                  Linked to customer record — paid amount will auto-sync to Payments module.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Items */}
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm">Items</CardTitle>
+              <Button type="button" size="sm" variant="outline" onClick={addItem}>
+                <Plus className="h-3 w-3 mr-1" /> Add Item
               </Button>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-muted-foreground px-2">
+                <div className="col-span-4">Description</div>
+                <div className="col-span-2">HSN</div>
+                <div className="col-span-2">Qty</div>
+                <div className="col-span-2">Rate</div>
+                <div className="col-span-1">Amount</div>
+                <div className="col-span-1"></div>
+              </div>
+              {items.map((item, idx) => (
+                <div key={idx} className="grid grid-cols-12 gap-2 items-start">
+                  <Input
+                    list="product-list"
+                    className="col-span-12 md:col-span-4"
+                    placeholder="Item description"
+                    value={item.description}
+                    onChange={(e) => updateItem(idx, 'description', e.target.value)}
+                  />
+                  <datalist id="product-list">
+                    {PRODUCT_PRESETS.map((p) => <option key={p} value={p} />)}
+                  </datalist>
+                  <Input
+                    className="col-span-4 md:col-span-2"
+                    placeholder="HSN"
+                    value={item.hsn}
+                    onChange={(e) => updateItem(idx, 'hsn', e.target.value)}
+                  />
+                  <Input
+                    type="number"
+                    className="col-span-3 md:col-span-2"
+                    placeholder="Qty"
+                    value={item.quantity}
+                    onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
+                  />
+                  <Input
+                    type="number"
+                    className="col-span-3 md:col-span-2"
+                    placeholder="Rate"
+                    value={item.rate}
+                    onChange={(e) => updateItem(idx, 'rate', e.target.value)}
+                  />
+                  <div className="col-span-2 md:col-span-1 flex items-center h-9 text-sm font-medium">
+                    ₹{(item.amount || 0).toLocaleString('en-IN')}
+                  </div>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="col-span-1 h-9 w-9 text-destructive"
+                    onClick={() => removeItem(idx)}
+                    disabled={items.length === 1}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+              <p className="text-xs text-muted-foreground pt-2">
+                Tip: pick a customer above to see their production history, then click "Add to Bill" on any production row to auto-fill items.
+              </p>
+            </CardContent>
+          </Card>
 
-      {/* Tax & Discount */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-sm">Tax & Discount</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <Label className="text-xs">Discount %</Label>
-                <Input type="number" value={discountPercent} onChange={(e) => setDiscountPercent(Number(e.target.value) || 0)} />
-              </div>
-              <div>
-                <Label className="text-xs">CGST %</Label>
-                <Input type="number" value={cgstPercent} onChange={(e) => setCgstPercent(Number(e.target.value) || 0)} />
-              </div>
-              <div>
-                <Label className="text-xs">SGST %</Label>
-                <Input type="number" value={sgstPercent} onChange={(e) => setSgstPercent(Number(e.target.value) || 0)} />
-              </div>
-            </div>
+          {/* Tax & Discount + Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-sm">Tax & Discount</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label className="text-xs">Discount %</Label>
+                    <Input type="number" value={discountPercent} onChange={(e) => setDiscountPercent(Number(e.target.value) || 0)} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">CGST %</Label>
+                    <Input type="number" value={cgstPercent} onChange={(e) => setCgstPercent(Number(e.target.value) || 0)} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">SGST %</Label>
+                    <Input type="number" value={sgstPercent} onChange={(e) => setSgstPercent(Number(e.target.value) || 0)} />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">IGST % (for inter-state)</Label>
+                  <Input type="number" value={igstPercent} onChange={(e) => setIgstPercent(Number(e.target.value) || 0)} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-sm">Summary</CardTitle></CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Sub Total</span><span>₹{subTotal.toLocaleString('en-IN')}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span className="text-red-600">-₹{discountAmount.toLocaleString('en-IN')}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Taxable Amount</span><span>₹{taxableAmount.toLocaleString('en-IN')}</span></div>
+                {cgstPercent > 0 && <div className="flex justify-between"><span className="text-muted-foreground">CGST ({cgstPercent}%)</span><span>₹{cgstAmount.toFixed(2)}</span></div>}
+                {sgstPercent > 0 && <div className="flex justify-between"><span className="text-muted-foreground">SGST ({sgstPercent}%)</span><span>₹{sgstAmount.toFixed(2)}</span></div>}
+                {igstPercent > 0 && <div className="flex justify-between"><span className="text-muted-foreground">IGST ({igstPercent}%)</span><span>₹{igstAmount.toFixed(2)}</span></div>}
+                {Math.abs(roundOff) > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Round Off</span><span>₹{roundOff.toFixed(2)}</span></div>}
+                <div className="border-t pt-2 flex justify-between font-bold text-base"><span>Grand Total</span><span className="text-emerald-600 dark:text-emerald-400">₹{grandTotal.toLocaleString('en-IN')}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Paid Amount</span><span>₹{paidAmount.toLocaleString('en-IN')}</span></div>
+                <div className="flex justify-between font-medium"><span>Balance Due</span><span className={balanceAmount > 0 ? 'text-amber-600' : 'text-emerald-600'}>₹{balanceAmount.toLocaleString('en-IN')}</span></div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Payment & Notes */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <Label className="text-xs">IGST % (for inter-state)</Label>
-              <Input type="number" value={igstPercent} onChange={(e) => setIgstPercent(Number(e.target.value) || 0)} />
+              <Label className="text-xs">Paid Amount (₹)</Label>
+              <Input type="number" value={paidAmount} onChange={(e) => setPaidAmount(Number(e.target.value) || 0)} />
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-sm">Summary</CardTitle></CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-muted-foreground">Sub Total</span><span>₹{subTotal.toLocaleString('en-IN')}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span className="text-red-600">-₹{discountAmount.toLocaleString('en-IN')}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Taxable Amount</span><span>₹{taxableAmount.toLocaleString('en-IN')}</span></div>
-            {cgstPercent > 0 && <div className="flex justify-between"><span className="text-muted-foreground">CGST ({cgstPercent}%)</span><span>₹{cgstAmount.toFixed(2)}</span></div>}
-            {sgstPercent > 0 && <div className="flex justify-between"><span className="text-muted-foreground">SGST ({sgstPercent}%)</span><span>₹{sgstAmount.toFixed(2)}</span></div>}
-            {igstPercent > 0 && <div className="flex justify-between"><span className="text-muted-foreground">IGST ({igstPercent}%)</span><span>₹{igstAmount.toFixed(2)}</span></div>}
-            {Math.abs(roundOff) > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Round Off</span><span>₹{roundOff.toFixed(2)}</span></div>}
-            <div className="border-t pt-2 flex justify-between font-bold text-base"><span>Grand Total</span><span className="text-emerald-600 dark:text-emerald-400">₹{grandTotal.toLocaleString('en-IN')}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Paid Amount</span><span>₹{paidAmount.toLocaleString('en-IN')}</span></div>
-            <div className="flex justify-between font-medium"><span>Balance Due</span><span className={balanceAmount > 0 ? 'text-amber-600' : 'text-emerald-600'}>₹{balanceAmount.toLocaleString('en-IN')}</span></div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Payment & Notes */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div>
-          <Label className="text-xs">Paid Amount (₹)</Label>
-          <Input type="number" value={paidAmount} onChange={(e) => setPaidAmount(Number(e.target.value) || 0)} />
+            <div className="md:col-span-2">
+              <Label className="text-xs">Notes</Label>
+              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Additional notes (optional)" />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Terms & Conditions</Label>
+            <Textarea value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="Terms and conditions" rows={2} />
+          </div>
         </div>
-        <div className="md:col-span-2">
-          <Label className="text-xs">Notes</Label>
-          <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Additional notes (optional)" />
-        </div>
-      </div>
-      <div>
-        <Label className="text-xs">Terms & Conditions</Label>
-        <Textarea value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="Terms and conditions" rows={2} />
-      </div>
 
-      {/* Action buttons */}
-      <div className="flex gap-2 justify-end pt-2 border-t">
-        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
-          {saving ? 'Saving...' : (bill ? 'Update Bill' : 'Create Bill')}
-        </Button>
+        {/* RIGHT: Customer history sidebar (1 col on desktop, full width on mobile) */}
+        <div className="lg:col-span-1">
+          <CustomerHistoryPanel
+            customerId={customerId}
+            history={history}
+            loading={historyLoading}
+            error={historyError}
+            activeTab={activeHistoryTab}
+            onTabChange={setActiveHistoryTab}
+            onAddProduction={addProductionToBill}
+            onAddAllProduction={addAllProductionToBill}
+          />
+        </div>
       </div>
     </form>
   )
 }
 
-// ─── Print Bill Component ─────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// CUSTOMER SEARCH BLOCK — large, prominent search at top of Create Bill page
+// ════════════════════════════════════════════════════════════════════════════
+function CustomerSearchBlock({
+  selectedCustomerId,
+  selectedCustomerName,
+  onSelectCustomer,
+  onClear,
+}: {
+  selectedCustomerId: string | null
+  selectedCustomerName: string
+  onSelectCustomer: (c: CustomerSearchResult) => void
+  onClear: () => void
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<CustomerSearchResult[]>([])
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false)
+  const boxRef = useRef<HTMLDivElement>(null)
+
+  // Debounced search — fires 350ms after the user stops typing
+  useEffect(() => {
+    if (!query.trim()) {
+      setResults([])
+      setOpen(false)
+      return
+    }
+    setLoading(true)
+    const t = setTimeout(async () => {
+      try {
+        const data = await api.getCustomers(query.trim())
+        const list: CustomerSearchResult[] = (data.customers as any[]).map((c) => ({
+          id: c.id,
+          name: c.name,
+          mobile: c.mobile || '',
+          address: c.address || '',
+          gstNumber: c.gstNumber || '',
+        }))
+        setResults(list)
+        setOpen(list.length > 0)
+      } catch {
+        setResults([])
+        setOpen(false)
+      } finally {
+        setLoading(false)
+      }
+    }, 350)
+    return () => clearTimeout(t)
+  }, [query])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const handlePick = (c: CustomerSearchResult) => {
+    onSelectCustomer(c)
+    setQuery('')
+    setResults([])
+    setOpen(false)
+  }
+
+  return (
+    <Card className="border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Search className="h-4 w-4 text-emerald-600" />
+          Search Customer (from Customer Module)
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {selectedCustomerId ? (
+          <div className="flex items-center justify-between gap-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-md px-3 py-3">
+            <div className="flex items-center gap-2 text-sm min-w-0">
+              <UserCheck className="h-5 w-5 text-emerald-600 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-medium truncate">{selectedCustomerName}</p>
+                <p className="text-xs text-muted-foreground">Linked — history loaded on the right</p>
+              </div>
+            </div>
+            <Button type="button" size="sm" variant="ghost" onClick={onClear}>
+              <X className="h-3 w-3 mr-1" /> Unlink
+            </Button>
+          </div>
+        ) : (
+          <div ref={boxRef} className="relative">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+              <Input
+                placeholder="Type customer name or mobile number to search..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onFocus={() => results.length > 0 && setOpen(true)}
+                className="pl-10 h-12 text-base"
+                autoFocus
+              />
+              {loading && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Searching...
+                </span>
+              )}
+            </div>
+
+            {open && (
+              <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg max-h-96 overflow-auto">
+                {results.length > 0 ? (
+                  results.map((c) => (
+                    <button
+                      type="button"
+                      key={c.id}
+                      onClick={() => handlePick(c)}
+                      className="w-full text-left px-3 py-2.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-b last:border-0 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{c.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {[c.mobile, c.address].filter(Boolean).join(' • ') || 'No contact info'}
+                          </p>
+                        </div>
+                        {c.gstNumber && (
+                          <Badge variant="outline" className="text-xs shrink-0">GST</Badge>
+                        )}
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  !loading && query.trim() && (
+                    <div className="px-3 py-3 text-sm text-muted-foreground">
+                      No matching customers. You can still enter party details manually below.
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground mt-2">
+              Search fetches live from the Customer module. Selecting a customer auto-fills party details AND loads their production/dispatch/bill history.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CUSTOMER HISTORY PANEL — shown when a customer is selected
+// Shows tabs: Production | Dispatches | Previous Bills
+// User can click "Add to Bill" on any production row to auto-fill items
+// ════════════════════════════════════════════════════════════════════════════
+function CustomerHistoryPanel({
+  customerId,
+  history,
+  loading,
+  error,
+  activeTab,
+  onTabChange,
+  onAddProduction,
+  onAddAllProduction,
+}: {
+  customerId: string | null
+  history: CustomerBillHistory | null
+  loading: boolean
+  error: string | null
+  activeTab: 'production' | 'dispatches' | 'bills'
+  onTabChange: (t: 'production' | 'dispatches' | 'bills') => void
+  onAddProduction: (p: ProductionRow) => void
+  onAddAllProduction: () => void
+}) {
+  if (!customerId) {
+    return (
+      <Card className="sticky top-20">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Package className="h-4 w-4 text-muted-foreground" />
+            Customer History
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground text-center py-8">
+            Select a customer to view their production, dispatch, and billing history.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (loading) {
+    return (
+      <Card className="sticky top-20">
+        <CardContent className="flex items-center justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+          <span className="ml-2 text-sm text-muted-foreground">Loading history...</span>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card className="sticky top-20 border-destructive/30">
+        <CardContent className="py-4 text-sm text-destructive">
+          Failed to load history: {error}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!history) return null
+
+  const { summary, productions, dispatches, bills } = history
+
+  return (
+    <Card className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-hidden flex flex-col">
+      <CardHeader className="pb-3 shrink-0">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Package className="h-4 w-4 text-emerald-600" />
+          {history.customer.name}'s History
+        </CardTitle>
+        {/* Summary chips */}
+        <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
+          <div className="bg-muted/40 rounded px-2 py-1">
+            <span className="text-muted-foreground">Productions:</span>{' '}
+            <span className="font-medium">{summary.productionCount}</span>
+          </div>
+          <div className="bg-muted/40 rounded px-2 py-1">
+            <span className="text-muted-foreground">Dispatches:</span>{' '}
+            <span className="font-medium">{summary.dispatchCount}</span>
+          </div>
+          <div className="bg-muted/40 rounded px-2 py-1">
+            <span className="text-muted-foreground">Prev. Bills:</span>{' '}
+            <span className="font-medium">{summary.billCount}</span>
+          </div>
+          <div className="bg-muted/40 rounded px-2 py-1">
+            <span className="text-muted-foreground">Outstanding:</span>{' '}
+            <span className="font-medium text-amber-600">₹{summary.outstanding.toLocaleString('en-IN')}</span>
+          </div>
+        </div>
+      </CardHeader>
+
+      {/* Tabs */}
+      <div className="flex border-b shrink-0">
+        {[
+          { key: 'production' as const, label: 'Production', icon: Package, count: summary.productionCount },
+          { key: 'dispatches' as const, label: 'Dispatches', icon: Truck, count: summary.dispatchCount },
+          { key: 'bills' as const, label: 'Bills', icon: FileSpreadsheet, count: summary.billCount },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => onTabChange(tab.key)}
+            className={`flex-1 px-2 py-2 text-xs font-medium flex items-center justify-center gap-1 border-b-2 transition-colors ${
+              activeTab === tab.key
+                ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <tab.icon className="h-3 w-3" />
+            {tab.label}
+            <span className="ml-1 text-[10px] bg-muted-foreground/20 rounded-full px-1.5 py-0.5">{tab.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        {activeTab === 'production' && (
+          <>
+            {productions.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 mb-2"
+                onClick={onAddAllProduction}
+              >
+                <ShoppingCart className="h-3 w-3 mr-1" />
+                Add ALL Production to Bill ({summary.productionCount} records)
+              </Button>
+            )}
+            {productions.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">
+                No production records for this customer.
+              </p>
+            ) : (
+              productions.map((p) => {
+                const products = Object.entries(PROD_FIELD_TO_LABEL)
+                  .map(([k, label]) => ({ label, qty: Number((p as any)[k]) || 0 }))
+                  .filter((x) => x.qty > 0)
+                return (
+                  <div key={p.id} className="border rounded p-2 text-xs hover:border-emerald-300">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium">{p.date}</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-6 px-2 text-[11px]"
+                        onClick={() => onAddProduction(p)}
+                      >
+                        <Plus className="h-3 w-3 mr-0.5" /> Add
+                      </Button>
+                    </div>
+                    {products.length > 0 ? (
+                      <div className="space-y-0.5">
+                        {products.map((pr) => (
+                          <div key={pr.label} className="flex justify-between">
+                            <span className="text-muted-foreground">{pr.label}</span>
+                            <span className="font-medium">{pr.qty}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground">No billable products</p>
+                    )}
+                    {Number(p.transportationCharge) > 0 && (
+                      <div className="flex justify-between mt-1 pt-1 border-t">
+                        <span className="text-muted-foreground">Transport</span>
+                        <span className="font-medium">₹{Number(p.transportationCharge).toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+                    {p.remarks && (
+                      <p className="text-[10px] text-muted-foreground italic mt-1">{p.remarks}</p>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </>
+        )}
+
+        {activeTab === 'dispatches' && (
+          dispatches.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-4">
+              No dispatch records for this customer.
+            </p>
+          ) : (
+            (dispatches as any[]).map((d) => (
+              <div key={d.id} className="border rounded p-2 text-xs">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-medium">{d.date}</span>
+                  <Badge variant="outline" className="text-[10px]">{d.dispatchNumber}</Badge>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{d.brickType}</span>
+                  <span className="font-medium">{d.quantity} qty</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Truck: {d.truckNumber || '-'}</span>
+                </div>
+              </div>
+            ))
+          )
+        )}
+
+        {activeTab === 'bills' && (
+          bills.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-4">
+              No previous bills for this customer.
+            </p>
+          ) : (
+            (bills as any[]).map((b) => (
+              <div key={b.id} className="border rounded p-2 text-xs">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-medium">{b.billNumber}</span>
+                  <Badge variant="outline" className="text-[10px]">{b.status}</Badge>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{b.date}</span>
+                  <span className="font-medium">₹{Number(b.grandTotal || 0).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Paid: ₹{Number(b.paidAmount || 0).toLocaleString('en-IN')}</span>
+                  <span>Bal: ₹{Number(b.balanceAmount || 0).toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+            ))
+          )
+        )}
+      </div>
+    </Card>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PRINT BILL COMPONENT
+// ════════════════════════════════════════════════════════════════════════════
 function PrintBill({ bill, onClose }: { bill: Bill; onClose: () => void }) {
   useEffect(() => {
-    // Auto-trigger print dialog on mount
     setTimeout(() => window.print(), 300)
   }, [])
 
@@ -784,276 +1397,5 @@ function PrintBill({ bill, onClose }: { bill: Bill; onClose: () => void }) {
         </div>
       </div>
     </div>
-  )
-}
-
-// ─── Customer + Bill Search Card ─────────────────────────────────────────────
-// Dual-source live search:
-//   • Section 1: customers (click → fills party details, links customer)
-//   • Section 2: previous bills (click → fills party + items + tax + payment
-//     mode + terms — like a "duplicate bill" shortcut)
-//
-// Both sections fire in parallel on the same query so the user sees results
-// from either source instantly.
-interface CustomerSearchResult {
-  id: string
-  name: string
-  mobile?: string
-  address?: string
-  gstNumber?: string
-}
-
-interface BillSearchResult {
-  id: string
-  billNumber: string
-  billType: string
-  date: string
-  customerId?: string | null
-  toName: string
-  toPhone?: string
-  toAddress?: string
-  toGst?: string
-  items?: Array<{
-    description: string
-    hsn?: string
-    quantity: number
-    unit?: string
-    rate: number
-    amount: number
-  }>
-  discountPercent?: number
-  cgstPercent?: number
-  sgstPercent?: number
-  igstPercent?: number
-  grandTotal?: number
-  paymentMode?: string
-  terms?: string
-}
-
-function CustomerSearchCard({
-  selectedCustomerId,
-  onSelectCustomer,
-  onSelectBill,
-  onClear,
-}: {
-  selectedCustomerId: string | null
-  onSelectCustomer: (c: CustomerSearchResult) => void
-  onSelectBill: (b: BillSearchResult) => void
-  onClear: () => void
-}) {
-  const [query, setQuery] = useState('')
-  const [customers, setCustomers] = useState<CustomerSearchResult[]>([])
-  const [bills, setBills] = useState<BillSearchResult[]>([])
-  const [loading, setLoading] = useState(false)
-  const [open, setOpen] = useState(false)
-  const boxRef = useRef<HTMLDivElement>(null)
-
-  // Debounced dual-source search — fires 350ms after the user stops typing.
-  // Runs both API calls in parallel via Promise.allSettled so a failure in
-  // one source doesn't hide results from the other.
-  useEffect(() => {
-    if (!query.trim()) {
-      setCustomers([])
-      setBills([])
-      setOpen(false)
-      return
-    }
-    setLoading(true)
-    const t = setTimeout(async () => {
-      const [custRes, billRes] = await Promise.allSettled([
-        api.getCustomers(query.trim()),
-        api.getBills({ search: query.trim() }),
-      ])
-
-      const custList: CustomerSearchResult[] =
-        custRes.status === 'fulfilled'
-          ? (custRes.value.customers as any[]).map((c) => ({
-              id: c.id,
-              name: c.name,
-              mobile: c.mobile || '',
-              address: c.address || '',
-              gstNumber: c.gstNumber || '',
-            }))
-          : []
-
-      const billList: BillSearchResult[] =
-        billRes.status === 'fulfilled'
-          ? (billRes.value.bills as any[]).map((b) => ({
-              id: b.id,
-              billNumber: b.billNumber,
-              billType: b.billType,
-              date: b.date,
-              customerId: b.customerId || null,
-              toName: b.toName || '',
-              toPhone: b.toPhone || '',
-              toAddress: b.toAddress || '',
-              toGst: b.toGst || '',
-              items: b.items || [],
-              discountPercent: b.discountPercent,
-              cgstPercent: b.cgstPercent,
-              sgstPercent: b.sgstPercent,
-              igstPercent: b.igstPercent,
-              grandTotal: b.grandTotal,
-              paymentMode: b.paymentMode,
-              terms: b.terms,
-            }))
-          : []
-
-      setCustomers(custList)
-      setBills(billList)
-      setOpen(custList.length > 0 || billList.length > 0)
-      setLoading(false)
-    }, 350)
-    return () => clearTimeout(t)
-  }, [query])
-
-  // Close the dropdown on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  const handlePickCustomer = (c: CustomerSearchResult) => {
-    onSelectCustomer(c)
-    setQuery('')
-    setCustomers([])
-    setBills([])
-    setOpen(false)
-  }
-
-  const handlePickBill = (b: BillSearchResult) => {
-    onSelectBill(b)
-    setQuery('')
-    setCustomers([])
-    setBills([])
-    setOpen(false)
-  }
-
-  const handleClear = () => {
-    onClear()
-    setQuery('')
-    setCustomers([])
-    setBills([])
-  }
-
-  const hasAny = customers.length > 0 || bills.length > 0
-
-  return (
-    <Card className="border-emerald-200 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/10">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <Search className="h-4 w-4 text-emerald-600" />
-          Search Customer or Previous Bill (auto-fill)
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {selectedCustomerId ? (
-          <div className="flex items-center justify-between gap-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-md px-3 py-2">
-            <div className="flex items-center gap-2 text-sm">
-              <UserCheck className="h-4 w-4 text-emerald-600" />
-              <span className="font-medium">Customer linked</span>
-              <Badge variant="outline" className="text-xs">{selectedCustomerId.slice(-6)}</Badge>
-            </div>
-            <Button type="button" size="sm" variant="ghost" onClick={handleClear}>
-              <X className="h-3 w-3 mr-1" /> Unlink
-            </Button>
-          </div>
-        ) : (
-          <div ref={boxRef} className="relative">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Type customer name, mobile, address, OR previous bill number..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onFocus={() => hasAny && setOpen(true)}
-                className="pl-9"
-              />
-              {loading && (
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">Searching...</span>
-              )}
-            </div>
-
-            {open && (
-              <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg max-h-80 overflow-auto">
-                {/* Section: Customers */}
-                {customers.length > 0 && (
-                  <div>
-                    <div className="px-3 py-1.5 text-[11px] uppercase tracking-wide font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/30 border-b">
-                      Customers ({customers.length})
-                    </div>
-                    {customers.map((c) => (
-                      <button
-                        type="button"
-                        key={`c-${c.id}`}
-                        onClick={() => handlePickCustomer(c)}
-                        className="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-b transition-colors"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium truncate">{c.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {[c.mobile, c.address].filter(Boolean).join(' • ') || 'No contact info'}
-                            </p>
-                          </div>
-                          {c.gstNumber && (
-                            <Badge variant="outline" className="text-xs shrink-0">GST</Badge>
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Section: Previous Bills */}
-                {bills.length > 0 && (
-                  <div>
-                    <div className="px-3 py-1.5 text-[11px] uppercase tracking-wide font-semibold text-violet-700 dark:text-violet-400 bg-violet-50/60 dark:bg-violet-950/30 border-b">
-                      Previous Bills ({bills.length}) — click to duplicate
-                    </div>
-                    {bills.map((b) => (
-                      <button
-                        type="button"
-                        key={`b-${b.id}`}
-                        onClick={() => handlePickBill(b)}
-                        className="w-full text-left px-3 py-2 hover:bg-violet-50 dark:hover:bg-violet-950/30 border-b last:border-0 transition-colors"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium truncate">
-                              {b.toName} <span className="text-xs text-muted-foreground">— {b.billNumber}</span>
-                            </p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {b.date} • ₹{(b.grandTotal || 0).toLocaleString('en-IN')} • {(b.items?.length || 0)} items
-                            </p>
-                          </div>
-                          <Badge variant="outline" className="text-xs shrink-0 capitalize">{b.billType}</Badge>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* No results at all */}
-                {!hasAny && !loading && query.trim() && (
-                  <div className="px-3 py-3 text-sm text-muted-foreground">
-                    No matching customers or previous bills. You can still enter party details manually below.
-                  </div>
-                )}
-              </div>
-            )}
-
-            <p className="text-xs text-muted-foreground mt-2">
-              Tip: pick a customer to auto-fill party details, or pick a previous bill to duplicate the entire bill (items + tax + terms).
-            </p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
   )
 }
