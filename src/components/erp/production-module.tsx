@@ -36,7 +36,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Factory, Plus, Trash2, Pencil, Loader2, IndianRupee } from 'lucide-react'
+import { Factory, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload } from 'lucide-react'
+import ExcelImport from '@/components/erp/excel-import'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -155,6 +156,9 @@ export function ProductionModule() {
   React.useEffect(() => {
     fetchProductions()
   }, [fetchProductions])
+
+  // Excel import
+  const [importOpen, setImportOpen] = React.useState(false)
 
   const openAddDialog = () => {
     setEditingProduction(null)
@@ -281,13 +285,23 @@ export function ProductionModule() {
             </p>
           </div>
         </div>
-        <Button
-          onClick={openAddDialog}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
-        >
-          <Plus className="size-4" />
-          Add Production Entry
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+            className="w-full sm:w-auto"
+          >
+            <Upload className="size-4 mr-2" />
+            Import Excel
+          </Button>
+          <Button
+            onClick={openAddDialog}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
+          >
+            <Plus className="size-4" />
+            Add Production Entry
+          </Button>
+        </div>
       </div>
 
       {/* Table */}
@@ -498,6 +512,8 @@ export function ProductionModule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ExcelImport module="production" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchProductions} />
     </div>
   )
 }

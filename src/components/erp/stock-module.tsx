@@ -35,7 +35,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Package, Plus, Trash2, Pencil, Loader2 } from 'lucide-react'
+import { Package, Plus, Trash2, Pencil, Loader2, Upload } from 'lucide-react'
+import ExcelImport from '@/components/erp/excel-import'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -153,6 +154,9 @@ export function StockModule() {
   }, [fetchStocks])
 
   // ── Form handlers ───────────────────────────────────────────────────
+  // Excel import
+  const [importOpen, setImportOpen] = React.useState(false)
+
   const openAddDialog = () => {
     setEditingStock(null)
     setFormData(emptyForm)
@@ -277,13 +281,23 @@ export function StockModule() {
             </p>
           </div>
         </div>
-        <Button
-          onClick={openAddDialog}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
-        >
-          <Plus className="size-4" />
-          Add Stock Entry
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+            className="w-full sm:w-auto"
+          >
+            <Upload className="size-4 mr-2" />
+            Import Excel
+          </Button>
+          <Button
+            onClick={openAddDialog}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
+          >
+            <Plus className="size-4" />
+            Add Stock Entry
+          </Button>
+        </div>
       </div>
 
       {/* Table */}
@@ -437,6 +451,8 @@ export function StockModule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ExcelImport module="stock" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchStocks} />
     </div>
   )
 }

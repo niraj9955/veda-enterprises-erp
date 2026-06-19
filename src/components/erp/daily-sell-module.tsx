@@ -36,7 +36,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { ShoppingCart, Plus, Trash2, Pencil, Loader2, IndianRupee } from 'lucide-react'
+import { ShoppingCart, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload } from 'lucide-react'
+import ExcelImport from '@/components/erp/excel-import'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -121,6 +122,11 @@ export function DailySellModule() {
   React.useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  // Excel import
+
+  const [importOpen, setImportOpen] = React.useState(false)
+
 
   const openAddDialog = () => {
     setEditingItem(null)
@@ -404,6 +410,8 @@ export function DailySellModule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ExcelImport module="dailySell" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchData} />
     </div>
   )
 }

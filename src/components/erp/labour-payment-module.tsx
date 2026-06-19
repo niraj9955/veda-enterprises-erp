@@ -36,7 +36,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { HardHat, Plus, Trash2, Pencil, Loader2, IndianRupee } from 'lucide-react'
+import { HardHat, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload } from 'lucide-react'
+import ExcelImport from '@/components/erp/excel-import'
 
 interface LabourPayment {
   id: string
@@ -89,6 +90,11 @@ export function LabourPaymentModule() {
   }, [])
 
   React.useEffect(() => { fetchData() }, [fetchData])
+
+  // Excel import
+
+  const [importOpen, setImportOpen] = React.useState(false)
+
 
   const openAddDialog = () => { setEditingItem(null); setFormData(emptyForm); setFormOpen(true) }
   const openEditDialog = (item: LabourPayment) => {
@@ -144,7 +150,10 @@ export function LabourPaymentModule() {
             <p className="text-sm text-muted-foreground">Track payments made to labourers</p>
           </div>
         </div>
-        <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"><Plus className="size-4" />Add Payment</Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button variant="outline" onClick={() => setImportOpen(true)} className="w-full sm:w-auto"><Upload className="size-4 mr-2" />Import Excel</Button>
+          <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"><Plus className="size-4" />Add Payment</Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -194,6 +203,8 @@ export function LabourPaymentModule() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Labour Payment</AlertDialogTitle><AlertDialogDescription>Are you sure you want to delete this payment entry? This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} disabled={deleting} className="bg-destructive text-white hover:bg-destructive/90">{deleting && <Loader2 className="mr-2 size-4 animate-spin" />}Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
+
+      <ExcelImport module="labourPayment" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchData} />
     </div>
   )
 }

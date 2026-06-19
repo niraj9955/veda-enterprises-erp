@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { Customer } from '@/lib/models'
 
+// Force dynamic rendering — never cache customer list responses.
+// This ensures that after an Excel import the GET /api/customers
+// returns the freshly inserted rows instead of a stale snapshot.
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET(request: Request) {
   try {
     await connectDB()
@@ -17,7 +23,11 @@ export async function GET(request: Request) {
     }
 
     const customers = await Customer.find(filter).sort({ createdAt: -1 })
-    return NextResponse.json({ customers: customers.map(toObject) })
+    const res = NextResponse.json({ customers: customers.map(toObject) })
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+    res.headers.set('Pragma', 'no-cache')
+    res.headers.set('Expires', '0')
+    return res
   } catch (error) {
     console.error('Error fetching customers:', error)
     return NextResponse.json({ error: 'Failed to fetch customers' }, { status: 500 })

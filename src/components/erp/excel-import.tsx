@@ -19,7 +19,23 @@ import { api } from '@/lib/api'
 import { toast } from '@/hooks/use-toast'
 
 interface ExcelImportProps {
-  module: 'customers' | 'production' | 'orders' | 'dispatch' | 'payments' | 'expenses'
+  module:
+    | 'customers'
+    | 'production'
+    | 'stock'
+    | 'dailySell'
+    | 'customerPayment'
+    | 'labourPayment'
+    | 'tractorPayment'
+    | 'dustPurchase'
+    | 'cementPurchase'
+    | 'hardner'
+    | 'electricity'
+    | 'factoryStuff'
+    | 'orders'
+    | 'dispatch'
+    | 'payments'
+    | 'expenses'
   open: boolean
   onClose: () => void
   onSuccess: () => void
@@ -44,10 +60,137 @@ const moduleTemplates: Record<string, {
     label: 'Production',
     fields: [
       { key: 'date', label: 'Date', required: true, aliases: ['date', 'production date', 'production_date', 'date of production', 'दिनांक', 'tarikh'] },
-      { key: 'brickType', label: 'Brick Type', required: true, aliases: ['bricktype', 'brick type', 'brick_type', 'type', 'brick', 'product type', 'product_type', 'item', 'item name', 'ईंट का प्रकार'] },
-      { key: 'quantityProduced', label: 'Quantity Produced', required: true, aliases: ['quantityproduced', 'quantity produced', 'quantity_produced', 'quantity', 'qty', 'qty produced', 'qty_produced', 'produced', 'production qty', 'production_qty', 'output', 'मात्रा'] },
-      { key: 'shift', label: 'Shift', required: false, aliases: ['shift', 'shift name', 'shift_name', 'shift time', 'शिफ्ट'] },
+      { key: 'customerName', label: 'Customer Name', required: false, aliases: ['customer name', 'customer_name', 'customername', 'cust name', 'customer', 'party', 'name'] },
+      { key: 'address', label: 'Address', required: false, aliases: ['address', 'addr', 'location', 'पता'] },
+      { key: 'zigZagWhite80', label: 'Zig Zag White 80', required: false, aliases: ['zigzagwhite80', 'zig zag white 80', 'zig_zag_white_80', 'zz white 80', 'white 80'] },
+      { key: 'zigZagRed80', label: 'Zig Zag Red 80', required: false, aliases: ['zigzagred80', 'zig zag red 80', 'zig_zag_red_80', 'zz red 80', 'red 80'] },
+      { key: 'zigZagYellow80', label: 'Zig Zag Yellow 80', required: false, aliases: ['zigzagyellow80', 'zig zag yellow 80', 'zig_zag_yellow_80', 'zz yellow 80', 'yellow 80'] },
+      { key: 'zigZagWhite60', label: 'Zig Zag White 60', required: false, aliases: ['zigzagwhite60', 'zig zag white 60', 'zig_zag_white_60', 'zz white 60', 'white 60'] },
+      { key: 'zigZagRed60', label: 'Zig Zag Red 60', required: false, aliases: ['zigzagred60', 'zig zag red 60', 'zig_zag_red_60', 'zz red 60', 'red 60'] },
+      { key: 'zigZagYellow60', label: 'Zig Zag Yellow 60', required: false, aliases: ['zigzagyellow60', 'zig zag yellow 60', 'zig_zag_yellow_60', 'zz yellow 60', 'yellow 60'] },
+      { key: 'curveStone', label: 'Curve Stone', required: false, aliases: ['curvestone', 'curve stone', 'curve_stone', 'curve'] },
+      { key: 'chequreTile', label: 'Chequre Tile', required: false, aliases: ['chequretile', 'chequre tile', 'chequre_tile', 'chequre', 'tile'] },
+      { key: 'transportationCharge', label: 'Transportation Charge', required: false, aliases: ['transportationcharge', 'transportation charge', 'transportation_charge', 'transport', 'transport charge'] },
       { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note', 'notes', 'comment', 'comments', 'टिप्पणी'] },
+    ],
+  },
+  stock: {
+    label: 'Stock',
+    fields: [
+      { key: 'date', label: 'Date', required: true, aliases: ['date', 'stock date', 'दिनांक'] },
+      { key: 'cement', label: 'Cement', required: false, aliases: ['cement', 'cement bags'] },
+      { key: 'zigZagGrey80', label: 'Zig Zag Grey 80', required: false, aliases: ['zigzaggrey80', 'zig zag grey 80', 'grey 80'] },
+      { key: 'zigZagRed80', label: 'Zig Zag Red 80', required: false, aliases: ['zigzagred80', 'zig zag red 80', 'red 80'] },
+      { key: 'zigZagYellow80', label: 'Zig Zag Yellow 80', required: false, aliases: ['zigzagyellow80', 'zig zag yellow 80', 'yellow 80'] },
+      { key: 'zigZagGrey60', label: 'Zig Zag Grey 60', required: false, aliases: ['zigzaggrey60', 'zig zag grey 60', 'grey 60'] },
+      { key: 'zigZagRed60', label: 'Zig Zag Red 60', required: false, aliases: ['zigzagred60', 'zig zag red 60', 'red 60'] },
+      { key: 'zigZagYellow60', label: 'Zig Zag Yellow 60', required: false, aliases: ['zigzagyellow60', 'zig zag yellow 60', 'yellow 60'] },
+      { key: 'chequreTile', label: 'Chequre Tile', required: false, aliases: ['chequretile', 'chequre tile', 'chequre'] },
+      { key: 'curveStone', label: 'Curve Stone', required: false, aliases: ['curvestone', 'curve stone', 'curve'] },
+      { key: 'dumbleGrey80', label: 'Dumble Grey 80', required: false, aliases: ['dumblegrey80', 'dumble grey 80'] },
+      { key: 'dumbleRed80', label: 'Dumble Red 80', required: false, aliases: ['dumblered80', 'dumble red 80'] },
+      { key: 'dumbleYellow80', label: 'Dumble Yellow 80', required: false, aliases: ['dumbleyellow80', 'dumble yellow 80'] },
+    ],
+  },
+  dailySell: {
+    label: 'Daily Sell',
+    fields: [
+      { key: 'date', label: 'Date', required: true, aliases: ['date', 'sell date', 'दिनांक'] },
+      { key: 'customerName', label: 'Customer Name', required: true, aliases: ['customer name', 'customer_name', 'customer', 'party', 'name'] },
+      { key: 'address', label: 'Address', required: false, aliases: ['address', 'addr', 'location'] },
+      { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'sell amount', 'राशि'] },
+      { key: 'contactNumber', label: 'Contact Number', required: false, aliases: ['contact', 'mobile', 'phone', 'contact number', 'contact_no'] },
+      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
+    ],
+  },
+  customerPayment: {
+    label: 'Customer Payment',
+    fields: [
+      { key: 'date', label: 'Date', required: true, aliases: ['date', 'payment date', 'दिनांक'] },
+      { key: 'name', label: 'Customer Name', required: true, aliases: ['name', 'customer name', 'customer_name', 'customer', 'party'] },
+      { key: 'address', label: 'Address', required: false, aliases: ['address', 'addr'] },
+      { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'paid', 'राशि'] },
+      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
+    ],
+  },
+  labourPayment: {
+    label: 'Labour Payment',
+    fields: [
+      { key: 'date', label: 'Date', required: true, aliases: ['date', 'payment date', 'दिनांक'] },
+      { key: 'name', label: 'Labour Name', required: true, aliases: ['name', 'labour name', 'labour_name', 'labour', 'worker name', 'worker'] },
+      { key: 'address', label: 'Address', required: false, aliases: ['address', 'addr'] },
+      { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'paid', 'wage', 'राशि'] },
+      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
+    ],
+  },
+  tractorPayment: {
+    label: 'Tractor Payment',
+    fields: [
+      { key: 'date', label: 'Date', required: true, aliases: ['date', 'payment date', 'दिनांक'] },
+      { key: 'vendorName', label: 'Vendor Name', required: true, aliases: ['vendor', 'vendor name', 'vendor_name', 'tractor', 'tractor name', 'party'] },
+      { key: 'quantityTon', label: 'Quantity (Ton)', required: true, aliases: ['quantity', 'qty', 'quantity ton', 'quantity_ton', 'ton', 'tons'] },
+      { key: 'rate', label: 'Rate', required: true, aliases: ['rate', 'price', 'per ton', 'rate per ton'] },
+      { key: 'totalAmount', label: 'Total Amount', required: false, aliases: ['total', 'total amount', 'total_amount', 'amount'] },
+      { key: 'paidAmount', label: 'Paid Amount', required: false, aliases: ['paid', 'paid amount', 'paid_amount'] },
+      { key: 'remainingAmount', label: 'Remaining Amount', required: false, aliases: ['remaining', 'remaining amount', 'remaining_amount', 'balance'] },
+      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
+    ],
+  },
+  dustPurchase: {
+    label: 'Dust Purchase',
+    fields: [
+      { key: 'date', label: 'Date', required: true, aliases: ['date', 'purchase date', 'दिनांक'] },
+      { key: 'vendorName', label: 'Vendor Name', required: true, aliases: ['vendor', 'vendor name', 'vendor_name', 'party', 'supplier'] },
+      { key: 'cementName', label: 'Cement Name', required: false, aliases: ['cement', 'cement name', 'cement_name', 'brand'] },
+      { key: 'quantity', label: 'Quantity', required: true, aliases: ['quantity', 'qty', 'ton'] },
+      { key: 'rate', label: 'Rate', required: true, aliases: ['rate', 'price', 'per ton'] },
+      { key: 'totalAmount', label: 'Total Amount', required: false, aliases: ['total', 'total amount', 'amount'] },
+      { key: 'paidAmount', label: 'Paid Amount', required: false, aliases: ['paid', 'paid amount'] },
+      { key: 'transportationCharge', label: 'Transportation Charge', required: false, aliases: ['transport', 'transportation', 'transport charge'] },
+      { key: 'gst', label: 'GST', required: false, aliases: ['gst', 'gst amount', 'tax'] },
+      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
+    ],
+  },
+  cementPurchase: {
+    label: 'Cement Purchase',
+    fields: [
+      { key: 'date', label: 'Date', required: true, aliases: ['date', 'purchase date', 'दिनांक'] },
+      { key: 'vendorName', label: 'Vendor Name', required: true, aliases: ['vendor', 'vendor name', 'vendor_name', 'party', 'supplier'] },
+      { key: 'itemName', label: 'Item Name', required: false, aliases: ['item', 'item name', 'item_name', 'cement brand', 'brand'] },
+      { key: 'quantity', label: 'Quantity', required: true, aliases: ['quantity', 'qty', 'bags'] },
+      { key: 'rate', label: 'Rate', required: true, aliases: ['rate', 'price', 'per bag'] },
+      { key: 'totalAmount', label: 'Total Amount', required: false, aliases: ['total', 'total amount', 'amount'] },
+      { key: 'paidAmount', label: 'Paid Amount', required: false, aliases: ['paid', 'paid amount'] },
+      { key: 'transportationCharge', label: 'Transportation Charge', required: false, aliases: ['transport', 'transportation'] },
+      { key: 'gst', label: 'GST', required: false, aliases: ['gst', 'tax'] },
+      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
+    ],
+  },
+  hardner: {
+    label: 'Hardner',
+    fields: [
+      { key: 'date', label: 'Date', required: true, aliases: ['date', 'दिनांक'] },
+      { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'राशि'] },
+    ],
+  },
+  electricity: {
+    label: 'Electricity',
+    fields: [
+      { key: 'date', label: 'Date', required: true, aliases: ['date', 'bill date', 'दिनांक'] },
+      { key: 'name', label: 'Name', required: false, aliases: ['name', 'party', 'connection name'] },
+      { key: 'work', label: 'Work', required: false, aliases: ['work', 'description', 'details'] },
+      { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'bill amount', 'राशि'] },
+      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
+    ],
+  },
+  factoryStuff: {
+    label: 'Factory Stuff',
+    fields: [
+      { key: 'date', label: 'Date', required: true, aliases: ['date', 'दिनांक'] },
+      { key: 'itemName', label: 'Item Name', required: true, aliases: ['item', 'item name', 'item_name', 'stuff'] },
+      { key: 'quantity', label: 'Quantity', required: false, aliases: ['quantity', 'qty'] },
+      { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'राशि'] },
+      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
     ],
   },
   orders: {
@@ -195,7 +338,16 @@ function transformRow(
     }
 
     // Handle numeric fields
-    if (['quantityProduced', 'quantity', 'creditLimit', 'amount', 'rate'].includes(fieldKey)) {
+    if ([
+      'quantityProduced', 'quantity', 'creditLimit', 'amount', 'rate',
+      'zigZagWhite80', 'zigZagRed80', 'zigZagYellow80',
+      'zigZagWhite60', 'zigZagRed60', 'zigZagYellow60',
+      'curveStone', 'chequreTile', 'transportationCharge',
+      'cement', 'zigZagGrey80', 'zigZagGrey60',
+      'dumbleGrey80', 'dumbleRed80', 'dumbleYellow80',
+      'quantityTon', 'totalAmount', 'paidAmount', 'remainingAmount',
+      'gst',
+    ].includes(fieldKey)) {
       const numVal = Number(String(value || '').replace(/[^0-9.-]/g, '') || 0)
       result[fieldKey] = isNaN(numVal) ? 0 : numVal
       continue
@@ -417,11 +569,32 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
       const res = await api.importData(module, transformedData)
       setResult({ imported: res.imported, total: res.total, errors: res.errors })
       if (res.imported > 0) {
-        toast({ title: 'Import successful', description: `${res.imported} of ${res.total} rows imported` })
+        toast({
+          title: 'Import successful',
+          description: `${res.imported} of ${res.total} rows imported. Refreshing list...`,
+        })
+        // Refresh the parent module's data FIRST so the new rows appear,
+        // then auto-close this dialog after a short delay so the user can
+        // see the "Imported X of Y" success banner briefly.
         onSuccess()
+        setTimeout(() => {
+          handleClose()
+        }, 1200)
+      } else {
+        toast({
+          title: 'No rows imported',
+          description: res.errors?.length
+            ? `${res.errors.length} row(s) were skipped. Check the errors below.`
+            : 'All rows were skipped (possibly duplicates).',
+          variant: 'destructive',
+        })
       }
     } catch (err) {
-      toast({ title: 'Import failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' })
+      toast({
+        title: 'Import failed',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      })
     } finally {
       setImporting(false)
     }

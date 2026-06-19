@@ -1,9 +1,25 @@
 const BASE = '/api'
 
+// Wrapper around fetch that:
+//  1. Disables Next.js caching for ALL requests (we always want fresh data
+//     after an import / mutation). This fixes the bug where newly imported
+//     rows didn't show up until a hard refresh.
+//  2. Adds a cache-busting query param as an extra safety net so even
+//     browser/proxy caches can't serve stale responses.
+//  3. Reuses the caller-supplied options intact.
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${url}`, {
+  // Build a URL with a cache-busting _t param for GET requests
+  let fullUrl = `${BASE}${url}`
+  const method = (options?.method || 'GET').toUpperCase()
+  if (method === 'GET') {
+    const sep = fullUrl.includes('?') ? '&' : '?'
+    fullUrl = `${fullUrl}${sep}_t=${Date.now()}`
+  }
+
+  const res = await fetch(fullUrl, {
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     credentials: 'same-origin',
+    cache: 'no-store',
     ...options,
   })
   if (!res.ok) {

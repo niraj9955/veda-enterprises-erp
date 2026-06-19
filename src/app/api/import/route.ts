@@ -6,6 +6,9 @@ import {
   DustPurchase, CementPurchase, Hardner, Electricity, FactoryStuff,
 } from '@/lib/models'
 
+// Force dynamic — this route must never be cached/previewed as a static asset.
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
   try {
     await connectDB()
@@ -16,13 +19,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Module and data array are required' }, { status: 400 })
     }
 
+    // IMPORTANT — APPEND-ONLY import semantics:
+    // This route NEVER calls deleteMany / replaceOne / updateOne to wipe
+    // existing rows before inserting. Every iteration only calls Model.create()
+    // (or upsert-by-natural-key for Customers). Importing Jan 11-20 after
+    // Jan 1-10 will therefore LEAVE the Jan 1-10 rows in place and ADD the
+    // new rows on top. This is intentional and required by the business.
+
     let imported = 0
     let skipped = 0
     const errors: string[] = []
-
-    // Helper: generate unique key for deduplication
-    const makeKey = (row: Record<string, unknown>, fields: string[]) =>
-      fields.map((f) => String(row[f] ?? '').trim()).join('|')
 
     for (let i = 0; i < data.length; i++) {
       try {
