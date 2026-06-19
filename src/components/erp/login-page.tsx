@@ -98,9 +98,7 @@ export default function LoginPage() {
             <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
-            <Button type="button" variant="outline" className="w-full" onClick={handleInit}>
-              Initialize Default Admin
-            </Button>
+          
           </form>
         </CardContent>
       </Card>
