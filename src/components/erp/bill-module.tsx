@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/hooks/use-toast'
-import { Plus, Trash2, Edit, Printer, FileText, IndianRupee, Search } from 'lucide-react'
+import { Plus, Trash2, Edit, Printer, FileText, IndianRupee, Search, UserCheck, X } from 'lucide-react'
 
 interface BillItem {
   description: string
@@ -29,6 +29,7 @@ interface Bill {
   billType: string
   date: string
   dueDate?: string
+  customerId?: string | null
   fromName: string
   fromAddress: string
   fromGst: string
@@ -303,6 +304,9 @@ function BillForm({ bill, onSave, onCancel }: { bill: Bill | null; onSave: () =>
   const [billType, setBillType] = useState(bill?.billType || 'sales')
   const [date, setDate] = useState(bill?.date || new Date().toISOString().split('T')[0])
   const [dueDate, setDueDate] = useState(bill?.dueDate || '')
+  // Customer link — when set, the bill's paidAmount auto-syncs to a Payment
+  // document for this customer. May be null (manual party entry).
+  const [customerId, setCustomerId] = useState<string | null>(bill?.customerId || null)
   const [toName, setToName] = useState(bill?.toName || '')
   const [toAddress, setToAddress] = useState(bill?.toAddress || '')
   const [toGst, setToGst] = useState(bill?.toGst || '')
@@ -369,6 +373,7 @@ function BillForm({ bill, onSave, onCancel }: { bill: Bill | null; onSave: () =>
         billType,
         date,
         dueDate,
+        customerId: customerId || null,
         toName, toAddress, toGst, toPhone,
         items: items.filter((i) => i.description.trim()),
         discountPercent,
@@ -429,6 +434,19 @@ function BillForm({ bill, onSave, onCancel }: { bill: Bill | null; onSave: () =>
         </div>
       </div>
 
+      {/* Customer search & auto-fill */}
+      <CustomerSearchCard
+        selectedCustomerId={customerId}
+        onSelectCustomer={(c) => {
+          setCustomerId(c.id)
+          setToName(c.name)
+          setToPhone(c.mobile || '')
+          setToAddress(c.address || '')
+          setToGst(c.gstNumber || '')
+        }}
+        onClear={() => setCustomerId(null)}
+      />
+
       {/* Bill To */}
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-sm">Bill To (Party Details)</CardTitle></CardHeader>
@@ -436,21 +454,41 @@ function BillForm({ bill, onSave, onCancel }: { bill: Bill | null; onSave: () =>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Party Name *</Label>
-              <Input value={toName} onChange={(e) => setToName(e.target.value)} placeholder="Customer / Vendor name" required />
+              <Input value={toName} onChange={(e) => {
+                setToName(e.target.value)
+                // Manual edits break the customer link so we don't accidentally
+                // sync payments to the wrong customer.
+                if (customerId) setCustomerId(null)
+              }} placeholder="Customer / Vendor name" required />
             </div>
             <div>
               <Label className="text-xs">Phone</Label>
-              <Input value={toPhone} onChange={(e) => setToPhone(e.target.value)} placeholder="Contact number" />
+              <Input value={toPhone} onChange={(e) => {
+                setToPhone(e.target.value)
+                if (customerId) setCustomerId(null)
+              }} placeholder="Contact number" />
             </div>
           </div>
           <div>
             <Label className="text-xs">Address</Label>
-            <Textarea value={toAddress} onChange={(e) => setToAddress(e.target.value)} placeholder="Full address" rows={2} />
+            <Textarea value={toAddress} onChange={(e) => {
+              setToAddress(e.target.value)
+              if (customerId) setCustomerId(null)
+            }} placeholder="Full address" rows={2} />
           </div>
           <div>
             <Label className="text-xs">GST Number</Label>
-            <Input value={toGst} onChange={(e) => setToGst(e.target.value)} placeholder="GSTIN (optional)" />
+            <Input value={toGst} onChange={(e) => {
+              setToGst(e.target.value)
+              if (customerId) setCustomerId(null)
+            }} placeholder="GSTIN (optional)" />
           </div>
+          {customerId && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <UserCheck className="h-3 w-3" />
+              Linked to customer record — paid amount will auto-sync to Payments module.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -716,5 +754,162 @@ function PrintBill({ bill, onClose }: { bill: Bill; onClose: () => void }) {
         </div>
       </div>
     </div>
+  )
+}
+
+// ─── Customer Search Card ─────────────────────────────────────────────────────
+// Live-searches /api/customers by name / mobile / address and lets the user
+// pick a customer to auto-fill the Bill To fields. The selected customer's
+// id is propagated up so the Bill can be linked and the paid amount can
+// auto-sync to the Payments module.
+interface CustomerSearchResult {
+  id: string
+  name: string
+  mobile?: string
+  address?: string
+  gstNumber?: string
+}
+
+function CustomerSearchCard({
+  selectedCustomerId,
+  onSelectCustomer,
+  onClear,
+}: {
+  selectedCustomerId: string | null
+  onSelectCustomer: (c: CustomerSearchResult) => void
+  onClear: () => void
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<CustomerSearchResult[]>([])
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false)
+  const boxRef = useRef<HTMLDivElement>(null)
+
+  // Debounced search — fires 350ms after the user stops typing
+  useEffect(() => {
+    if (!query.trim()) {
+      setResults([])
+      setOpen(false)
+      return
+    }
+    setLoading(true)
+    const t = setTimeout(async () => {
+      try {
+        const data = await api.getCustomers(query.trim())
+        // Map raw customer records to the search-result shape
+        const list = (data.customers as CustomerSearchResult[]).map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          mobile: c.mobile || '',
+          address: c.address || '',
+          gstNumber: c.gstNumber || '',
+        }))
+        setResults(list)
+        setOpen(true)
+      } catch {
+        setResults([])
+        setOpen(false)
+      } finally {
+        setLoading(false)
+      }
+    }, 350)
+    return () => clearTimeout(t)
+  }, [query])
+
+  // Close the dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const handlePick = (c: CustomerSearchResult) => {
+    onSelectCustomer(c)
+    setQuery('')
+    setResults([])
+    setOpen(false)
+  }
+
+  const handleClear = () => {
+    onClear()
+    setQuery('')
+    setResults([])
+  }
+
+  return (
+    <Card className="border-emerald-200 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/10">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Search className="h-4 w-4 text-emerald-600" />
+          Search Customer (auto-fill party details)
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {selectedCustomerId ? (
+          <div className="flex items-center justify-between gap-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-md px-3 py-2">
+            <div className="flex items-center gap-2 text-sm">
+              <UserCheck className="h-4 w-4 text-emerald-600" />
+              <span className="font-medium">Customer linked</span>
+              <Badge variant="outline" className="text-xs">{selectedCustomerId.slice(-6)}</Badge>
+            </div>
+            <Button type="button" size="sm" variant="ghost" onClick={handleClear}>
+              <X className="h-3 w-3 mr-1" /> Unlink
+            </Button>
+          </div>
+        ) : (
+          <div ref={boxRef} className="relative">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Type customer name, mobile, or address to search..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onFocus={() => results.length > 0 && setOpen(true)}
+                className="pl-9"
+              />
+              {loading && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">Searching...</span>
+              )}
+            </div>
+            {open && results.length > 0 && (
+              <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg max-h-72 overflow-auto">
+                {results.map((c) => (
+                  <button
+                    type="button"
+                    key={c.id}
+                    onClick={() => handlePick(c)}
+                    className="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-b last:border-0 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{c.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {[c.mobile, c.address].filter(Boolean).join(' • ') || 'No contact info'}
+                        </p>
+                      </div>
+                      {c.gstNumber && (
+                        <Badge variant="outline" className="text-xs shrink-0">GST</Badge>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {open && results.length === 0 && !loading && query.trim() && (
+              <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg px-3 py-3 text-sm text-muted-foreground">
+                No matching customers found. You can still enter party details manually below.
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-2">
+              Tip: linking a customer lets the bill's paid amount auto-sync to the Payments module — no manual payment entry needed.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

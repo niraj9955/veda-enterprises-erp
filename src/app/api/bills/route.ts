@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
-import { Bill, Company } from '@/lib/models'
+import { Bill, Company, Payment } from '@/lib/models'
 import { getSession } from '@/lib/auth'
+
+// Force dynamic — never cache bill list responses
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 // GET — list all bills (with optional filter by type/status)
 export async function GET(request: Request) {
@@ -21,7 +25,9 @@ export async function GET(request: Request) {
     if (status) query.status = status
 
     const bills = await Bill.find(query).sort({ createdAt: -1 }).lean()
-    return NextResponse.json({ bills: toObject(bills) })
+    const res = NextResponse.json({ bills: toObject(bills) })
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+    return res
   } catch (error) {
     console.error('Error fetching bills:', error)
     return NextResponse.json({ error: 'Failed to fetch bills' }, { status: 500 })
@@ -73,11 +79,15 @@ export async function POST(request: Request) {
     const paidAmount = Number(body.paidAmount) || 0
     const balanceAmount = grandTotal - paidAmount
 
+    // customerId is optional — may be null when the bill is for a walk-in party
+    const customerId = body.customerId || null
+
     const bill = await Bill.create({
       billNumber,
       billType: body.billType || 'sales',
       date: body.date || new Date().toISOString().split('T')[0],
       dueDate: body.dueDate || '',
+      customerId,
       fromName, fromAddress, fromGst, fromPhone,
       toName: body.toName,
       toAddress: body.toAddress || '',
@@ -101,6 +111,28 @@ export async function POST(request: Request) {
       status: paidAmount >= grandTotal && grandTotal > 0 ? 'paid' : (paidAmount > 0 ? 'partial' : 'draft'),
       createdBy: session.name,
     })
+
+    // Auto-sync Payment: if a customer is linked AND there's a non-zero paid
+    // amount, create a corresponding Payment row so the receipt shows up in
+    // the Payments module without manual entry. The Payment carries billId so
+    // future updates / deletes on this Bill propagate atomically.
+    if (customerId && paidAmount > 0) {
+      try {
+        await Payment.create({
+          customerId,
+          paymentType: body.paymentMode || 'Cash',
+          amount: paidAmount,
+          date: bill.date,
+          remarks: `Auto-synced from bill ${bill.billNumber}`,
+          billId: bill._id,
+          billNumber: bill.billNumber,
+        })
+      } catch (syncErr) {
+        // Sync failure is logged but must NOT fail the bill creation — the
+        // bill is the source of truth, the Payment is a convenience mirror.
+        console.error('Bill → Payment auto-sync failed on create:', syncErr)
+      }
+    }
 
     return NextResponse.json({ bill: toObject(bill) }, { status: 201 })
   } catch (error) {

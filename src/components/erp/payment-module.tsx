@@ -74,6 +74,8 @@ interface Payment {
   date: string
   remarks: string
   createdAt: string
+  billId?: string | null
+  billNumber?: string
   customer: { id: string; name: string }
 }
 
@@ -690,6 +692,7 @@ export function PaymentModule() {
                   <TableHead>Payment Type</TableHead>
                   <TableHead className="text-right">Amount (₹)</TableHead>
                   <TableHead>Date</TableHead>
+                  <TableHead>Source</TableHead>
                   <TableHead>Remarks</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -699,7 +702,7 @@ export function PaymentModule() {
                   renderSkeletons()
                 ) : filteredPayments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                       No payments yet. Click &quot;Receive Payment&quot; to get started.
                     </TableCell>
                   </TableRow>
@@ -715,6 +718,17 @@ export function PaymentModule() {
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         {formatDate(payment.date)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {payment.billId ? (
+                          <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800">
+                            Bill {payment.billNumber || ''}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900/30 dark:text-slate-400 dark:border-slate-700">
+                            Manual
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate text-muted-foreground">
                         {payment.remarks || '—'}

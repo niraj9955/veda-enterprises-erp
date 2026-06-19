@@ -225,7 +225,15 @@ const PaymentSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   date: { type: String, required: true },
   remarks: { type: String, default: '' },
+  // If this payment was auto-created from a Bill (paidAmount sync), billId
+  // links back to the source Bill so the Bill PUT/DELETE routes can update /
+  // delete this Payment atomically. Manual payments created via /api/payments
+  // have billId = null.
+  billId: { type: mongoose.Schema.Types.ObjectId, ref: 'Bill', default: null },
+  billNumber: { type: String, default: '' },
 }, { timestamps: true });
+PaymentSchema.index({ customerId: 1 });
+PaymentSchema.index({ billId: 1 });
 
 const ExpenseSchema = new mongoose.Schema({
   category: { type: String, required: true },
@@ -262,6 +270,10 @@ const BillSchema = new mongoose.Schema({
   fromPhone: { type: String, default: '' },
 
   // Bill To (customer/party)
+  // customerId is OPTIONAL — set when the bill is created from an existing
+  // customer record. When set, the bill's paidAmount auto-syncs to a Payment
+  // document linked to this customer (see /api/bills routes).
+  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null },
   toName: { type: String, required: true },
   toAddress: { type: String, default: '' },
   toGst: { type: String, default: '' },
@@ -302,6 +314,7 @@ const BillSchema = new mongoose.Schema({
 BillSchema.index({ billNumber: 1 });
 BillSchema.index({ date: -1 });
 BillSchema.index({ billType: 1, status: 1 });
+BillSchema.index({ customerId: 1 });
 
 // ─── Models ─────────────────────────────────────────────────────────────────
 export const Company = mongoose.models.Company || mongoose.model('Company', CompanySchema);
