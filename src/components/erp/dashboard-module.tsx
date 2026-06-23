@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+import { useAppStore } from '@/lib/store'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Factory,
   Package,
   ShoppingCart,
-  HardHat,
-  Truck,
   CreditCard,
   Construction,
   Droplets,
@@ -53,6 +52,7 @@ const formatNumber = (value: number): string =>
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function DashboardModule() {
+  const { setActiveModule } = useAppStore()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -114,9 +114,12 @@ export default function DashboardModule() {
         <p className="text-muted-foreground text-sm mt-1">
           Paver Block Manufacturing &mdash; Overview of operations and performance
         </p>
+        <p className="text-muted-foreground/70 text-xs mt-1">
+          Tip: click any card below to jump straight to that module.
+        </p>
       </div>
 
-      {/* Primary KPI Cards */}
+      {/* Primary KPI Cards — clickable to navigate to their modules */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4">
         <KpiCard
           label="Today's Production"
@@ -126,6 +129,7 @@ export default function DashboardModule() {
           iconColor="text-emerald-600 dark:text-emerald-400"
           borderColor="border-l-emerald-500"
           sublabel="pieces produced today"
+          onClick={() => setActiveModule('production')}
         />
         <KpiCard
           label="Today's Sales"
@@ -135,15 +139,17 @@ export default function DashboardModule() {
           iconColor="text-amber-600 dark:text-amber-400"
           borderColor="border-l-amber-500"
           sublabel="daily sell amount"
+          onClick={() => setActiveModule('dailySell')}
         />
         <KpiCard
-          label="Labour Payments Today"
-          value={formatCurrency(stats.todayLabourPayments)}
-          icon={<HardHat className="h-5 w-5" />}
-          iconBg="bg-rose-100 dark:bg-rose-900/30"
-          iconColor="text-rose-600 dark:text-rose-400"
-          borderColor="border-l-rose-500"
-          sublabel="paid to labourers"
+          label="Customer Payments Today"
+          value={formatCurrency(stats.todayCustomerPayments)}
+          icon={<CreditCard className="h-5 w-5" />}
+          iconBg="bg-emerald-100 dark:bg-emerald-900/30"
+          iconColor="text-emerald-600 dark:text-emerald-400"
+          borderColor="border-l-emerald-500"
+          sublabel="received from customers"
+          onClick={() => setActiveModule('customerPayment')}
         />
         <KpiCard
           label="Stock Summary"
@@ -153,29 +159,12 @@ export default function DashboardModule() {
           iconColor="text-sky-600 dark:text-sky-400"
           borderColor="border-l-sky-500"
           sublabel={`${formatNumber(stats.totalStockCement)} cement bags`}
+          onClick={() => setActiveModule('stock')}
         />
       </div>
 
-      {/* Secondary KPI Cards */}
+      {/* Secondary KPI Cards — clickable */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4">
-        <KpiCard
-          label="Customer Payments Today"
-          value={formatCurrency(stats.todayCustomerPayments)}
-          icon={<CreditCard className="h-5 w-5" />}
-          iconBg="bg-emerald-100 dark:bg-emerald-900/30"
-          iconColor="text-emerald-600 dark:text-emerald-400"
-          borderColor="border-l-emerald-500"
-          sublabel="received from customers"
-        />
-        <KpiCard
-          label="Tractor Dues"
-          value={formatCurrency(stats.totalTractorRemaining)}
-          icon={<Truck className="h-5 w-5" />}
-          iconBg="bg-orange-100 dark:bg-orange-900/30"
-          iconColor="text-orange-600 dark:text-orange-400"
-          borderColor="border-l-orange-500"
-          sublabel="total remaining amount"
-        />
         <KpiCard
           label="Today's Expenses"
           value={formatCurrency(stats.totalExpensesToday)}
@@ -184,6 +173,7 @@ export default function DashboardModule() {
           iconColor="text-violet-600 dark:text-violet-400"
           borderColor="border-l-violet-500"
           sublabel="all expenses combined"
+          onClick={() => setActiveModule('expenses')}
         />
         <KpiCard
           label="Net Cash Flow"
@@ -193,13 +183,37 @@ export default function DashboardModule() {
           iconColor="text-teal-600 dark:text-teal-400"
           borderColor="border-l-teal-500"
           sublabel="income minus expenses"
+          onClick={() => setActiveModule('reports')}
+        />
+        <KpiCard
+          label="Orders"
+          value={formatCurrency(stats.todaySales)}
+          icon={<ShoppingCart className="h-5 w-5" />}
+          iconBg="bg-indigo-100 dark:bg-indigo-900/30"
+          iconColor="text-indigo-600 dark:text-indigo-400"
+          borderColor="border-l-indigo-500"
+          sublabel="jump to orders module"
+          onClick={() => setActiveModule('orders')}
+        />
+        <KpiCard
+          label="Dispatch"
+          value={formatCurrency(stats.todaySales)}
+          icon={<Package className="h-5 w-5" />}
+          iconBg="bg-fuchsia-100 dark:bg-fuchsia-900/30"
+          iconColor="text-fuchsia-600 dark:text-fuchsia-400"
+          borderColor="border-l-fuchsia-500"
+          sublabel="jump to dispatch module"
+          onClick={() => setActiveModule('dispatch')}
         />
       </div>
 
-      {/* Expense Breakdown */}
+      {/* Expense Breakdown — each card clickable to its purchase module */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base font-semibold">Today&apos;s Expense Breakdown</CardTitle>
+          <p className="text-xs text-muted-foreground/70 mt-1">
+            Click any expense to open its module.
+          </p>
         </CardHeader>
         <CardContent>
           {stats.totalExpensesToday === 0 ? (
@@ -208,12 +222,12 @@ export default function DashboardModule() {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-              <ExpenseCard icon={<HardHat className="h-4 w-4" />} label="Labour" amount={stats.todayLabourPayments} total={stats.totalExpensesToday} color="text-rose-600" />
-              <ExpenseCard icon={<Mountain className="h-4 w-4" />} label="Dust Purchase" amount={stats.todayDustPurchase} total={stats.totalExpensesToday} color="text-amber-600" />
-              <ExpenseCard icon={<Construction className="h-4 w-4" />} label="Cement Purchase" amount={stats.todayCementPurchase} total={stats.totalExpensesToday} color="text-sky-600" />
-              <ExpenseCard icon={<Droplets className="h-4 w-4" />} label="Hardner" amount={stats.todayHardner} total={stats.totalExpensesToday} color="text-violet-600" />
-              <ExpenseCard icon={<Zap className="h-4 w-4" />} label="Electricity" amount={stats.todayElectricity} total={stats.totalExpensesToday} color="text-yellow-600" />
-              <ExpenseCard icon={<Wrench className="h-4 w-4" />} label="Factory Stuff" amount={stats.todayFactoryStuff} total={stats.totalExpensesToday} color="text-emerald-600" />
+              <ExpenseCard icon={<Factory className="h-4 w-4" />} label="Labour" amount={stats.todayLabourPayments} total={stats.totalExpensesToday} color="text-rose-600" onClick={() => setActiveModule('labourPayment')} />
+              <ExpenseCard icon={<Mountain className="h-4 w-4" />} label="Dust Purchase" amount={stats.todayDustPurchase} total={stats.totalExpensesToday} color="text-amber-600" onClick={() => setActiveModule('dustPurchase')} />
+              <ExpenseCard icon={<Construction className="h-4 w-4" />} label="Cement Purchase" amount={stats.todayCementPurchase} total={stats.totalExpensesToday} color="text-sky-600" onClick={() => setActiveModule('cementPurchase')} />
+              <ExpenseCard icon={<Droplets className="h-4 w-4" />} label="Hardner" amount={stats.todayHardner} total={stats.totalExpensesToday} color="text-violet-600" onClick={() => setActiveModule('hardner')} />
+              <ExpenseCard icon={<Zap className="h-4 w-4" />} label="Electricity" amount={stats.todayElectricity} total={stats.totalExpensesToday} color="text-yellow-600" onClick={() => setActiveModule('electricity')} />
+              <ExpenseCard icon={<Wrench className="h-4 w-4" />} label="Factory Stuff" amount={stats.todayFactoryStuff} total={stats.totalExpensesToday} color="text-emerald-600" onClick={() => setActiveModule('factoryStuff')} />
             </div>
           )}
         </CardContent>
@@ -224,7 +238,7 @@ export default function DashboardModule() {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function KpiCard({ label, value, icon, iconBg, iconColor, borderColor, sublabel }: {
+function KpiCard({ label, value, icon, iconBg, iconColor, borderColor, sublabel, onClick }: {
   label: string
   value: string
   icon: React.ReactNode
@@ -232,9 +246,13 @@ function KpiCard({ label, value, icon, iconBg, iconColor, borderColor, sublabel 
   iconColor: string
   borderColor: string
   sublabel: string
+  onClick?: () => void
 }) {
-  return (
-    <Card className={`border-l-4 ${borderColor} hover:shadow-md transition-shadow`}>
+  // Render as a <button> when onClick is supplied so the entire card is
+  // keyboard-focusable and click-anywhere-on-card navigates. Visual styling
+  // stays identical to the non-clickable variant (no extra padding / borders).
+  const inner = (
+    <>
       <CardContent className="p-4">
         <div className="flex items-center gap-3">
           <div className={`flex-shrink-0 h-10 w-10 rounded-lg flex items-center justify-center ${iconBg} ${iconColor}`}>
@@ -247,28 +265,64 @@ function KpiCard({ label, value, icon, iconBg, iconColor, borderColor, sublabel 
           </div>
         </div>
       </CardContent>
+    </>
+  )
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`text-left border-l-4 ${borderColor} hover:shadow-md hover:-translate-y-0.5 transition-all bg-card border border-card rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer`}
+      >
+        {inner}
+      </button>
+    )
+  }
+
+  return (
+    <Card className={`border-l-4 ${borderColor} hover:shadow-md transition-shadow`}>
+      {inner}
     </Card>
   )
 }
 
-function ExpenseCard({ icon, label, amount, total, color }: {
+function ExpenseCard({ icon, label, amount, total, color, onClick }: {
   icon: React.ReactNode
   label: string
   amount: number
   total: number
   color: string
+  onClick?: () => void
 }) {
   const pct = total > 0 ? (amount / total) * 100 : 0
-  return (
-    <div className="text-center space-y-2">
-      <div className={`flex items-center justify-center gap-1 ${color}`}>{icon}<span className="text-xs font-medium">{label}</span></div>
+
+  const inner = (
+    <>
+      <div className={`flex items-center justify-center gap-1 ${color}`}>
+        {icon}<span className="text-xs font-medium">{label}</span>
+      </div>
       <p className="text-sm font-bold">{formatCurrency(amount)}</p>
       <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
         <div className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
       <p className="text-xs text-muted-foreground">{pct.toFixed(1)}%</p>
-    </div>
+    </>
   )
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="text-center space-y-2 p-2 rounded-lg hover:bg-muted/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer"
+      >
+        {inner}
+      </button>
+    )
+  }
+
+  return <div className="text-center space-y-2">{inner}</div>
 }
 
 // ─── Mountain icon (inline since it's used in expense breakdown) ─────────────
