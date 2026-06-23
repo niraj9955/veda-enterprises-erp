@@ -99,7 +99,42 @@ interface OrderFormData {
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-const BRICK_TYPES = ['Red Brick', 'Fly Ash Brick', 'Cement Brick', 'Hollow Block'] as const
+// Paver block product types — same 12 fields as Stock/Production schema
+// (cement, zigZagGrey80, zigZagRed80, zigZagYellow80, zigZagGrey60,
+//  zigZagRed60, zigZagYellow60, chequreTile, curveStone,
+//  dumbleGrey80, dumbleRed80, dumbleYellow80)
+const BRICK_TYPES = [
+  'Cement',
+  'Zig Zag Grey 80mm',
+  'Zig Zag Red 80mm',
+  'Zig Zag Yellow 80mm',
+  'Zig Zag Grey 60mm',
+  'Zig Zag Red 60mm',
+  'Zig Zag Yellow 60mm',
+  'Chequre Tile',
+  'Curve Stone',
+  'Dumble Grey 80mm',
+  'Dumble Red 80mm',
+  'Dumble Yellow 80mm',
+] as const
+
+// Map each product label to its Stock/Production schema field name — used
+// when "Add Item" rows are added so the line item's description can be
+// correlated with stock/production data later.
+const PRODUCT_FIELD_MAP: Record<string, string> = {
+  'Cement':               'cement',
+  'Zig Zag Grey 80mm':    'zigZagGrey80',
+  'Zig Zag Red 80mm':     'zigZagRed80',
+  'Zig Zag Yellow 80mm':  'zigZagYellow80',
+  'Zig Zag Grey 60mm':    'zigZagGrey60',
+  'Zig Zag Red 60mm':     'zigZagRed60',
+  'Zig Zag Yellow 60mm':  'zigZagYellow60',
+  'Chequre Tile':         'chequreTile',
+  'Curve Stone':          'curveStone',
+  'Dumble Grey 80mm':     'dumbleGrey80',
+  'Dumble Red 80mm':      'dumbleRed80',
+  'Dumble Yellow 80mm':   'dumbleYellow80',
+}
 
 const ORDER_STATUSES = ['Pending', 'Processing', 'Delivered', 'Cancelled'] as const
 
@@ -440,10 +475,10 @@ export function OrderModule() {
             </Select>
           </div>
 
-          {/* Items section — multi-line item entry */}
+          {/* Items section — multi-line item entry with paver block types */}
           <div className="grid gap-2">
             <div className="flex items-center justify-between">
-              <Label>Items <span className="text-muted-foreground text-xs font-normal">(add multiple products / brick types)</span></Label>
+              <Label>Items <span className="text-muted-foreground text-xs font-normal">(select brick type for each line)</span></Label>
               <Button type="button" size="sm" variant="outline" onClick={addItem}>
                 <Plus className="h-3 w-3 mr-1" /> Add Item
               </Button>
@@ -451,12 +486,12 @@ export function OrderModule() {
             <div className="border rounded-md p-2 space-y-2 bg-muted/20">
               {formData.items.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-2">
-                  No items added. Use "Add Item" to add multiple products, OR skip this section and use brick type + qty + rate above.
+                  No items added. Use "Add Item" to add multiple paver block products, OR skip this section and use brick type + qty + rate above.
                 </p>
               ) : (
                 <>
                   <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-muted-foreground px-1">
-                    <div className="col-span-5">Description</div>
+                    <div className="col-span-5">Brick Type</div>
                     <div className="col-span-2">Qty</div>
                     <div className="col-span-2">Unit</div>
                     <div className="col-span-2">Rate (₹)</div>
@@ -464,12 +499,21 @@ export function OrderModule() {
                   </div>
                   {formData.items.map((item, idx) => (
                     <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                      <Input
-                        className="col-span-12 md:col-span-5"
-                        placeholder="Item description"
+                      <Select
                         value={item.description}
-                        onChange={(e) => updateItem(idx, 'description', e.target.value)}
-                      />
+                        onValueChange={(val) => updateItem(idx, 'description', val)}
+                      >
+                        <SelectTrigger className="col-span-12 md:col-span-5 h-9">
+                          <SelectValue placeholder="Select brick type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {BRICK_TYPES.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <Input
                         type="number"
                         className="col-span-4 md:col-span-2"
