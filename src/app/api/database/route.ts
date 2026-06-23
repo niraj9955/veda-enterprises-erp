@@ -226,11 +226,26 @@ export async function PUT(request: Request) {
     // MERGE restore — NO deleteMany. For each collection, build a bulkWrite
     // of replaceOne + upsert operations keyed by _id. This preserves docs
     // whose _id is not in the backup file (the user's "current data").
+    //
+    // IMPORTANT: We SKIP the `users` collection during restore. The export
+    // route strips User.password for security, so the backup file has no
+    // usable passwords. Restoring users would either (a) replace existing
+    // users with password-less docs (validation error) or (b) inject random
+    // placeholder passwords that lock the user out of their own ERP.
+    // Skipping users entirely is the safe choice — authentication state is
+    // never restored from a backup file.
+    const SKIP_ON_RESTORE = new Set(['users'])
+
     const counts: Record<string, number> = { inserted: 0, replaced: 0 }
     const perCollection: Record<string, { inserted: number; replaced: number; skipped: number }> = {}
     const errors: Record<string, string> = {}
 
     for (const { key, model } of COLLECTIONS) {
+      if (SKIP_ON_RESTORE.has(key)) {
+        perCollection[key] = { inserted: 0, replaced: 0, skipped: -1 } // -1 = intentionally skipped
+        console.log(`[restore] ${key}: intentionally skipped (auth state never restored from backup)`)
+        continue
+      }
       const rows = data[key]
       if (!Array.isArray(rows) || rows.length === 0) {
         perCollection[key] = { inserted: 0, replaced: 0, skipped: 0 }
