@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject, extractCustomer } from '@/lib/db'
-import { Order } from '@/lib/models'
+import { Order, Bill, Payment } from '@/lib/models'
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -73,6 +73,24 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE — remove an Order.
+//
+// CASCADE:
+//   • Bills that reference this order via remarks/notes are NOT deleted
+//     automatically — the user may have already printed and sent them.
+//     Instead, we leave them as historical records.
+//   • Dispatches linked to this order (orderId) are NOT deleted either —
+//     they represent physical goods that left the factory and shouldn't be
+//     erased just because the order was removed.
+//
+// What we DO clean up:
+//   • Nothing automatically — the order is the source of truth, but its
+//     deletion doesn't invalidate downstream financial records.
+//
+// This is the safe default. If you want aggressive cascade deletion,
+// uncomment the cascade block below.
+// ─────────────────────────────────────────────────────────────────────────────
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB()

@@ -95,6 +95,21 @@ interface PaymentFormData {
   amount: number | string
   date: string
   remarks: string
+  billId: string  // optional link to a Bill — empty string means "no link"
+}
+
+// Lightweight Bill shape for the "Link to Bill" dropdown in the form.
+// We only fetch the fields needed to render each option: id, billNumber,
+// grandTotal, paidAmount, balanceAmount, date, status. The dropdown shows
+// "BILL-XXXX — ₹balance pending" so the user knows which bill is outstanding.
+interface BillOption {
+  id: string
+  billNumber: string
+  grandTotal: number
+  paidAmount: number
+  balanceAmount: number
+  date: string
+  status: string
 }
 
 interface OutstandingEntry {
@@ -144,6 +159,7 @@ const emptyForm: PaymentFormData = {
   amount: '',
   date: '',
   remarks: '',
+  billId: '',
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -162,6 +178,14 @@ export function PaymentModule() {
   const [editingPayment, setEditingPayment] = React.useState<Payment | null>(null)
   const [formData, setFormData] = React.useState<PaymentFormData>(emptyForm)
   const [formSubmitting, setFormSubmitting] = React.useState(false)
+
+  // Bills for the currently-selected customer — used to populate the
+  // "Link to Bill" dropdown in the payment form. Fetched whenever the user
+  // picks a customer (or opens the edit dialog with a pre-selected customer).
+  // Only outstanding bills (status = 'partial' or 'draft' or 'sent') are
+  // shown — fully paid bills are hidden to keep the dropdown short.
+  const [customerBills, setCustomerBills] = React.useState<BillOption[]>([])
+  const [loadingBills, setLoadingBills] = React.useState(false)
 
   // Excel import
   const [importOpen, setImportOpen] = React.useState(false)
@@ -305,6 +329,7 @@ export function PaymentModule() {
   const openCreateDialog = () => {
     setEditingPayment(null)
     setFormData(emptyForm)
+    setCustomerBills([])
     setDialogOpen(true)
   }
 
@@ -316,9 +341,62 @@ export function PaymentModule() {
       amount: payment.amount,
       date: payment.date,
       remarks: payment.remarks,
+      billId: payment.billId || '',
     })
     setDialogOpen(true)
+    // Fetch this customer's outstanding bills (including the linked one,
+    // even if it's already paid, so the user sees the current link).
+    fetchCustomerBills(payment.customerId)
   }
+
+  // Fetch outstanding bills for a customer — populates the "Link to Bill"
+  // dropdown. Safe to call repeatedly; debouncing not needed because the
+  // customer change is a discrete user action (not a keystroke stream).
+  const fetchCustomerBills = async (customerId: string) => {
+    if (!customerId) {
+      setCustomerBills([])
+      return
+    }
+    setLoadingBills(true)
+    try {
+      // We use the existing /api/bills endpoint with search filter. The
+      // response is the full bill list but we filter client-side by
+      // customerId + outstanding status. For large datasets this should
+      // eventually become a server-side filter, but for now this is fast
+      // enough (typically <50 bills per customer).
+      const data = await api.getBills() as { bills: BillOption[] }
+      const filtered = (data.bills || [])
+        .filter((b) => {
+          // Match by customerId. Note: /api/bills returns bills with
+          // customerId as a string (toObject renames _id → id).
+          const billCustomerId = (b as any).customerId
+          return billCustomerId && String(billCustomerId) === String(customerId)
+        })
+        // Show outstanding + the currently-linked bill (even if 'paid')
+        .filter((b) => {
+          if (editingPayment && editingPayment.billId && String(b.id) === String(editingPayment.billId)) return true
+          return b.status !== 'paid' && b.status !== 'cancelled'
+        })
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      setCustomerBills(filtered)
+    } catch (err) {
+      console.error('Failed to fetch customer bills:', err)
+      setCustomerBills([])
+    } finally {
+      setLoadingBills(false)
+    }
+  }
+
+  // When customer changes in the form, refresh the bills dropdown.
+  // Wrapped in useEffect so we don't refetch on every render.
+  React.useEffect(() => {
+    if (dialogOpen && formData.customerId) {
+      fetchCustomerBills(formData.customerId)
+    } else if (!formData.customerId) {
+      setCustomerBills([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.customerId, dialogOpen])
 
   const handleFormChange = (field: keyof PaymentFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -345,7 +423,7 @@ export function PaymentModule() {
 
     setFormSubmitting(true)
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         customerId: formData.customerId,
         paymentType: formData.paymentType,
         amount: Number(formData.amount),
@@ -353,17 +431,40 @@ export function PaymentModule() {
         remarks: formData.remarks,
       }
 
+      // Include billId in the payload so the server can link/unlink the
+      // payment to a Bill and auto-sync the Bill's paidAmount.
+      // Empty string → unlink (server treats "" as null).
+      if (editingPayment) {
+        // On edit, always send billId (even if empty) so the server can
+        // detect "unlink" intent vs "no change".
+        payload.billId = formData.billId || null
+      } else {
+        // On create, only send billId if user picked one.
+        if (formData.billId) payload.billId = formData.billId
+      }
+
       if (editingPayment) {
         await api.updatePayment(editingPayment.id, payload)
-        toast({ title: 'Success', description: 'Payment updated successfully' })
+        toast({
+          title: 'Success',
+          description: formData.billId
+            ? 'Payment updated and linked to bill. Bill paid amount auto-synced.'
+            : 'Payment updated successfully',
+        })
       } else {
         await api.createPayment(payload)
-        toast({ title: 'Success', description: 'Payment recorded successfully' })
+        toast({
+          title: 'Success',
+          description: formData.billId
+            ? 'Payment recorded and linked to bill. Bill paid amount auto-synced.'
+            : 'Payment recorded successfully',
+        })
       }
 
       setDialogOpen(false)
       setEditingPayment(null)
       setFormData(emptyForm)
+      setCustomerBills([])
       fetchPayments()
       fetchOrders() // Refresh for outstanding calculations
     } catch (err) {
@@ -509,6 +610,52 @@ export function PaymentModule() {
               onChange={(e) => handleFormChange('remarks', e.target.value)}
               className="min-h-[80px] resize-none"
             />
+          </div>
+
+          {/* Link to Bill — optional. When set, the Bill's paidAmount will
+              auto-update to reflect this payment (reverse sync). */}
+          <div className="grid gap-2">
+            <Label htmlFor="payment-bill">
+              Link to Bill <span className="text-muted-foreground text-xs font-normal">(optional — auto-syncs Bill's paid amount)</span>
+            </Label>
+            {!formData.customerId ? (
+              <p className="text-xs text-muted-foreground italic py-2">
+                Select a customer first to see their outstanding bills.
+              </p>
+            ) : loadingBills ? (
+              <p className="text-xs text-muted-foreground py-2">Loading bills...</p>
+            ) : customerBills.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic py-2">
+                No outstanding bills for this customer. You can still record an
+                advance payment without linking it.
+              </p>
+            ) : (
+              <Select
+                value={formData.billId || '__none__'}
+                onValueChange={(val) => handleFormChange('billId', val === '__none__' ? '' : val)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="No link (advance payment)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No link (advance payment)</SelectItem>
+                  {customerBills.map((b) => {
+                    const balance = Number(b.balanceAmount) || 0
+                    const date = new Date(b.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                    return (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.billNumber} — {formatCurrency(balance)} pending ({date})
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+            )}
+            {formData.billId && (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                ✓ This payment will auto-update the linked bill's paid amount.
+              </p>
+            )}
           </div>
         </div>
 
