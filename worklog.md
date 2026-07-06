@@ -920,3 +920,53 @@ Stage Summary:
 - Stray test entry for 15 Jul 2026 has been deleted.
 - Production module now shows 48 entries (the real Excel data) — no phantom "auto data" anymore.
 - Lesson learned: when testing the import API with test data, ALWAYS clean up immediately via the single-record DELETE endpoint (which doesn't require admin auth), not the bulk DELETE endpoint (which does).
+
+---
+Task ID: 11
+Agent: Main Agent
+Task: Three fixes — (1) sticky bottom horizontal scrollbar on Production main table, (2) full-screen loading spinner during delete, (3) fast bulk import.
+
+Work Log:
+
+### Task 1: Sticky bottom scrollbar on Production table
+- Problem: The Production Records main table (not the import dialog) had 14+ columns but only ~10 were visible. The plain `overflow-auto` div put the horizontal scrollbar at the bottom of the scroll CONTENT, so for 48 rows the user had to scroll all the way down to reach it.
+- Extracted the `ScrollableTable` component (previously inline in excel-import.tsx) into a shared, reusable file: `/home/z/my-project/src/components/ui/scrollable-table.tsx`.
+- The shared component measures inner content width AND viewport width via ResizeObserver, and only shows the fake bottom scrollbar when content is actually wider than the viewport (no useless thin bar on narrow tables).
+- Updated `production-module.tsx` to import and use `<ScrollableTable>` instead of the plain `<div className="overflow-auto">` wrapper.
+- Updated `excel-import.tsx` to import the shared component (removed the inline copy).
+
+### Task 2: Full-screen loading overlay during delete
+- Problem: When user clicked Delete (single, bulk, or delete-all), the only feedback was a tiny spinner inside the button text. User said "kuchh pta nhi chalta" (can't tell anything is happening).
+- Added a full-screen modal overlay to `production-module.tsx` that appears whenever `deleting || deletingAll || bulkDeleting` is true:
+  • Semi-transparent black backdrop with backdrop-blur
+  • Centered white card with a large spinning Loader2 icon (size-12, emerald)
+  • Dynamic message: "Deleting entry..." / "Deleting N entries..." / "Deleting all entries..."
+  • Subtext: "Please wait while records are removed and stock is re-synced."
+  • z-index 100 so it sits above everything
+- The overlay stays visible until the API call completes AND the table refreshes, so the user always knows the delete is in progress.
+
+### Task 3: Fast bulk import
+- Problem: Import was slow because the route did `await Model.create(doc)` for EACH row — N sequential DB round trips. For 48 rows this took 8-10 seconds, hitting Vercel Hobby's 10s timeout and causing "Failed to fetch" errors.
+- Rewrote the import loop to collect all valid documents into a `toInsert[]` array (with `rowIndexByDoc[]` mapping each doc back to its Excel row index for error reporting).
+- After the loop, do a SINGLE `Model.insertMany(toInsert, { ordered: false })` call — this is ONE DB round trip instead of N.
+- `ordered: false` means MongoDB inserts all valid docs even if some fail, and returns per-doc errors via `writeErrors`.
+- Added `getModelForModule()` helper that maps module name → Mongoose model.
+- Handled BulkWriteError: walks `writeErrors`, maps each to its row index, and pushes either "Duplicate data found" (code 11000) or the validation error message to the `errors` array.
+- Orders and dispatch modules still use row-by-row create because they need sequential order/dispatch numbers (countDocuments + padStart). All other 13 modules use the fast bulk path.
+- Expected speedup: 48 rows should now import in <1 second instead of 8-10 seconds.
+
+### Verification
+- TypeScript: no errors in modified files
+- Full `next build`: ✓ Compiled successfully in 6.9s
+- Pushed to GitHub (commit b8fc709) → Vercel will auto-deploy
+- Cleaned up 3 test entries (2026-08-01/02/03) that were created during pre-push API testing
+
+Stage Summary:
+- Production main table now has a sticky bottom horizontal scrollbar (always visible, no need to scroll down).
+- Delete operations (single, bulk, all) now show a full-screen spinner overlay so the user always sees progress.
+- Import is now dramatically faster — 48 rows should import in <1 second via single insertMany call instead of 8-10 seconds via 48 sequential creates. This also fixes the "Failed to fetch" timeout errors.
+- Modified files:
+  • /home/z/my-project/src/components/ui/scrollable-table.tsx (NEW — shared component)
+  • /home/z/my-project/src/components/erp/production-module.tsx (use ScrollableTable + full-screen delete overlay)
+  • /home/z/my-project/src/components/erp/excel-import.tsx (use shared ScrollableTable)
+  • /home/z/my-project/src/app/api/import/route.ts (bulk insertMany optimization + getModelForModule helper)
