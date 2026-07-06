@@ -35,15 +35,24 @@ const SYNC_FIELDS = [
  * Re-aggregate all Production rows for the given date and upsert the Stock
  * entry for that date. Safe to call multiple times.
  *
- * Returns the upserted stock doc (or null if no productions exist for the date
- * AND we chose not to create an empty row — currently we DO create an empty
- * row, so the stock overview always reflects a "production exists" day).
+ * Returns the upserted stock doc (or null if no productions exist for the date —
+ * in which case the corresponding stock entry is also deleted so the Stock
+ * Overview doesn't show phantom all-zero rows for dates with no production).
  */
 export async function syncStockForDate(date: string) {
   await connectDB()
 
   // Aggregate all production rows for this date
   const productions = await Production.find({ date }).lean()
+
+  // Edge case: if no productions exist for this date (e.g. user deleted the
+  // last one), remove the corresponding Stock entry too. Stock is a derived
+  // view of Production — an empty production day should not leave a phantom
+  // all-zero stock row.
+  if (productions.length === 0) {
+    await Stock.deleteMany({ date })
+    return null
+  }
 
   const totals: Record<string, number> = {}
   for (const field of SYNC_FIELDS) {
