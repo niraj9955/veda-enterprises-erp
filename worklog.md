@@ -302,3 +302,30 @@ Stage Summary:
 - Bill creation now fetches customer's orders + payments automatically. User can one-click "Add to Bill" on any order to import all order items (no more manual bill creation when an order already exists). Customer's advance payments are auto-applied to paidAmount.
 - 5 history tabs in the right sidebar: Orders (default), Production, Dispatches, Bills, Payments.
 - All changes saved. User should push to GitHub / deploy to Vercel to see live.
+
+---
+Task ID: prod-cleanup-1
+Agent: main
+Task: Remove customer name and address fields from Production module
+
+Work Log:
+- Inspected production-module.tsx UI, /api/production route, /api/production/[id] route, models.ts ProductionSchema, excel-import.tsx production config, /api/import/route.ts production fields, /api/customers/[id]/bill-history/route.ts production query
+- Removed `customerName` + `address` from:
+  * production-module.tsx (Production interface, ProductionFormData interface, emptyForm, openEditDialog, handleSubmit payload, table header columns, table body cells, dialog form inputs, search filter fields list)
+  * models.ts ProductionSchema (drop fields + drop customerName index)
+  * /api/production/route.ts POST handler (stop accepting these fields)
+  * /api/production/[id]/route.ts PUT field allowlist (also fixed: previously had stale `brickType`/`quantityProduced`/`shift` fields that don't exist on schema; replaced with correct product fields)
+  * /api/production/[id]/route.ts DELETE (removed broken stock-decrement logic that referenced `production.brickType` + `production.quantityProduced` — these don't exist on the schema)
+  * /api/production/[id]/route.ts (removed unused `Stock` import)
+  * excel-import.tsx production field config (drop customerName + address column defs)
+  * /api/import/route.ts (drop customerName + address from production fields list + update duplicateRowLabel)
+  * /api/customers/[id]/bill-history/route.ts (production query now matches by customerId only — customerName $or fallback removed since the field no longer exists)
+- Build passed (npx next build succeeded, all routes compile)
+- Pre-existing TypeScript errors in customer-history-modal.tsx (referencing `productionTotals`, `productions`, `dailySells` on getCustomerHistory response) confirmed UNRELATED to this change — those errors existed before and are in an unrelated file
+- Committed (5fae4c5) and pushed to GitHub; Vercel auto-deploy triggered
+
+Stage Summary:
+- Production module no longer collects, stores, or displays Customer Name or Address. The form now has: Date → product quantity fields → transport charge → remarks.
+- Existing production rows in MongoDB will still have `customerName`/`address` fields in their documents (MongoDB is schemaless), but they will be silently ignored on read/write — no migration needed.
+- Customer bill-history now links productions to customers via customerId only, which is consistent with how Dispatches, Orders, Payments, and Bills are already linked.
+- Side-fix: PUT /api/production/[id] was previously a no-op for product quantity updates (its field allowlist only included `date`/`brickType`/`quantityProduced`/`shift`/`remarks`, none of which except `date` and `remarks` exist on the schema). Now correctly accepts all product fields.
