@@ -28,9 +28,10 @@ export async function POST(request: Request) {
       date: body.date,
       customerName: body.customerName,
       address: body.address || '',
+      contactNumber: body.contactNumber || '',
+      product: body.product || '',
       amount: Number(body.amount),
       remarks: body.remarks || '',
-      contactNumber: body.contactNumber || '',
     })
     return NextResponse.json({ dailySell: toObject(record) }, { status: 201 })
   } catch (error) {

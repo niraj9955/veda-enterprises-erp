@@ -355,9 +355,10 @@ export async function POST(request: Request) {
               date: String(row.date),
               customerName: String(row.customerName),
               address: String(row.address || ''),
+              contactNumber: String(row.contactNumber || row.mobile || ''),
+              product: String(row.product || ''),
               amount: Number(row.amount),
               remarks: String(row.remarks || ''),
-              contactNumber: String(row.contactNumber || row.mobile || ''),
             })
             imported++
             break
@@ -708,7 +709,7 @@ export async function GET() {
     { id: 'customers', label: 'Customers', fields: ['name', 'mobile', 'address', 'gstNumber', 'creditLimit'] },
     { id: 'production', label: 'Production', fields: ['date', 'cement', 'zigZagGrey80', 'zigZagRed80', 'zigZagYellow80', 'zigZagGrey60', 'zigZagRed60', 'zigZagYellow60', 'curveStone', 'chequreTile', 'dumbleGrey80', 'dumbleRed80', 'dumbleYellow80', 'transportationCharge', 'remarks'] },
     { id: 'stock', label: 'Stock', fields: ['date', 'cement', 'zigZagGrey80', 'zigZagRed80', 'zigZagYellow80', 'zigZagGrey60', 'zigZagRed60', 'zigZagYellow60', 'chequreTile', 'curveStone', 'dumbleGrey80', 'dumbleRed80', 'dumbleYellow80'] },
-    { id: 'dailySell', label: 'Daily Sell', fields: ['date', 'customerName', 'address', 'amount', 'remarks', 'contactNumber'] },
+    { id: 'dailySell', label: 'Daily Sell', fields: ['date', 'customerName', 'address', 'contactNumber', 'product', 'amount', 'remarks'] },
     { id: 'customerPayment', label: 'Customer Payment', fields: ['date', 'name', 'address', 'amount', 'remarks'] },
     { id: 'labourPayment', label: 'Labour Payment', fields: ['date', 'name', 'address', 'amount', 'remarks'] },
     { id: 'tractorPayment', label: 'Tractor Payment', fields: ['date', 'vendorName', 'quantityTon', 'rate', 'totalAmount', 'paidAmount', 'remainingAmount', 'remarks'] },

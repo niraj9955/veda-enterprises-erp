@@ -95,9 +95,10 @@ const DailySellSchema = new mongoose.Schema({
   date: { type: String, required: true },
   customerName: { type: String, required: true },
   address: { type: String, default: '' },
+  contactNumber: { type: String, default: '' },
+  product: { type: String, default: '' },
   amount: { type: Number, required: true },
   remarks: { type: String, default: '' },
-  contactNumber: { type: String, default: '' },
 }, { timestamps: true });
 DailySellSchema.index({ date: -1 });
 DailySellSchema.index({ customerName: 1 });

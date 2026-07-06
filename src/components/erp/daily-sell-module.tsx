@@ -46,9 +46,10 @@ interface DailySell {
   date: string
   customerName: string
   address: string
+  contactNumber: string
+  product: string
   amount: number
   remarks: string
-  contactNumber: string
   createdAt: string
   updatedAt: string
 }
@@ -57,9 +58,10 @@ interface DailySellFormData {
   date: string
   customerName: string
   address: string
+  contactNumber: string
+  product: string
   amount: string
   remarks: string
-  contactNumber: string
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -83,9 +85,10 @@ const emptyForm: DailySellFormData = {
   date: '',
   customerName: '',
   address: '',
+  contactNumber: '',
+  product: '',
   amount: '',
   remarks: '',
-  contactNumber: '',
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -132,7 +135,7 @@ export function DailySellModule() {
     if (!debouncedSearch.trim()) return dailySells
     const q = debouncedSearch.toLowerCase()
     return dailySells.filter((item: any) =>
-      ['date', 'customerName', 'address', 'contactNumber', 'remarks'].some((f) =>
+      ['date', 'customerName', 'address', 'contactNumber', 'product', 'remarks'].some((f) =>
         String((item as any)[f] ?? '').toLowerCase().includes(q)
       )
     )
@@ -159,9 +162,10 @@ export function DailySellModule() {
       date: item.date ? item.date.split('T')[0] : '',
       customerName: item.customerName || '',
       address: item.address || '',
+      contactNumber: item.contactNumber || '',
+      product: item.product || '',
       amount: String(item.amount || ''),
       remarks: item.remarks || '',
-      contactNumber: item.contactNumber || '',
     })
     setFormOpen(true)
   }
@@ -186,9 +190,10 @@ export function DailySellModule() {
         date: formData.date,
         customerName: formData.customerName.trim(),
         address: formData.address.trim(),
+        contactNumber: formData.contactNumber.trim(),
+        product: formData.product.trim(),
         amount: Number(formData.amount) || 0,
         remarks: formData.remarks.trim(),
-        contactNumber: formData.contactNumber.trim(),
       }
 
       if (editingItem) {
@@ -243,6 +248,7 @@ export function DailySellModule() {
         <TableCell><Skeleton className="h-4 w-28" /></TableCell>
         <TableCell><Skeleton className="h-4 w-24" /></TableCell>
         <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
         <TableCell><Skeleton className="h-4 w-20" /></TableCell>
         <TableCell><Skeleton className="h-8 w-20" /></TableCell>
       </TableRow>
@@ -329,8 +335,9 @@ export function DailySellModule() {
                   <TableHead>Date</TableHead>
                   <TableHead>Customer Name</TableHead>
                   <TableHead>Address</TableHead>
-                  <TableHead className="text-right">Amount (₹)</TableHead>
                   <TableHead>Contact Number</TableHead>
+                  <TableHead>Product</TableHead>
+                  <TableHead className="text-right">Amount (₹)</TableHead>
                   <TableHead>Remarks</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -340,7 +347,7 @@ export function DailySellModule() {
                   renderSkeletons()
                 ) : filteredDailySells.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
                       No daily sell entries yet. Click &quot;Add Daily Sell&quot; to get started.
                     </TableCell>
                   </TableRow>
@@ -350,8 +357,9 @@ export function DailySellModule() {
                       <TableCell className="font-medium whitespace-nowrap">{formatDate(item.date)}</TableCell>
                       <TableCell className="font-medium">{item.customerName}</TableCell>
                       <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.address || '—'}</TableCell>
-                      <TableCell className="text-right font-medium whitespace-nowrap">{formatCurrency(item.amount)}</TableCell>
                       <TableCell className="whitespace-nowrap">{item.contactNumber || '—'}</TableCell>
+                      <TableCell className="max-w-[150px] truncate">{item.product || '—'}</TableCell>
+                      <TableCell className="text-right font-medium whitespace-nowrap">{formatCurrency(item.amount)}</TableCell>
                       <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.remarks || '—'}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -401,15 +409,19 @@ export function DailySellModule() {
               <Input id="ds-address" placeholder="Enter address" value={formData.address} onChange={(e) => handleFormChange('address', e.target.value)} />
             </div>
             <div className="grid gap-2">
+              <Label htmlFor="ds-contact">Contact Number</Label>
+              <Input id="ds-contact" placeholder="Enter contact number" value={formData.contactNumber} onChange={(e) => handleFormChange('contactNumber', e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ds-product">Product</Label>
+              <Input id="ds-product" placeholder="Enter product name" value={formData.product} onChange={(e) => handleFormChange('product', e.target.value)} />
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="ds-amount">Amount (₹)</Label>
               <div className="relative">
                 <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                 <Input id="ds-amount" type="number" min="0" placeholder="0" className="pl-9" value={formData.amount} onChange={(e) => handleFormChange('amount', e.target.value)} />
               </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="ds-contact">Contact Number</Label>
-              <Input id="ds-contact" placeholder="Enter contact number" value={formData.contactNumber} onChange={(e) => handleFormChange('contactNumber', e.target.value)} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ds-remarks">Remarks</Label>
