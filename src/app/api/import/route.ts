@@ -10,6 +10,83 @@ import { syncStockForDates } from '@/lib/sync-stock'
 // Force dynamic — this route must never be cached/previewed as a static asset.
 export const dynamic = 'force-dynamic'
 
+// ─── Server-side date normalization ─────────────────────────────────────────
+//
+// The client (excel-import.tsx) already normalizes dates to YYYY-MM-DD, but
+// we re-normalize here as defense-in-depth so a direct API call (or a future
+// caller that bypasses the Excel wizard) is still safe.
+//
+// Supported input formats (any separator among - / . or space):
+//   • YYYY-MM-DD          (already canonical)
+//   • DD-MM-YYYY  DD/MM/YYYY  DD.MM.YYYY   (day-first, Indian format)
+//   • DD-MM-YY    DD/MM/YY    DD.MM.YY     (short year, prefixed with 20)
+//   • MM/DD/YYYY  (only when first number > 12, e.g. 13/01/2024 -> Jan 13)
+//   • Datetime strings like "2024-01-15 10:30:00" (time part stripped)
+//   • Excel serial numbers (e.g. 46178)
+//   • Fallback: native Date parsing, then the raw string unchanged.
+function normalizeDate(value: unknown): string {
+  if (value == null) return ''
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return value.toISOString().split('T')[0]
+  }
+  if (typeof value === 'number' && Number.isFinite(value) && value > 59 && value < 60000) {
+    // Excel serial date: days since 1899-12-30
+    const ms = Math.round((value - 25569) * 86400 * 1000)
+    const d = new Date(ms)
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0]
+  }
+  const raw = String(value ?? '').trim()
+  if (raw === '') return ''
+
+  // Strip time portion
+  const trimmed = raw
+    .replace(/[Tt]\s*\d{1,2}:\d{2}.*$/, '')
+    .replace(/\s+\d{1,2}:\d{2}.*$/, '')
+    .trim()
+  if (trimmed === '') return raw
+
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split('-')
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+  }
+  // YYYY/MM/DD or YYYY.MM.DD
+  const ymdMatch = trimmed.match(/^(\d{4})[/.\s](\d{1,2})[/.\s](\d{1,2})$/)
+  if (ymdMatch) {
+    const [, y, m, d] = ymdMatch
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+  }
+  // DD-MM-YYYY / DD/MM/YYYY / DD.MM.YYYY (with US fallback if second > 12)
+  const dmyMatch = trimmed.match(/^(\d{1,2})[/.\s-](\d{1,2})[/.\s-](\d{4})$/)
+  if (dmyMatch) {
+    const [, a, b, y] = dmyMatch
+    const d = Number(b) > 12 && Number(a) <= 12 ? b : a
+    const m = Number(b) > 12 && Number(a) <= 12 ? a : b
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+  }
+  // DD-MM-YY / DD/MM/YY / DD.MM.YY
+  const dmyShortMatch = trimmed.match(/^(\d{1,2})[/.\s-](\d{1,2})[/.\s-](\d{2})$/)
+  if (dmyShortMatch) {
+    const [, a, b, y] = dmyShortMatch
+    const d = Number(b) > 12 && Number(a) <= 12 ? b : a
+    const m = Number(b) > 12 && Number(a) <= 12 ? a : b
+    return `20${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+  }
+  // Native Date fallback
+  try {
+    const date = new Date(trimmed)
+    if (!isNaN(date.getTime())) return date.toISOString().split('T')[0]
+  } catch {}
+  return raw
+}
+
+// Normalize every date-like field on a row before validation/insert.
+// This keeps the per-module switch statement below simple.
+function normalizeRowDates(row: Record<string, unknown>): void {
+  if ('date' in row) row.date = normalizeDate(row.date)
+  if ('deliveryDate' in row) row.deliveryDate = normalizeDate(row.deliveryDate)
+}
+
 // ─── Duplicate detection ────────────────────────────────────────────────────
 //
 // Per user request: "jo duplicate ho use skip kre or uska mess de but jo
@@ -249,6 +326,11 @@ export async function POST(request: Request) {
     for (let i = 0; i < data.length; i++) {
       try {
         const row = data[i]
+
+        // Normalize date fields BEFORE duplicate check / validation / insert
+        // so DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY, datetime strings, and Excel
+        // serial numbers are all converted to canonical YYYY-MM-DD.
+        normalizeRowDates(row as Record<string, unknown>)
 
         // ── Duplicate check (against DB AND within this batch) ──────────
         const key = rowKey(module, row as Record<string, unknown>)

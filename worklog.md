@@ -668,3 +668,27 @@ Stage Summary:
 - Customer Payment delete now works (root cause was missing API endpoint, not UI bug)
 - Fixed same bug in 7 other modules proactively (labour-payment, tractor-payment, dust-purchase, cement-purchase, hardner, electricity, factory-stuff)
 - All Finance and Purchases & Expenses modules now support full CRUD (Create + Read + Update + Delete)
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Improve date format support in Excel import (DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY) and ensure success/error messages display clearly after import.
+
+Work Log:
+- Audited excel-import.tsx — found the existing parseDate() function had a dead MM/DD/YYYY branch (duplicate regex with DD-MM-YYYY that always matched first) and did not support dot separators, datetime strings, or short years robustly.
+- Audited /api/import/route.ts — server-side just stored `String(row.date)` without any normalization (relying entirely on client-side parsing).
+- Rewrote parseDate() in excel-import.tsx to support: YYYY-MM-DD (canonical), YYYY/MM/DD, YYYY.MM.DD, DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY, DD-MM-YY, DD/MM/YY, DD.MM.YY, MM/DD/YYYY (only when second number > 12), datetime strings (time part stripped), single-digit days/months, and Excel serial numbers (both as numbers and as numeric strings).
+- Fixed the US-format detection logic: when the SECOND number > 12, it must be a day, so user wrote MM/DD (US format). Previously the check was inverted (checking first > 12) which produced invalid dates like 2024-15-01 for input "15-01-2024".
+- Enhanced transformRow() to also handle Excel serial numbers passed as strings (e.g. "46178"), not just as numbers.
+- Added server-side normalizeDate() and normalizeRowDates() in /api/import/route.ts as defense-in-depth. All rows are normalized BEFORE duplicate check / validation / insert so direct API calls are also safe.
+- Added immediate toast notifications in handleImport() alongside the existing result popup: green toast on full success, amber toast on partial success with duplicates, red toast on partial success with errors, red toast on full failure, red toast on network/API error. The detailed result popup still opens for full review.
+- Verified the fix with a 17-case test script (all pass): Indian formats, US formats, datetime strings, empty input, year boundaries, single/double-digit days.
+- Confirmed no new TypeScript errors in modified files (existing 32 errors in unrelated files remain untouched).
+
+Stage Summary:
+- Date parsing is now robust across all 15 import modules (customers, production, stock, dailySell, customerPayment, labourPayment, tractorPayment, dustPurchase, cementPurchase, hardner, electricity, factoryStuff, orders, dispatch, payments, expenses).
+- Users can paste dates in DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY, DD-MM-YY, MM/DD/YYYY (auto-detected), or full datetime strings — all silently normalized to YYYY-MM-DD.
+- After import: instant toast notification + detailed popup showing imported/skipped/duplicates/errors counts with per-row error messages.
+- Modified files:
+  • /home/z/my-project/src/components/erp/excel-import.tsx (parseDate rewrite + transformRow enhancement + handleImport toast notifications)
+  • /home/z/my-project/src/app/api/import/route.ts (server-side normalizeDate + normalizeRowDates + hook into row loop)

@@ -363,9 +363,16 @@ function transformRow(
     if (['date', 'deliveryDate'].includes(fieldKey)) {
       // Excel may return dates as numeric serial numbers (e.g. 46178).
       // Detect that case and convert to YYYY-MM-DD before string parsing.
-      if (typeof value === 'number' && Number.isFinite(value)) {
+      // Also handle serial numbers passed as strings (e.g. "46178").
+      const numericValue = typeof value === 'number'
+        ? value
+        : (typeof value === 'string' && /^\d{4,6}(\.\d+)?$/.test(value.trim())
+            ? Number(value)
+            : NaN)
+
+      if (Number.isFinite(numericValue) && numericValue > 59 && numericValue < 60000) {
         // Excel serial date: days since 1899-12-30
-        const ms = Math.round((value - 25569) * 86400 * 1000)
+        const ms = Math.round((numericValue - 25569) * 86400 * 1000)
         const d = new Date(ms)
         if (!isNaN(d.getTime())) {
           result[fieldKey] = d.toISOString().split('T')[0]
@@ -449,40 +456,66 @@ function transformRow(
   return result
 }
 
-// Parse various date formats to YYYY-MM-DD
+// Parse various date formats to YYYY-MM-DD.
+// Supported formats (case-insensitive, any separator among - / . or space):
+//   • YYYY-MM-DD          (already canonical, returned as-is)
+//   • DD-MM-YYYY  DD/MM/YYYY  DD.MM.YYYY  (full year, day-first — Indian format)
+//   • DD-MM-YY    DD/MM/YY    DD.MM.YY    (short year, prefixed with 20)
+//   • MM/DD/YYYY  (US format — only used when second number is > 12, so 01/13/2024 -> Jan 13)
+//   • Datetime strings like "2024-01-15 10:30:00" or "15-01-2024 10:30" (time part stripped)
+//   • Excel serial numbers are handled earlier in transformRow() — not here.
+//   • Fallback: native Date parsing, then the raw string unchanged.
 function parseDate(value: string): string {
   if (!value || value.trim() === '') return new Date().toISOString().split('T')[0]
 
-  const trimmed = value.trim()
+  // Strip any time portion (e.g. " 10:30:00", "T10:30", " 10:30 AM")
+  // so datetime strings don't confuse the regex below.
+  const trimmed = value.trim().replace(/[Tt]\s*\d{1,2}:\d{2}.*$/, '').replace(/\s+\d{1,2}:\d{2}.*$/, '').trim()
+  if (trimmed === '') return new Date().toISOString().split('T')[0]
 
   // Already in YYYY-MM-DD format
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
-
-  // DD-MM-YYYY or DD/MM/YYYY
-  const dmyMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
-  if (dmyMatch) {
-    const [, d, m, y] = dmyMatch
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split('-')
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
 
-  // DD-MM-YY or DD/MM/YY
-  const dmyShortMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2})$/)
-  if (dmyShortMatch) {
-    const [, d, m, y] = dmyShortMatch
-    return `20${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+  // YYYY/MM/DD or YYYY.MM.DD
+  const ymdMatch = trimmed.match(/^(\d{4})[/.\s](\d{1,2})[/.\s](\d{1,2})$/)
+  if (ymdMatch) {
+    const [, y, m, d] = ymdMatch
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
 
-  // MM/DD/YYYY (US format) - only if first number > 12
-  const mdyMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
-  if (mdyMatch) {
-    const [, m, d, y] = mdyMatch
-    if (Number(m) > 12) {
-      return `${y}-${d.padStart(2, '0')}-${m.padStart(2, '0')}`
+  // DD-MM-YYYY / DD/MM/YYYY / DD.MM.YYYY  (day-first, full year)
+  //   — also handles MM/DD/YYYY when first number > 12 (e.g. 13/01/2024)
+  const dmyMatch = trimmed.match(/^(\d{1,2})[/.\s-](\d{1,2})[/.\s-](\d{4})$/)
+  if (dmyMatch) {
+    let [, a, b, y] = dmyMatch
+    let d: string, m: string
+    // If second number > 12, it MUST be a day -> user wrote MM/DD (US format)
+    if (Number(b) > 12 && Number(a) <= 12) {
+      m = a; d = b
+    } else {
+      // Default to DD-MM (Indian format)
+      d = a; m = b
     }
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
 
-  // Try native Date parsing as fallback
+  // DD-MM-YY / DD/MM/YY / DD.MM.YY (short year)
+  const dmyShortMatch = trimmed.match(/^(\d{1,2})[/.\s-](\d{1,2})[/.\s-](\d{2})$/)
+  if (dmyShortMatch) {
+    let [, a, b, y] = dmyShortMatch
+    let d: string, m: string
+    if (Number(b) > 12 && Number(a) <= 12) {
+      m = a; d = b
+    } else {
+      d = a; m = b
+    }
+    return `20${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+  }
+
+  // Try native Date parsing as fallback (handles ISO, RFC2822, etc.)
   try {
     const date = new Date(trimmed)
     if (!isNaN(date.getTime())) {
@@ -490,6 +523,7 @@ function parseDate(value: string): string {
     }
   } catch {}
 
+  // Last resort — return as-is so server-side validation can flag it
   return trimmed
 }
 
@@ -599,16 +633,51 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
         onSuccess()
       }
 
+      // Show an immediate toast so the user gets instant feedback, then
+      // open the detailed result popup for review.
+      const hasErrors = res.errors && res.errors.length > 0
+      if (res.imported === 0) {
+        toast({
+          title: 'Import failed',
+          description: hasErrors
+            ? `${res.errors!.length} error(s). See details.`
+            : 'No rows were imported. Please check your file and try again.',
+          variant: 'destructive',
+        })
+      } else if (hasErrors) {
+        toast({
+          title: 'Partial import',
+          description: `${res.imported} of ${res.total} row(s) imported. ${res.errors!.length} error(s) — see details.`,
+          variant: 'destructive',
+        })
+      } else if (skipped > 0) {
+        toast({
+          title: 'Import successful',
+          description: `${res.imported} of ${res.total} row(s) imported. ${skipped} duplicate(s) skipped.`,
+        })
+      } else {
+        toast({
+          title: 'Import successful',
+          description: `All ${res.imported} row(s) imported successfully.`,
+        })
+      }
+
       // Close the import dialog and open the result popup so the user
       // can review success/error details at their own pace.
       handleClose(false)
       setResultOpen(true)
     } catch (err) {
       // Network/API error — surface in the result popup as well.
+      const message = err instanceof Error ? err.message : 'Unknown error'
       setResult({
         imported: 0,
         total: transformedData.length,
-        errors: [err instanceof Error ? err.message : 'Unknown error'],
+        errors: [message],
+      })
+      toast({
+        title: 'Import failed',
+        description: message,
+        variant: 'destructive',
       })
       handleClose(false)
       setResultOpen(true)
