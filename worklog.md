@@ -692,3 +692,27 @@ Stage Summary:
 - Modified files:
   • /home/z/my-project/src/components/erp/excel-import.tsx (parseDate rewrite + transformRow enhancement + handleImport toast notifications)
   • /home/z/my-project/src/app/api/import/route.ts (server-side normalizeDate + normalizeRowDates + hook into row loop)
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Split import result popup into two separate popups (success vs error) and show what data was imported with proper scrolling.
+
+Work Log:
+- Added new state `importedRows` to snapshot the rows sent for import — survives both success and failure paths so the popup can always show what was attempted.
+- Updated `handleImport()` to call `setImportedRows(transformedData)` before the API call, so the data is captured even if the network request fails.
+- Replaced the single shared result Dialog with TWO completely separate Dialog components:
+  • SUCCESS POPUP — green theme, only opens when `result.errors` is empty AND `result.imported > 0`. Shows a green check icon in a circle, 3-column summary (Imported / Total / Duplicates Skipped), success banner, and a scrollable table of all imported rows.
+  • ERROR / FAILURE POPUP — red theme, opens when `result.errors` has entries OR `result.imported === 0`. Shows a red alert icon in a circle, 4-column summary (Imported / Total / Skipped / Errors), destructive Alert banner, scrollable error list, AND a scrollable data table where failed rows are highlighted with a red left border + "Failed" badge, and successful rows show a green "OK" badge.
+- Each popup's data table uses ScrollArea with sticky headers (z-10) so column headers stay visible while scrolling through many rows. Success popup table has max-h-[45vh], error popup table has max-h-[35vh] (leaving room for the error list above it).
+- Failed-row detection: parse error strings like "Row 3: Date is required" by matching `row ${i+1}:` (case-insensitive) against each row index. Rows with matching errors get the red highlight treatment.
+- Both popups share the same `closeResultPopup()` handler and `resultOpen` state, so only one is ever visible at a time (the open-condition expressions are mutually exclusive).
+- Verified: no new TypeScript errors in excel-import.tsx; no ESLint errors; file ends cleanly.
+
+Stage Summary:
+- User now sees TWO distinct popups after import:
+  1. Green "Import Successful!" popup — when all rows imported cleanly (or only duplicates skipped)
+  2. Red "Import Failed" / "Partial Import — Some Rows Failed" popup — when any error occurred
+- Each popup shows the actual data that was imported/attempted, in a properly scrollable table with sticky headers.
+- In the error popup, failed rows are visually highlighted (red left border + "Failed" badge) so the user can instantly see WHICH rows had problems and WHY (from the error list above the table).
+- Modified file: /home/z/my-project/src/components/erp/excel-import.tsx

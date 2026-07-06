@@ -535,6 +535,9 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<{ imported: number; total: number; duplicatesSkipped?: number; errors?: string[] } | null>(null)
   const [resultOpen, setResultOpen] = useState(false)
+  // Snapshot of the rows that were sent for import — used by the result
+  // popup to show "what was imported" with proper scrolling.
+  const [importedRows, setImportedRows] = useState<Record<string, unknown>[]>([])
   const [fileName, setFileName] = useState('')
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -622,6 +625,9 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
   const handleImport = async () => {
     if (transformedData.length === 0) return
     setImporting(true)
+    // Snapshot the rows being sent so the result popup can show them
+    // regardless of whether the API call succeeds or fails.
+    setImportedRows(transformedData)
     try {
       const res = await api.importData(module, transformedData)
       const skipped = res.total - res.imported
@@ -930,90 +936,168 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
       </DialogContent>
     </Dialog>
 
-    {/* Result popup — opens after import finishes (success, partial, or error). */}
-    <Dialog open={resultOpen} onOpenChange={(open) => { if (!open) closeResultPopup() }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {result && result.errors && result.errors.length > 0 ? (
-              <>
-                <AlertCircle className="h-5 w-5 text-destructive" />
-                <span className="text-destructive">
-                  {result.imported > 0 ? 'Partial Import' : 'Import Failed'}
-                </span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                <span className="text-emerald-700 dark:text-emerald-400">Import Successful</span>
-              </>
-            )}
+    {/* ═══ SUCCESS POPUP ════════════════════════════════════════════════════
+        Shown only when import succeeded with NO errors.
+        Distinct green-themed design, separate from the error popup.            */}
+    <Dialog
+      open={resultOpen && result !== null && (!result.errors || result.errors.length === 0) && result.imported > 0}
+      onOpenChange={(open) => { if (!open) closeResultPopup() }}
+    >
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+        <DialogHeader className="border-b border-emerald-200 dark:border-emerald-800 pb-4">
+          <DialogTitle className="flex items-center gap-3 text-emerald-700 dark:text-emerald-400">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+              <CheckCircle2 className="h-6 w-6" />
+            </span>
+            Import Successful!
           </DialogTitle>
-          <DialogDescription>
-            {template.label} import result
+          <DialogDescription className="text-base">
+            {template.label} • {result?.imported ?? 0} of {result?.total ?? 0} row(s) imported
           </DialogDescription>
         </DialogHeader>
 
         {result && (
-          <div className="space-y-4 py-2">
+          <div className="flex-1 overflow-hidden flex flex-col gap-4 py-2">
             {/* Summary numbers */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-4 text-center">
+                <div className="text-3xl font-bold text-emerald-700 dark:text-emerald-400">{result.imported}</div>
+                <div className="text-xs text-muted-foreground mt-1 uppercase tracking-wide">Imported</div>
+              </div>
+              <div className="rounded-lg border bg-muted/50 p-4 text-center">
+                <div className="text-3xl font-bold">{result.total}</div>
+                <div className="text-xs text-muted-foreground mt-1 uppercase tracking-wide">Total Rows</div>
+              </div>
+              <div className="rounded-lg border bg-amber-50 dark:bg-amber-900/20 p-4 text-center">
+                <div className="text-3xl font-bold text-amber-700 dark:text-amber-400">
+                  {result.duplicatesSkipped || 0}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1 uppercase tracking-wide">Duplicates Skipped</div>
+              </div>
+            </div>
+
+            {/* Success status banner */}
+            <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-3 text-sm text-emerald-800 dark:text-emerald-300">
+              {result.imported === result.total
+                ? `All ${result.imported} row(s) imported successfully. The list has been refreshed.`
+                : `${result.imported} of ${result.total} row(s) imported. ${result.duplicatesSkipped || 0} duplicate(s) were skipped.`}
+            </div>
+
+            {/* Imported data preview — proper scrollable table */}
+            {importedRows.length > 0 && (
+              <div className="flex flex-col gap-2 flex-1 overflow-hidden">
+                <h4 className="text-sm font-semibold flex items-center gap-2 shrink-0">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  Imported Data ({importedRows.length} rows)
+                </h4>
+                <ScrollArea className="flex-1 min-h-0 max-h-[45vh] rounded-md border">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-background z-10">
+                        <TableRow>
+                          <TableHead className="text-xs w-10">#</TableHead>
+                          {template.fields
+                            .filter((f) => mappedFieldKeys.has(f.key))
+                            .map((f) => (
+                              <TableHead key={f.key} className="text-xs whitespace-nowrap">{f.label}</TableHead>
+                            ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {importedRows.map((row, i) => (
+                          <TableRow key={i} className="hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10">
+                            <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
+                            {template.fields
+                              .filter((f) => mappedFieldKeys.has(f.key))
+                              .map((f) => (
+                                <TableCell key={f.key} className="text-xs whitespace-nowrap">
+                                  {String(row[f.key] ?? '')}
+                                </TableCell>
+                              ))}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter className="border-t pt-4">
+          <Button onClick={closeResultPopup} className="bg-emerald-600 hover:bg-emerald-700">
+            <CheckCircle2 className="h-4 w-4 mr-2" />
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* ═══ ERROR / FAILURE POPUP ════════════════════════════════════════════
+        Shown when import had errors OR failed completely.
+        Distinct red-themed design, separate from the success popup.           */}
+    <Dialog
+      open={resultOpen && result !== null && ((!!result.errors && result.errors.length > 0) || result.imported === 0)}
+      onOpenChange={(open) => { if (!open) closeResultPopup() }}
+    >
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+        <DialogHeader className="border-b border-destructive/30 pb-4">
+          <DialogTitle className="flex items-center gap-3 text-destructive">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
+              <AlertCircle className="h-6 w-6" />
+            </span>
+            {result && result.imported > 0 ? 'Partial Import — Some Rows Failed' : 'Import Failed'}
+          </DialogTitle>
+          <DialogDescription className="text-base">
+            {template.label} • {result?.imported ?? 0} of {result?.total ?? 0} row(s) imported
+          </DialogDescription>
+        </DialogHeader>
+
+        {result && (
+          <div className="flex-1 overflow-hidden flex flex-col gap-4 py-2">
+            {/* Summary numbers */}
+            <div className="grid grid-cols-4 gap-3">
               <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-900/20 p-3 text-center">
                 <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{result.imported}</div>
-                <div className="text-xs text-muted-foreground mt-1">Imported</div>
+                <div className="text-xs text-muted-foreground mt-1 uppercase tracking-wide">Imported</div>
               </div>
               <div className="rounded-lg border bg-muted/50 p-3 text-center">
                 <div className="text-2xl font-bold">{result.total}</div>
-                <div className="text-xs text-muted-foreground mt-1">Total Rows</div>
+                <div className="text-xs text-muted-foreground mt-1 uppercase tracking-wide">Total</div>
               </div>
               <div className="rounded-lg border bg-amber-50 dark:bg-amber-900/20 p-3 text-center">
                 <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">
                   {result.total - result.imported}
                 </div>
-                <div className="text-xs text-muted-foreground mt-1">Skipped</div>
+                <div className="text-xs text-muted-foreground mt-1 uppercase tracking-wide">Skipped</div>
               </div>
-              <div className="rounded-lg border bg-muted/50 p-3 text-center">
-                <div className="text-2xl font-bold">
-                  {result.duplicatesSkipped || 0}
+              <div className="rounded-lg border-2 border-destructive/30 bg-destructive/5 p-3 text-center">
+                <div className="text-2xl font-bold text-destructive">
+                  {result.errors?.length || 0}
                 </div>
-                <div className="text-xs text-muted-foreground mt-1">Duplicates</div>
+                <div className="text-xs text-muted-foreground mt-1 uppercase tracking-wide">Errors</div>
               </div>
             </div>
 
-            {/* Status message */}
-            <Alert variant={result.errors && result.errors.length > 0 ? 'destructive' : 'default'}>
+            {/* Error status banner */}
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                {result.imported === 0 ? (
-                  <span>
-                    No rows were imported.{' '}
-                    {result.errors && result.errors.length > 0
-                      ? `Reasons are listed below.`
-                      : 'Please check your file and column mapping, then try again.'}
-                  </span>
-                ) : result.imported === result.total ? (
-                  <span>All {result.imported} row(s) imported successfully. The list has been refreshed.</span>
-                ) : (
-                  <span>
-                    {result.imported} of {result.total} row(s) imported.{' '}
-                    {result.duplicatesSkipped && result.duplicatesSkipped > 0
-                      ? `${result.duplicatesSkipped} duplicate(s) skipped. `
-                      : ''}
-                    {result.errors && result.errors.length > 0
-                      ? `${result.errors.length} error(s) listed below.`
-                      : ''}
-                  </span>
-                )}
+                {result.imported === 0
+                  ? `No rows were imported. ${result.errors && result.errors.length > 0 ? `${result.errors.length} error(s) found — see below.` : 'Please check your file and column mapping, then try again.'}`
+                  : `${result.imported} of ${result.total} row(s) imported. ${result.errors?.length || 0} error(s) listed below.`}
               </AlertDescription>
             </Alert>
 
-            {/* Error list */}
+            {/* Error list — proper scrollable */}
             {result.errors && result.errors.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium flex items-center gap-2">
+              <div className="flex flex-col gap-2 shrink-0">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 text-destructive" />
-                  Errors ({result.errors.length})
+                  Error Details ({result.errors.length})
                 </h4>
-                <ScrollArea className="max-h-64 rounded-md border">
+                <ScrollArea className="max-h-40 rounded-md border border-destructive/20 bg-destructive/5">
                   <ul className="text-xs space-y-1 p-3">
                     {result.errors.map((err, i) => (
                       <li key={i} className="text-destructive flex gap-2">
@@ -1025,11 +1109,75 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                 </ScrollArea>
               </div>
             )}
+
+            {/* Attempted data preview — proper scrollable table with error rows highlighted */}
+            {importedRows.length > 0 && (
+              <div className="flex flex-col gap-2 flex-1 overflow-hidden">
+                <h4 className="text-sm font-semibold flex items-center gap-2 shrink-0">
+                  <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+                  Data Sent for Import ({importedRows.length} rows)
+                  <Badge variant="outline" className="text-xs ml-1">Red = failed</Badge>
+                </h4>
+                <ScrollArea className="flex-1 min-h-0 max-h-[35vh] rounded-md border">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-background z-10">
+                        <TableRow>
+                          <TableHead className="text-xs w-10">#</TableHead>
+                          <TableHead className="text-xs w-20">Status</TableHead>
+                          {template.fields
+                            .filter((f) => mappedFieldKeys.has(f.key))
+                            .map((f) => (
+                              <TableHead key={f.key} className="text-xs whitespace-nowrap">{f.label}</TableHead>
+                            ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {importedRows.map((row, i) => {
+                          // Match error strings like "Row 3: ..." to highlight failed rows
+                          const rowErrors = (result.errors || []).filter((e) =>
+                            e.toLowerCase().includes(`row ${i + 1}:`)
+                          )
+                          const hasError = rowErrors.length > 0
+                          return (
+                            <TableRow
+                              key={i}
+                              className={hasError
+                                ? 'bg-destructive/5 border-l-4 border-l-destructive'
+                                : 'hover:bg-muted/50'}
+                            >
+                              <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
+                              <TableCell className="text-xs">
+                                {hasError ? (
+                                  <Badge variant="destructive" className="text-xs">Failed</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800">
+                                    <CheckCircle2 className="h-3 w-3 mr-1" /> OK
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              {template.fields
+                                .filter((f) => mappedFieldKeys.has(f.key))
+                                .map((f) => (
+                                  <TableCell key={f.key} className="text-xs whitespace-nowrap">
+                                    {String(row[f.key] ?? '')}
+                                  </TableCell>
+                                ))}
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
           </div>
         )}
 
-        <DialogFooter>
-          <Button onClick={closeResultPopup} className="bg-emerald-600 hover:bg-emerald-700">
+        <DialogFooter className="border-t pt-4">
+          <Button onClick={closeResultPopup} variant="destructive">
+            <AlertCircle className="h-4 w-4 mr-2" />
             Close
           </Button>
         </DialogFooter>
