@@ -477,6 +477,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
   const [excelColumns, setExcelColumns] = useState<string[]>([])
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<{ imported: number; total: number; duplicatesSkipped?: number; errors?: string[] } | null>(null)
+  const [resultOpen, setResultOpen] = useState(false)
   const [fileName, setFileName] = useState('')
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -570,49 +571,24 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
       const dups = (res as { duplicatesSkipped?: number }).duplicatesSkipped || 0
       setResult({ imported: res.imported, total: res.total, duplicatesSkipped: dups, errors: res.errors })
 
-      if (res.imported > 0 && skipped === 0) {
-        // Full success — every row imported
-        toast({
-          title: 'Import successful',
-          description: `All ${res.imported} row(s) imported. List refreshed.`,
-        })
+      // Refresh the underlying list whenever at least one row imported.
+      if (res.imported > 0) {
         onSuccess()
-        // Auto-close after short delay so user sees the green banner
-        setTimeout(() => { handleClose() }, 1500)
-      } else if (res.imported > 0 && skipped > 0) {
-        // Partial success — some imported, some skipped
-        const dupText = dups > 0 ? ` (${dups} duplicate${dups !== 1 ? 's' : ''} skipped)` : ''
-        toast({
-          title: 'Partial import',
-          description: `${res.imported} imported, ${skipped} skipped${dupText}. List refreshed.`,
-        })
-        onSuccess()
-        // Keep dialog open longer so user can see the error list, then close
-        setTimeout(() => { handleClose() }, 3500)
-      } else {
-        // Zero imported — DON'T auto-close. Force user to see what went wrong.
-        const allDuplicates = dups > 0 && dups === skipped
-        const reason = allDuplicates
-          ? `All ${skipped} row(s) were duplicates — they already exist in records. Nothing new to import.`
-          : res.errors?.length
-            ? `${res.errors.length} row(s) skipped. Reasons are listed below.`
-            : skipped > 0
-              ? `All ${skipped} row(s) were skipped.`
-              : 'No rows were imported. Please check your file and column mapping.'
-        toast({
-          title: allDuplicates ? 'All rows were duplicates' : 'No rows imported',
-          description: reason,
-          variant: allDuplicates ? 'default' : 'destructive',
-        })
-        // Do NOT call onSuccess — nothing changed, no need to refresh.
-        // Do NOT auto-close — user needs to read the errors below.
       }
+
+      // Close the import dialog and open the result popup so the user
+      // can review success/error details at their own pace.
+      handleClose(false)
+      setResultOpen(true)
     } catch (err) {
-      toast({
-        title: 'Import failed',
-        description: err instanceof Error ? err.message : 'Unknown error',
-        variant: 'destructive',
+      // Network/API error — surface in the result popup as well.
+      setResult({
+        imported: 0,
+        total: transformedData.length,
+        errors: [err instanceof Error ? err.message : 'Unknown error'],
       })
+      handleClose(false)
+      setResultOpen(true)
     } finally {
       setImporting(false)
     }
@@ -631,22 +607,28 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
     toast({ title: 'Template downloaded', description: 'Fill in your data and upload the file' })
   }
 
-  const handleClose = () => {
+  const handleClose = (clearResult = true) => {
     setRawData([])
     setTransformedData([])
     setColumnMapping({})
     setExcelColumns([])
-    setResult(null)
+    if (clearResult) setResult(null)
     setFileName('')
     if (fileInputRef.current) fileInputRef.current.value = ''
     onClose()
+  }
+
+  const closeResultPopup = () => {
+    setResultOpen(false)
+    setResult(null)
   }
 
   const mappedFieldKeys = new Set(Object.values(columnMapping))
   const unmappedRequired = template.fields.filter((f) => f.required && !mappedFieldKeys.has(f.key))
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -823,44 +805,12 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
             </div>
           )}
 
-          {/* Import result */}
-          {result && (
-            <Alert variant={result.errors && result.errors.length > 0 ? 'destructive' : 'default'}>
-              <div className="flex items-start gap-2">
-                {result.errors && result.errors.length > 0 ? (
-                  <AlertCircle className="h-4 w-4 mt-0.5" />
-                ) : (
-                  <CheckCircle2 className="h-4 w-4 mt-0.5" />
-                )}
-                <AlertDescription>
-                  <p className="font-medium">
-                    Imported {result.imported} of {result.total} rows successfully
-                    {result.duplicatesSkipped && result.duplicatesSkipped > 0 ? (
-                      <span className="text-amber-700 dark:text-amber-400 font-normal">
-                        {' '}— {result.duplicatesSkipped} duplicate{result.duplicatesSkipped !== 1 ? 's' : ''} skipped
-                      </span>
-                    ) : null}
-                  </p>
-                  {result.errors && result.errors.length > 0 && (
-                    <ScrollArea className="max-h-32 mt-2">
-                      <ul className="text-xs space-y-1">
-                        {result.errors.slice(0, 20).map((err, i) => (
-                          <li key={i} className="text-destructive">{err}</li>
-                        ))}
-                        {result.errors.length > 20 && (
-                          <li className="text-muted-foreground">... and {result.errors.length - 20} more errors</li>
-                        )}
-                      </ul>
-                    </ScrollArea>
-                  )}
-                </AlertDescription>
-              </div>
-            </Alert>
-          )}
+          {/* Import result is now shown in a dedicated popup after the
+              import dialog closes — see the result Dialog below. */}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>Cancel</Button>
+          <Button variant="outline" onClick={() => handleClose()}>Cancel</Button>
           <Button
             onClick={handleImport}
             disabled={transformedData.length === 0 || importing || unmappedRequired.length > 0}
@@ -881,5 +831,112 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Result popup — opens after import finishes (success, partial, or error). */}
+    <Dialog open={resultOpen} onOpenChange={(open) => { if (!open) closeResultPopup() }}>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {result && result.errors && result.errors.length > 0 ? (
+              <>
+                <AlertCircle className="h-5 w-5 text-destructive" />
+                <span className="text-destructive">
+                  {result.imported > 0 ? 'Partial Import' : 'Import Failed'}
+                </span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                <span className="text-emerald-700 dark:text-emerald-400">Import Successful</span>
+              </>
+            )}
+          </DialogTitle>
+          <DialogDescription>
+            {template.label} import result
+          </DialogDescription>
+        </DialogHeader>
+
+        {result && (
+          <div className="space-y-4 py-2">
+            {/* Summary numbers */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-900/20 p-3 text-center">
+                <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{result.imported}</div>
+                <div className="text-xs text-muted-foreground mt-1">Imported</div>
+              </div>
+              <div className="rounded-lg border bg-muted/50 p-3 text-center">
+                <div className="text-2xl font-bold">{result.total}</div>
+                <div className="text-xs text-muted-foreground mt-1">Total Rows</div>
+              </div>
+              <div className="rounded-lg border bg-amber-50 dark:bg-amber-900/20 p-3 text-center">
+                <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">
+                  {result.total - result.imported}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">Skipped</div>
+              </div>
+              <div className="rounded-lg border bg-muted/50 p-3 text-center">
+                <div className="text-2xl font-bold">
+                  {result.duplicatesSkipped || 0}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">Duplicates</div>
+              </div>
+            </div>
+
+            {/* Status message */}
+            <Alert variant={result.errors && result.errors.length > 0 ? 'destructive' : 'default'}>
+              <AlertDescription>
+                {result.imported === 0 ? (
+                  <span>
+                    No rows were imported.{' '}
+                    {result.errors && result.errors.length > 0
+                      ? `Reasons are listed below.`
+                      : 'Please check your file and column mapping, then try again.'}
+                  </span>
+                ) : result.imported === result.total ? (
+                  <span>All {result.imported} row(s) imported successfully. The list has been refreshed.</span>
+                ) : (
+                  <span>
+                    {result.imported} of {result.total} row(s) imported.{' '}
+                    {result.duplicatesSkipped && result.duplicatesSkipped > 0
+                      ? `${result.duplicatesSkipped} duplicate(s) skipped. `
+                      : ''}
+                    {result.errors && result.errors.length > 0
+                      ? `${result.errors.length} error(s) listed below.`
+                      : ''}
+                  </span>
+                )}
+              </AlertDescription>
+            </Alert>
+
+            {/* Error list */}
+            {result.errors && result.errors.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-destructive" />
+                  Errors ({result.errors.length})
+                </h4>
+                <ScrollArea className="max-h-64 rounded-md border">
+                  <ul className="text-xs space-y-1 p-3">
+                    {result.errors.map((err, i) => (
+                      <li key={i} className="text-destructive flex gap-2">
+                        <span className="font-mono text-muted-foreground shrink-0">#{i + 1}</span>
+                        <span>{err}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </ScrollArea>
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button onClick={closeResultPopup} className="bg-emerald-600 hover:bg-emerald-700">
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
