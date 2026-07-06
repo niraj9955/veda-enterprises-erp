@@ -166,18 +166,28 @@
   top: 0;
   z-index: 10;
   /* Solid opaque background — prevents data rows from "ghosting" through
-     the header when scrolling. We use a solid white/near-white instead of
-     hsl(var(--background)) because some browsers render HSL variables with
-     slight alpha in dark mode, causing the overlap/bleed-through the user
-     reported. Two layers: an explicit solid color + the design token on
-     top, so theme overrides still work but we always have a fallback. */
-  background: #ffffff;
-  background: hsl(var(--background));
+     the header when scrolling.
+
+     IMPORTANT: this theme uses `oklch()` color values for --background,
+     NOT hsl(). So we must use `var(--background)` directly (NOT
+     `hsl(var(--background))` — that wrapping was invalid CSS and caused
+     the background to fall back to transparent, which is exactly the
+     overlap/ghosting bug the user reported).
+
+     We layer TWO backgrounds:
+       1. A solid #ffffff fallback (rendered first, painted on the bottom).
+       2. The theme's --background token on top.
+
+     If --background is somehow undefined or invalid, the white layer
+     still hides the data rows. In dark mode we override both layers
+     with the dark --background value via the .dark selector below. */
+  background-color: #ffffff;
+  background-color: var(--background);
   /* `box-shadow` creates a subtle 1px bottom border that visually
      separates the sticky header from the data rows below it. Using
      box-shadow instead of border-bottom avoids layout shifts that
      would push the sticky position out of alignment. */
-  box-shadow: inset 0 -1px 0 hsl(var(--border)), 0 1px 0 hsl(var(--border));
+  box-shadow: inset 0 -1px 0 var(--border), 0 1px 0 var(--border);
   /* Extra safety: make absolutely sure no alpha leaks through by
      forcing isolation. */
   isolation: isolate;
@@ -196,23 +206,19 @@
    through them horizontally. */
 .scrollable-table-wrapper [data-slot="table-body"] td.sticky {
   z-index: 5;
-  background: #ffffff;
-  background: hsl(var(--background));
+  background-color: #ffffff;
+  background-color: var(--background);
   isolation: isolate;
 }
 
-/* Dark mode: use the dark background token value so the solid fallback
-   doesn't render as bright white in dark themes. */
-@media (prefers-color-scheme: dark) {
-  .scrollable-table-wrapper [data-slot="table-header"] th,
-  .scrollable-table-wrapper [data-slot="table-body"] td.sticky {
-    background: hsl(var(--background));
-  }
-}
-/* Explicit dark class on <html> (shadcn convention) — same override. */
+/* Dark mode override — the solid #ffffff fallback above would render as
+   bright white in dark themes, which would look wrong. The .dark class
+   is shadcn's convention (applied to <html>) so we use it to swap the
+   fallback to a dark solid color while keeping --background on top. */
 .dark .scrollable-table-wrapper [data-slot="table-header"] th,
 .dark .scrollable-table-wrapper [data-slot="table-body"] td.sticky {
-  background: hsl(var(--background));
+  background-color: oklch(0.145 0 0);
+  background-color: var(--background);
 }
 
 /* ─── Print styles for Customer History page ─────────────────────────────
