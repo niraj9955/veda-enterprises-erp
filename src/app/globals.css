@@ -126,27 +126,43 @@
    sticky header. Two CSS rules make this work:
 
    1. The shadcn Table component wraps <table> in its own
-      <div class="overflow-x-auto">, which creates a NEW scroll context
-      that breaks `position: sticky` on <thead>. We override that inner
-      wrapper's overflow to `visible` so the only scroll context is
-      ScrollableTable's outer div.
+      <div class="relative w-full overflow-x-auto"> (the table-container
+      data-slot). That inner wrapper creates a new positioning context
+      that BREAKS `position: sticky` on <thead>/<th> — the sticky element
+      binds to the inner wrapper (which has no height constraint) instead
+      of the outer ScrollableTable div.
 
-   2. <thead> has `display: table-header-group` by default in some browsers,
-      which prevents `position: sticky` from working. We force it to
-      `display: table-header-group` (no-op in modern browsers) but more
-      importantly pin each <th> cell to the top of the scroll container.
-      Pinning on <th> (not <thead>) is more reliable across browsers.
+      We neutralize that inner wrapper by overriding its position to
+      `static` and its overflow to `visible` on BOTH axes. With no
+      scrollable ancestor between <th> and ScrollableTable's outer div,
+      `position: sticky; top: 0` correctly pins the header to the
+      ScrollableTable's viewport.
+
+   2. We apply `position: sticky; top: 0` directly to each <th> cell.
+      Pinning on <th> (rather than <thead>) is more reliable across
+      browsers because <thead> has `display: table-header-group` by
+      default, which interacts poorly with sticky positioning in some
+      engines.
    ---------------------------------------------------------------------- */
 .scrollable-table-wrapper [data-slot="table-container"] {
   overflow: visible !important;
-  /* The Table component sets `relative w-full overflow-x-auto` on this
-     inner wrapper. We neutralize the overflow so it doesn't shadow the
-     outer ScrollableTable's scroll context, allowing `position: sticky`
-     on the header to bind to the correct ancestor. */
+  position: static !important;
+  width: max-content !important;
+  max-width: none !important;
+  /* `width: max-content` makes the inner wrapper size to the table's
+     natural width instead of constraining it to the parent's width.
+     Combined with `overflow: visible`, the table can extend horizontally
+     without being clipped — and the outer ScrollableTable div handles
+     the actual horizontal scroll. */
+}
+
+.scrollable-table-wrapper [data-slot="table"] {
+  /* The table itself should not be a scroll context either. */
+  overflow: visible !important;
 }
 
 .scrollable-table-wrapper [data-slot="table-header"] th {
-  position: sticky;
+  position: sticky !important;
   top: 0;
   z-index: 10;
   background: hsl(var(--background));
@@ -155,20 +171,18 @@
   box-shadow: inset 0 -1px 0 hsl(var(--border));
 }
 
-/* If a column is also pinned left (e.g. the checkbox / Date column in
-   production-module), it needs a higher z-index so it stays above the
-   header when BOTH sticky top and sticky left apply. The element with
-   both sticky positions sits at the intersection. */
-.scrollable-table-wrapper [data-slot="table-header"] th[style*="position: sticky"],
+/* Header cells that are ALSO pinned left (e.g. the checkbox / Date column
+   in production-module) need a higher z-index so they stay above the
+   rest of the header when both sticky-top and sticky-left apply. */
 .scrollable-table-wrapper [data-slot="table-header"] th.sticky {
   z-index: 20;
 }
 
-/* Body cells with sticky left positioning (e.g. pinned checkbox column)
+/* Body cells with sticky-left positioning (e.g. pinned checkbox column)
    need to be above regular body cells but below the header. */
-.scrollable-table-wrapper [data-slot="table-body"] td.sticky,
-.scrollable-table-wrapper [data-slot="table-body"] td[style*="position: sticky"] {
+.scrollable-table-wrapper [data-slot="table-body"] td.sticky {
   z-index: 5;
+  background: hsl(var(--background));
 }
 
 /* ─── Print styles for Customer History page ─────────────────────────────

@@ -642,14 +642,12 @@ export async function POST(request: Request) {
               skipped++
               continue
             }
-            const count = await Order.countDocuments({})
-            const { Company } = await import('@/lib/models')
-            const company = await Company.findOne({})
-            const prefix = company?.orderPrefix || 'ORD'
-            const orderNumber = `${prefix}-${String(count + imported + 1).padStart(4, '0')}`
-
-            await Order.create({
-              orderNumber,
+            // Defer orderNumber generation to the bulk phase below — we just
+            // collect the row here. The bulk phase runs ONE countDocuments
+            // and ONE Company.findOne for the whole batch, then issues a
+            // single insertMany with sequential orderNumbers computed in
+            // memory. This eliminates the previous N × 3 query pattern.
+            toInsert.push({
               customerId: row.customerId,
               brickType: row.brickType,
               quantity: Number(row.quantity),
@@ -658,7 +656,7 @@ export async function POST(request: Request) {
               deliveryDate: row.deliveryDate || row.date || new Date().toISOString().split('T')[0],
               status: row.status || 'Pending',
             })
-            imported++
+            rowIndexByDoc.push(i)
             break
           }
 
@@ -668,14 +666,9 @@ export async function POST(request: Request) {
               skipped++
               continue
             }
-            const count = await Dispatch.countDocuments({})
-            const { Company } = await import('@/lib/models')
-            const company = await Company.findOne({})
-            const prefix = company?.dispatchPrefix || 'DSP'
-            const dispatchNumber = `${prefix}-${String(count + imported + 1).padStart(4, '0')}`
-
-            await Dispatch.create({
-              dispatchNumber,
+            // Same deferral as orders — orderNumber generation happens in
+            // the bulk phase below.
+            toInsert.push({
               customerId: row.customerId,
               orderId: row.orderId || null,
               truckNumber: row.truckNumber,
@@ -684,7 +677,7 @@ export async function POST(request: Request) {
               brickType: row.brickType,
               date: row.date,
             })
-            imported++
+            rowIndexByDoc.push(i)
             break
           }
 
@@ -733,11 +726,35 @@ export async function POST(request: Request) {
     // ── Bulk insert all valid documents in ONE DB call ───────────────────
     // This is the key optimization: instead of N separate `Model.create()`
     // calls (each a DB round trip), we do a single `Model.insertMany()`.
-    // Orders and dispatch are excluded because they need sequential numbering
-    // (already handled row-by-row above).
-    if (toInsert.length > 0 && !['orders', 'dispatch'].includes(module)) {
+    //
+    // For `orders` and `dispatch`, we need sequential orderNumber/dispatchNumber
+    // values. We do that efficiently here: ONE countDocuments + ONE
+    // Company.findOne for the whole batch, then compute sequential numbers
+    // in memory and insertMany in one call. Previously this was done
+    // per-row inside the loop (N × 3 queries).
+    if (toInsert.length > 0) {
       try {
         const Model = getModelForModule(module)
+
+        // ── Sequential numbering for orders & dispatch ──────────────────
+        // Pre-compute orderNumber/dispatchNumber for each doc in memory
+        // using a single count + single Company lookup.
+        if (module === 'orders' || module === 'dispatch') {
+          const { Company } = await import('@/lib/models')
+          const [existingCount, company] = await Promise.all([
+            module === 'orders' ? Order.countDocuments({}) : Dispatch.countDocuments({}),
+            Company.findOne({}),
+          ])
+          const prefix =
+            module === 'orders'
+              ? (company?.orderPrefix || 'ORD')
+              : (company?.dispatchPrefix || 'DSP')
+          const numField = module === 'orders' ? 'orderNumber' : 'dispatchNumber'
+          toInsert.forEach((doc, idx) => {
+            doc[numField] = `${prefix}-${String(existingCount + idx + 1).padStart(4, '0')}`
+          })
+        }
+
         if (Model) {
           // `ordered: false` lets MongoDB insert all valid docs even if some
           // fail validation — we collect per-doc errors from the result.
@@ -833,7 +850,11 @@ function getModelForModule(module: string) {
     case 'factoryStuff': return FactoryStuff
     case 'payments': return Payment
     case 'expenses': return Expense
-    // orders and dispatch need sequential numbering — handled separately.
+    // Orders and dispatch now use the bulk-insert path too — their
+    // sequential orderNumber/dispatchNumber is pre-computed in memory
+    // before insertMany is called. See the bulk phase in POST handler.
+    case 'orders': return Order
+    case 'dispatch': return Dispatch
     default: return null
   }
 }
