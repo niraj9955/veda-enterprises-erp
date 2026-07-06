@@ -546,3 +546,41 @@ Stage Summary:
 - Production import now auto-populates Stock Overview — every date touched gets its Stock snapshot re-aggregated from Production rows.
 - Production create/update/delete also syncs Stock so manual entries reflect too.
 - "Delete All" in Production also wipes Stock (so stock isn't left dangling).
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: Fix Stock Overview issues - field name sync, broken delete/edit, auto-populate from Production imports
+
+Work Log:
+- Investigated user complaint: Stock Overview shows wrong field names, delete/edit buttons broken, Production imports don't auto-populate Stock
+- Discovered root cause #1: 4 local commits unpushed - Vercel deployment was still on OLD code with "Zig Zag White 80mm" column headers in Production module
+- Discovered root cause #2: Stale MongoDB unique index `brickType_1` on `stocks` collection (from old schema) was blocking all new Stock inserts with "E11000 duplicate key error: { brickType: null }"
+- Discovered root cause #3: Stale MongoDB index `customerName_1` on `productions` collection (from old schema when production had customerName field)
+- Discovered root cause #4: syncStockForDate() always created an empty stock entry even when no productions existed for the date — caused phantom all-zero rows after deleting the last production
+
+Fixes applied:
+1. Pushed 4 unpushed local commits to GitHub → Vercel auto-redeployed with new code
+2. Created `/api/admin/fix-indexes` endpoint that drops stale indexes (brickType_1 from stocks, customerName_1 from productions)
+3. Ran the fix-indexes endpoint on production DB — both stale indexes dropped successfully
+4. Fixed `syncStockForDate()` in src/lib/sync-stock.ts: when no productions exist for a date, now DELETES the corresponding stock entry instead of creating an all-zero row
+5. Created `/api/admin/sync-all-stock` endpoint for one-shot backfill: aggregates all existing Production dates and syncs them to Stock
+6. Ran the backfill on production DB: all 48 production dates synced successfully (0 failures)
+7. Cleaned up test data (test production entry for 2026-07-15, empty stock entries)
+
+Verification:
+- POST /api/production → auto-syncs stock for that date ✓
+- PUT /api/stock/[id] (edit) → works correctly ✓
+- DELETE /api/stock/[id] → works correctly ✓
+- DELETE /api/production/[id] → triggers re-sync, removes empty stock entry if last production for date ✓
+- Excel import → syncStockForDates() called with all touched dates ✓
+- Final state: 48 stock records matching 48 production dates, 0 mismatches, 0 empty entries ✓
+- Vercel JS bundle contains "Zig Zag Grey 80mm" (12x) and 0 "Zig Zag White" references ✓
+
+Stage Summary:
+- Stock Overview now correctly displays all Production data with proper field names (zigZagGrey*, dumble*)
+- All three Stock CRUD operations (create/edit/delete) work correctly
+- Production imports and individual create/edit/delete operations auto-sync to Stock
+- Stale MongoDB indexes that were blocking inserts are now dropped
+- Backfill completed: all 48 historical production dates have corresponding Stock entries
+- New admin endpoints available: /api/admin/fix-indexes (drop stale indexes), /api/admin/sync-all-stock (backfill), /api/debug/sync?date=YYYY-MM-DD (single-date debug)
