@@ -3,20 +3,25 @@
 import React from 'react'
 
 // ═══ ScrollableTable ════════════════════════════════════════════════════════
-// A simple wrapper around a single native `overflow-auto` div.
+// A single scroll container that gives a table:
+//   • vertical scroll (capped by `maxHeight`)
+//   • horizontal scroll (native scrollbar)
+//   • a STICKY HEADER that stays pinned at the top while you scroll
 //
-// History: this component previously used a dual-scroll-area trick with a
-// JS-synced "fake" bottom scrollbar to keep the horizontal scrollbar pinned
-// to the bottom of the viewport. That approach caused TWO horizontal
-// scrollbars to render at the bottom (the body's native one was not reliably
-// hidden by `::-webkit-scrollbar:horizontal { display: none }` across browsers),
-// which confused users. We've reverted to the simplest possible design:
-// one scroll container, one scrollbar — both vertical and horizontal are
-// handled by the browser's native scrollbar.
+// Why we need the `scrollable-table-wrapper` class: the shadcn `Table`
+// component wraps `<table>` in its own `<div className="overflow-x-auto">`,
+// which creates a new scroll context. That interferes with `position: sticky`
+// on the header — the header ends up sticking to the inner wrapper (which
+// has no height constraint) instead of the outer ScrollableTable.
 //
-// The container's height is capped by `maxHeight` so very tall tables
-// scroll vertically inside the dialog. Wide tables scroll horizontally
-// with the same native scrollbar.
+// The CSS rule `.scrollable-table-wrapper [data-slot="table-container"]`
+// overrides that inner wrapper's `overflow` to `visible`, so the only
+// scroll context is this component's outer div — and `sticky top-0` on
+// `<thead>` works correctly.
+//
+// Header stickiness is achieved with the `.sticky-header` class applied to
+// `<TableHeader>`. The CSS rule for `.sticky-header th` pins each `<th>`
+// to the top of the scroll container.
 // ════════════════════════════════════════════════════════════════════════════
 export function ScrollableTable({
   children,
@@ -29,7 +34,7 @@ export function ScrollableTable({
 }) {
   return (
     <div
-      className={`rounded-md border overflow-auto ${maxHeight} ${className}`}
+      className={`scrollable-table-wrapper rounded-md border overflow-auto ${maxHeight} ${className}`}
     >
       <div className="min-w-max">{children}</div>
     </div>

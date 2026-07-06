@@ -514,7 +514,7 @@ export function ProductionModule() {
         <CardContent>
           <ScrollableTable maxHeight="max-h-[60vh]">
             <Table>
-              <TableHeader className="sticky top-0 bg-background z-10">
+              <TableHeader>
                 <TableRow>
                   <TableHead className="w-10 sticky left-0 bg-background z-20">
                     <Checkbox
@@ -526,7 +526,7 @@ export function ProductionModule() {
                       aria-label="Select all rows"
                     />
                   </TableHead>
-                  <TableHead className="sticky left-10 bg-background z-10">Date</TableHead>
+                  <TableHead className="sticky left-10 bg-background z-20">Date</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Cement</TableHead>
                   {PRODUCT_FIELDS.map((f) => (
                     <TableHead key={f.key} className="text-right whitespace-nowrap">{f.label}</TableHead>
@@ -552,7 +552,7 @@ export function ProductionModule() {
                       data-state={selectedIds.has(prod.id) ? 'selected' : undefined}
                       className={selectedIds.has(prod.id) ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}
                     >
-                      <TableCell className="w-10 sticky left-0 bg-background z-10">
+                      <TableCell className="w-10 sticky left-0 bg-background z-10 sticky">
                         <Checkbox
                           checked={selectedIds.has(prod.id)}
                           onCheckedChange={() => toggleSelect(prod.id)}

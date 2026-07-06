@@ -902,7 +902,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
               </h4>
               <ScrollableTable maxHeight="max-h-72">
                   <Table>
-                    <TableHeader className="sticky top-0 bg-background z-10">
+                    <TableHeader>
                       <TableRow>
                         <TableHead className="text-xs w-8">#</TableHead>
                         {template.fields
@@ -1022,7 +1022,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                 </h4>
                 <ScrollableTable maxHeight="max-h-[45vh]" className="flex-1 min-h-0">
                     <Table>
-                      <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableHeader>
                         <TableRow>
                           <TableHead className="text-xs w-10">#</TableHead>
                           {template.fields
@@ -1148,7 +1148,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                 </h4>
                 <ScrollableTable maxHeight="max-h-[35vh]" className="flex-1 min-h-0">
                     <Table>
-                      <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableHeader>
                         <TableRow>
                           <TableHead className="text-xs w-10">#</TableHead>
                           <TableHead className="text-xs w-20">Status</TableHead>
