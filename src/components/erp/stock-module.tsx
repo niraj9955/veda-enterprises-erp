@@ -65,12 +65,10 @@ interface StockSummaryItem {
   id: string
   key: string
   name: string
-  available: number
-  sold: number
-  soldCount: number
-  soldAmount: number
-  production: number
-  prevYearStock: number
+  totalProduction: number
+  latestDate: string
+  latestQuantity: number
+  productionDays: number
 }
 
 interface StockFormData {
@@ -329,10 +327,9 @@ export function StockModule() {
       <TableRow key={i}>
         <TableCell><Skeleton className="h-4 w-6" /></TableCell>
         <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-        <TableCell className="text-right"><Skeleton className="h-4 w-20" /></TableCell>
-        <TableCell className="text-right"><Skeleton className="h-4 w-20" /></TableCell>
-        <TableCell className="text-right"><Skeleton className="h-4 w-20" /></TableCell>
-        <TableCell className="text-right"><Skeleton className="h-4 w-20" /></TableCell>
+        <TableCell className="text-right"><Skeleton className="h-4 w-24" /></TableCell>
+        <TableCell className="text-right"><Skeleton className="h-4 w-40" /></TableCell>
+        <TableCell className="text-right"><Skeleton className="h-4 w-16" /></TableCell>
       </TableRow>
     ))
 
@@ -347,7 +344,7 @@ export function StockModule() {
           <div>
             <h2 className="text-2xl font-bold tracking-tight">Stock Overview</h2>
             <p className="text-sm text-muted-foreground">
-              Item-wise stock summary across all dates
+              Aggregated production summary across all dates
             </p>
           </div>
         </div>
@@ -440,10 +437,9 @@ export function StockModule() {
                     />
                   </TableHead>
                   <TableHead className="sticky left-10 bg-background z-20">Item Name</TableHead>
-                  <TableHead className="text-right whitespace-nowrap">Available Quantity</TableHead>
-                  <TableHead className="text-right whitespace-nowrap">Sell Number</TableHead>
-                  <TableHead className="text-right whitespace-nowrap">Production</TableHead>
-                  <TableHead className="text-right whitespace-nowrap">Previous Year Stock</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Total Production</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Latest Production</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Production Days</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -451,7 +447,7 @@ export function StockModule() {
                   renderSkeletons()
                 ) : filteredSummary.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
                       No stock data yet. Production entries will auto-populate the summary.
                     </TableCell>
                   </TableRow>
@@ -472,17 +468,25 @@ export function StockModule() {
                       <TableCell className="font-medium whitespace-nowrap sticky left-10 bg-background z-10 sticky">
                         {item.name}
                       </TableCell>
-                      <TableCell className="text-right font-mono whitespace-nowrap">
-                        {enIN.format(item.available)}
+                      <TableCell className="text-right font-mono whitespace-nowrap tabular-nums">
+                        {enIN.format(item.totalProduction)}
                       </TableCell>
-                      <TableCell className="text-right font-mono whitespace-nowrap">
-                        {enIN.format(item.sold)}
+                      <TableCell className="text-right whitespace-nowrap">
+                        <div className="flex flex-col items-end leading-tight">
+                          <span className="font-mono tabular-nums">
+                            {enIN.format(item.latestQuantity)}
+                          </span>
+                          {item.latestDate ? (
+                            <span className="text-xs text-muted-foreground">
+                              on {formatDate(item.latestDate)}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">never</span>
+                          )}
+                        </div>
                       </TableCell>
-                      <TableCell className="text-right font-mono whitespace-nowrap">
-                        {enIN.format(item.production)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono whitespace-nowrap">
-                        {enIN.format(item.prevYearStock)}
+                      <TableCell className="text-right font-mono whitespace-nowrap tabular-nums">
+                        {item.productionDays}
                       </TableCell>
                     </TableRow>
                   ))

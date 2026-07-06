@@ -970,3 +970,69 @@ Stage Summary:
   • /home/z/my-project/src/components/erp/production-module.tsx (use ScrollableTable + full-screen delete overlay)
   • /home/z/my-project/src/components/erp/excel-import.tsx (use shared ScrollableTable)
   • /home/z/my-project/src/app/api/import/route.ts (bulk insertMany optimization + getModelForModule helper)
+
+---
+Task ID: 12
+Agent: Main Agent
+Task: Fix Stock Overview UI to show meaningful aggregated data aligned with Production module (user said "UI THIK KRO JO CURRENT DATA H PRODUCTION ME USKE HISAB SE DATA DIKHAO STOCK OVER VIEW ME").
+
+Work Log:
+
+### Problem diagnosis
+User uploaded screenshot of current Stock Overview showing 5 columns:
+  Item Name | Available Quantity | Sell Number | Production | Previous Year Stock
+
+Data showed:
+  - Available Quantity: small numbers (13, 782, 1412, 810, 746, 729, 810, 320) — misleading because this was just the LATEST day's production snapshot, not actual "available stock"
+  - Sell Number: 0 for ALL rows — because DailySell.product is free-text and never matches paver block item names; also DailySell has no quantity field, only amount
+  - Production: real totals (539.5, 15335, etc.) — correct, sum across all production records
+  - Previous Year Stock: 0 for ALL rows — because Stock is auto-synced from Production on every mutation, no historical snapshots survive
+
+The "Available Quantity" column was especially misleading: it showed the latest day's production total (since Stock is auto-synced per-date from Production via syncStockForDate), but was labeled as if it represented actual stock on hand.
+
+### Fix #1: Rewrite /api/stock/summary route
+- Removed the misleading `available`, `sold`, `soldCount`, `soldAmount`, `prevYearStock` fields from the response (all were either always 0 or misleading)
+- Added new meaningful fields:
+  • `totalProduction` — sum of this field across EVERY Production record (matches the column total in Production module)
+  • `latestDate` — the most recent date (YYYY-MM-DD) on which this item had a non-zero production value
+  • `latestQuantity` — the production value on that latest date (sum across all Production rows for that date)
+  • `productionDays` — count of UNIQUE dates that have a non-zero production value for this field
+- Removed the DailySell import and matching logic (was dead code — always returned 0)
+- Now only 2 DB queries: Production.find + Stock.find (was 3 with DailySell)
+- Added a fallback: if Stock has no non-zero entry but Production does (sync interrupted), walk Production sorted date-desc to find the latest non-zero date
+
+### Fix #2: Update src/lib/api.ts types
+- Updated getStockSummary return type to match the new response shape:
+  `{ id, key, name, totalProduction, latestDate, latestQuantity, productionDays }[]`
+- Removed the old `{ available, sold, soldCount, soldAmount, production, prevYearStock }` fields
+
+### Fix #3: Update stock-module.tsx UI
+- Updated StockSummaryItem interface to match new API response
+- Renamed table columns from `Item Name | Available Quantity | Sell Number | Production | Previous Year Stock` to `Item Name | Total Production | Latest Production | Production Days` (5 → 4 data columns)
+- Updated table header cells and colSpan (6 → 5 with checkbox)
+- "Latest Production" column shows TWO-LINE cell:
+  • Top line: latest quantity (font-mono, tabular-nums)
+  • Bottom line: "on 15 Jul 2026" (text-xs, muted) — or "never" italic if no production
+- Removed Sell Number and Previous Year Stock columns entirely (always 0, no real signal)
+- Renamed subtitle from "Item-wise stock summary across all dates" to "Aggregated production summary across all dates" (clearer that this is derived from Production)
+- Updated skeleton rows to match new column count (5 cells instead of 6)
+- All existing features preserved: multi-select checkboxes, Delete Selected button, Delete All button, ScrollableTable with sticky header, sticky left columns (Item Name + checkbox)
+
+### Verification
+- TypeScript: no errors in modified files (stock-module.tsx, lib/api.ts, stock/summary/route.ts)
+- Full `next build`: ✓ Compiled successfully in 7.0s
+- All 12 static pages generated
+- /api/stock/summary route still registered in build output
+
+Stage Summary:
+- Stock Overview now shows 4 meaningful columns that align with Production data:
+  • Total Production (matches the column total in Production module)
+  • Latest Production (date + quantity — when was it last produced and how much)
+  • Production Days (how many unique dates have production for this item)
+- Removed 3 misleading/always-zero columns: Available Quantity, Sell Number, Previous Year Stock
+- The "Latest Production" column replaces the confusing "Available Quantity" — same underlying data (latest stock snapshot value) but with a clearer label AND the date shown beneath, so the user knows it's the latest day's production, not "available stock"
+- Multi-select delete, Delete All, ScrollableTable, sticky header — all preserved
+- Modified files:
+  • /home/z/my-project/src/app/api/stock/summary/route.ts (rewritten response shape)
+  • /home/z/my-project/src/lib/api.ts (updated getStockSummary return type)
+  • /home/z/my-project/src/components/erp/stock-module.tsx (new column layout + types)

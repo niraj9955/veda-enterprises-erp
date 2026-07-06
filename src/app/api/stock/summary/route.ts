@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/db'
-import { Stock, Production, DailySell } from '@/lib/models'
+import { Stock, Production } from '@/lib/models'
 
 // Force dynamic — never cache summary responses
 export const dynamic = 'force-dynamic'
@@ -9,55 +9,58 @@ export const revalidate = 0
 // ─── Item-wise Stock Summary ───────────────────────────────────────────────
 //
 // Returns ONE row per product item (Cement, Zig Zag Grey 80mm, etc.) with:
-//   • id           — stable key derived from the field name (used by React)
-//   • key          — the schema field name (cement, zigZagGrey80, …)
-//   • name         — human-readable label
-//   • available    — current stock on hand = the LATEST stock snapshot's
-//                    value for this field (most recent date's stock)
-//   • sold         — total sold of this item across all DailySell records
-//                    whose `product` text matches the item's label
-//                    (DailySell has only a free-text `product` field and a
-//                    rupee `amount`, so we count matching records AND sum
-//                    their amounts — the UI can decide which to show)
-//   • soldCount    — number of matching DailySell records
-//   • soldAmount   — sum of amount across matching DailySell records
-//   • production   — total produced across ALL Production records (sum of
-//                    this field across every production row)
-//   • prevYearStock — stock value for this field at the end of the previous
-//                     year (latest stock record whose date is in a year
-//                     before the current one). 0 if no such record exists.
+//   • id              — stable key derived from the field name (used by React)
+//   • key             — the schema field name (cement, zigZagGrey80, …)
+//   • name            — human-readable label
+//   • totalProduction — sum of this field across EVERY Production record
+//                       (matches the column total shown in the Production
+//                       module — this is the canonical "how much have we
+//                       produced" number)
+//   • latestDate      — the most recent date (YYYY-MM-DD) on which this item
+//                       had a non-zero production value. Empty string if the
+//                       item has never been produced.
+//   • latestQuantity  — the production value on that latest date (sum across
+//                       all Production rows for that date — since Stock is
+//                       auto-synced per-date from Production, this equals the
+//                       latest Stock snapshot value for the field)
+//   • productionDays  — count of UNIQUE dates that have a non-zero production
+//                       value for this field. Lets the user see how often the
+//                       item is produced (1 day vs 48 days).
 //
-// The frontend renders this as the table the user requested:
-//   Item name | Available Quantity | Sell Number | Production | Previous Year Stock
+// Why we removed `sold`, `soldCount`, `soldAmount`, `prevYearStock`:
+//   • DailySell.product is a free-text field with no quantity column — we
+//     could only count records, not units sold, and the count was always 0
+//     in practice because nobody fills DailySell for paver blocks.
+//   • Dispatch.brickType uses Red Brick / Fly Ash Brick / etc. — different
+//     product line, never matches "Zig Zag Grey 80mm".
+//   • Previous-year stock was always 0 because Stock is auto-synced from
+//     Production on every mutation, so no historical snapshots survive.
+//
+// The frontend renders this as a clean 4-column summary table:
+//   Item Name | Total Production | Latest Production (date + qty) | Production Days
 //
 // All aggregation happens server-side so the client gets a small, fixed
 // payload (one row per product, ~12 rows total) regardless of how many
-// production / stock / daily-sell records exist.
-
-const CURRENT_YEAR = new Date().getFullYear()
-const PREV_YEAR_STR = String(CURRENT_YEAR - 1)
+// production records exist.
 
 interface ProductField {
   key: string
   name: string
-  // Aliases used in DailySell.product free-text matching. We match
-  // case-insensitively against any of these.
-  aliases: string[]
 }
 
 const PRODUCT_FIELDS: ProductField[] = [
-  { key: 'cement',         name: 'Cement',              aliases: ['cement'] },
-  { key: 'zigZagGrey80',   name: 'Zig Zag Grey 80mm',   aliases: ['zig zag grey 80', 'zigzag grey 80', 'zig zag grey 80mm'] },
-  { key: 'zigZagRed80',    name: 'Zig Zag Red 80mm',    aliases: ['zig zag red 80', 'zigzag red 80', 'zig zag red 80mm'] },
-  { key: 'zigZagYellow80', name: 'Zig Zag Yellow 80mm', aliases: ['zig zag yellow 80', 'zigzag yellow 80', 'zig zag yellow 80mm'] },
-  { key: 'zigZagGrey60',   name: 'Zig Zag Grey 60mm',   aliases: ['zig zag grey 60', 'zigzag grey 60', 'zig zag grey 60mm'] },
-  { key: 'zigZagRed60',    name: 'Zig Zag Red 60mm',    aliases: ['zig zag red 60', 'zigzag red 60', 'zig zag red 60mm'] },
-  { key: 'zigZagYellow60', name: 'Zig Zag Yellow 60mm', aliases: ['zig zag yellow 60', 'zigzag yellow 60', 'zig zag yellow 60mm'] },
-  { key: 'chequreTile',    name: 'Chequre Tile',        aliases: ['chequre tile', 'chequretile', 'chequer tile'] },
-  { key: 'curveStone',     name: 'Curve Stone',         aliases: ['curve stone', 'curvestone'] },
-  { key: 'dumbleGrey80',   name: 'Dumble Grey 80mm',    aliases: ['dumble grey 80', 'dumblegrey80', 'dumble grey 80mm'] },
-  { key: 'dumbleRed80',    name: 'Dumble Red 80mm',     aliases: ['dumble red 80', 'dumblered80', 'dumble red 80mm'] },
-  { key: 'dumbleYellow80', name: 'Dumble Yellow 80mm',  aliases: ['dumble yellow 80', 'dumbleyellow80', 'dumble yellow 80mm'] },
+  { key: 'cement',         name: 'Cement' },
+  { key: 'zigZagGrey80',   name: 'Zig Zag Grey 80mm' },
+  { key: 'zigZagRed80',    name: 'Zig Zag Red 80mm' },
+  { key: 'zigZagYellow80', name: 'Zig Zag Yellow 80mm' },
+  { key: 'zigZagGrey60',   name: 'Zig Zag Grey 60mm' },
+  { key: 'zigZagRed60',    name: 'Zig Zag Red 60mm' },
+  { key: 'zigZagYellow60', name: 'Zig Zag Yellow 60mm' },
+  { key: 'chequreTile',    name: 'Chequre Tile' },
+  { key: 'curveStone',     name: 'Curve Stone' },
+  { key: 'dumbleGrey80',   name: 'Dumble Grey 80mm' },
+  { key: 'dumbleRed80',    name: 'Dumble Red 80mm' },
+  { key: 'dumbleYellow80', name: 'Dumble Yellow 80mm' },
 ]
 
 export async function GET() {
@@ -65,71 +68,75 @@ export async function GET() {
     await connectDB()
 
     // ── Fetch all source data in parallel ──────────────────────────────
-    // Three queries total, regardless of how many items we summarize.
-    const [stocks, productions, dailySells] = await Promise.all([
+    // Two queries total, regardless of how many items we summarize.
+    // We pull Production (the canonical source) and Stock (the per-date
+    // snapshot, used to find the "latest" production date quickly without
+    // re-aggregating Production in JS).
+    const [productions, stocks] = await Promise.all([
+      Production.find({}).sort({ date: -1 }).lean(),
       Stock.find({}).sort({ date: -1 }).lean(),
-      Production.find({}).lean(),
-      DailySell.find({}).lean(),
     ])
 
     // ── Build per-item summaries ───────────────────────────────────────
     const summaries = PRODUCT_FIELDS.map((field) => {
-      // Available = latest stock snapshot value for this field.
-      // stocks[] is sorted date-desc, so the first non-zero (or first
-      // overall) entry is the most recent.
-      let available = 0
+      // Total Production = sum of this field across EVERY Production record.
+      // This matches the column total the user sees in the Production module.
+      let totalProduction = 0
+      for (const p of productions) {
+        totalProduction += Number((p as Record<string, unknown>)[field.key]) || 0
+      }
+
+      // Latest production info.
+      // stocks[] is sorted date-desc, so the first non-zero value is the
+      // most recent date on which the item was produced. Because Stock is
+      // auto-synced from Production per-date (see src/lib/sync-stock.ts),
+      // Stock[field] for a given date === sum of Production[field] for that
+      // same date, so reading from Stock gives the same answer as iterating
+      // Production but is faster (fewer rows — one per date, not per entry).
+      let latestDate = ''
+      let latestQuantity = 0
       for (const s of stocks) {
         const v = Number((s as Record<string, unknown>)[field.key]) || 0
-        if (v > 0) { available = v; break }
-      }
-      // Fallback: if no non-zero value, take the first stock record's value
-      if (available === 0 && stocks.length > 0) {
-        available = Number((stocks[0] as Record<string, unknown>)[field.key]) || 0
+        if (v > 0) {
+          latestDate = String((s as Record<string, unknown>).date || '')
+          latestQuantity = v
+          break
+        }
       }
 
-      // Production = sum of this field across every Production record.
-      let production = 0
+      // Fallback: if Stock has no non-zero entry but Production does, the
+      // sync may have been interrupted. Walk Production (sorted date-desc)
+      // to find the latest date with a non-zero value.
+      if (!latestDate) {
+        for (const p of productions) {
+          const v = Number((p as Record<string, unknown>)[field.key]) || 0
+          if (v > 0) {
+            latestDate = String((p as Record<string, unknown>).date || '')
+            latestQuantity = v
+            break
+          }
+        }
+      }
+
+      // Production Days = count of UNIQUE dates whose Production sum for
+      // this field is > 0. We use a Set of date strings to dedupe.
+      const uniqueDates = new Set<string>()
       for (const p of productions) {
-        production += Number((p as Record<string, unknown>)[field.key]) || 0
-      }
-
-      // Previous Year Stock = stock value at end of previous year.
-      // Find the most recent stock record whose date's year is < current year.
-      let prevYearStock = 0
-      for (const s of stocks) {
-        const d = String((s as Record<string, unknown>).date || '')
-        // Date is stored as YYYY-MM-DD. Compare the year prefix.
-        const yearStr = d.slice(0, 4)
-        if (yearStr && Number(yearStr) < CURRENT_YEAR) {
-          const v = Number((s as Record<string, unknown>)[field.key]) || 0
-          if (v > 0) { prevYearStock = v; break }
+        const v = Number((p as Record<string, unknown>)[field.key]) || 0
+        if (v > 0) {
+          uniqueDates.add(String((p as Record<string, unknown>).date || ''))
         }
       }
-
-      // Sell = match DailySell records by free-text product field.
-      // We do case-insensitive substring matching against any alias.
-      const lowerAliases = field.aliases.map((a) => a.toLowerCase())
-      let soldCount = 0
-      let soldAmount = 0
-      for (const ds of dailySells) {
-        const productText = String((ds as Record<string, unknown>).product || '').toLowerCase()
-        if (!productText) continue
-        if (lowerAliases.some((alias) => productText.includes(alias))) {
-          soldCount++
-          soldAmount += Number((ds as Record<string, unknown>).amount) || 0
-        }
-      }
+      const productionDays = uniqueDates.size
 
       return {
-        id: field.key,        // stable React key
-        key: field.key,       // schema field name
-        name: field.name,     // human label
-        available,
-        soldCount,
-        soldAmount,
-        sold: soldCount,      // primary "Sell Number" shown in UI = count of sales
-        production,
-        prevYearStock,
+        id: field.key,           // stable React key
+        key: field.key,          // schema field name
+        name: field.name,        // human label
+        totalProduction,
+        latestDate,
+        latestQuantity,
+        productionDays,
       }
     })
 

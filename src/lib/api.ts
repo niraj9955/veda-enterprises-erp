@@ -168,7 +168,7 @@ export const api = {
   // Stock
   getStock: () => request<{ stocks: unknown[] }>('/stock'),
   getStockSummary: () =>
-    request<{ summary: Array<{ id: string; key: string; name: string; available: number; sold: number; soldCount: number; soldAmount: number; production: number; prevYearStock: number }> }>('/stock/summary'),
+    request<{ summary: Array<{ id: string; key: string; name: string; totalProduction: number; latestDate: string; latestQuantity: number; productionDays: number }> }>('/stock/summary'),
   createStock: (data: Record<string, unknown>) =>
     request<{ stock: unknown }>('/stock', { method: 'POST', body: JSON.stringify(data) }),
   updateStock: (id: string, data: Record<string, unknown>) =>
