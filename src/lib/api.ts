@@ -65,14 +65,18 @@ export const api = {
         date: string
         customerName?: string
         address?: string
-        zigZagWhite80?: number
+        cement?: number
+        zigZagGrey80?: number
         zigZagRed80?: number
         zigZagYellow80?: number
-        zigZagWhite60?: number
+        zigZagGrey60?: number
         zigZagRed60?: number
         zigZagYellow60?: number
         curveStone?: number
         chequreTile?: number
+        dumbleGrey80?: number
+        dumbleRed80?: number
+        dumbleYellow80?: number
         transportationCharge?: number
         remarks?: string
       }>

@@ -43,14 +43,17 @@ interface Summary {
 }
 
 interface ProductionTotals {
-  zigZagWhite80: number
+  zigZagGrey80: number
   zigZagRed80: number
   zigZagYellow80: number
-  zigZagWhite60: number
+  zigZagGrey60: number
   zigZagRed60: number
   zigZagYellow60: number
   curveStone: number
   chequreTile: number
+  dumbleGrey80: number
+  dumbleRed80: number
+  dumbleYellow80: number
   transportationCharge: number
 }
 
@@ -247,12 +250,15 @@ export function CustomerHistoryModal({ customerId, open, onClose }: CustomerHist
                   <Package className="size-3" /> Production Summary ({summary.productionCount} entries)
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
-                  {productionTotals.zigZagWhite80 > 0 && <Badge variant="outline" className="bg-white">ZZ White 80: <b className="ml-1">{productionTotals.zigZagWhite80}</b></Badge>}
+                  {productionTotals.zigZagGrey80 > 0 && <Badge variant="outline" className="bg-white">ZZ Grey 80: <b className="ml-1">{productionTotals.zigZagGrey80}</b></Badge>}
                   {productionTotals.zigZagRed80 > 0 && <Badge variant="outline" className="bg-white">ZZ Red 80: <b className="ml-1">{productionTotals.zigZagRed80}</b></Badge>}
                   {productionTotals.zigZagYellow80 > 0 && <Badge variant="outline" className="bg-white">ZZ Yellow 80: <b className="ml-1">{productionTotals.zigZagYellow80}</b></Badge>}
-                  {productionTotals.zigZagWhite60 > 0 && <Badge variant="outline" className="bg-white">ZZ White 60: <b className="ml-1">{productionTotals.zigZagWhite60}</b></Badge>}
+                  {productionTotals.zigZagGrey60 > 0 && <Badge variant="outline" className="bg-white">ZZ Grey 60: <b className="ml-1">{productionTotals.zigZagGrey60}</b></Badge>}
                   {productionTotals.zigZagRed60 > 0 && <Badge variant="outline" className="bg-white">ZZ Red 60: <b className="ml-1">{productionTotals.zigZagRed60}</b></Badge>}
                   {productionTotals.zigZagYellow60 > 0 && <Badge variant="outline" className="bg-white">ZZ Yellow 60: <b className="ml-1">{productionTotals.zigZagYellow60}</b></Badge>}
+                  {productionTotals.dumbleGrey80 > 0 && <Badge variant="outline" className="bg-white">D Grey 80: <b className="ml-1">{productionTotals.dumbleGrey80}</b></Badge>}
+                  {productionTotals.dumbleRed80 > 0 && <Badge variant="outline" className="bg-white">D Red 80: <b className="ml-1">{productionTotals.dumbleRed80}</b></Badge>}
+                  {productionTotals.dumbleYellow80 > 0 && <Badge variant="outline" className="bg-white">D Yellow 80: <b className="ml-1">{productionTotals.dumbleYellow80}</b></Badge>}
                   {productionTotals.curveStone > 0 && <Badge variant="outline" className="bg-white">Curve Stone: <b className="ml-1">{productionTotals.curveStone}</b></Badge>}
                   {productionTotals.chequreTile > 0 && <Badge variant="outline" className="bg-white">Chequre Tile: <b className="ml-1">{productionTotals.chequreTile}</b></Badge>}
                   {productionTotals.transportationCharge > 0 && (
@@ -495,14 +501,17 @@ function ProductionView({ productions }: { productions: Record<string, unknown>[
         <TableHeader>
           <TableRow>
             <TableHead>Date</TableHead>
-            <TableHead className="text-right">ZZ W80</TableHead>
+            <TableHead className="text-right">ZZ G80</TableHead>
             <TableHead className="text-right">ZZ R80</TableHead>
             <TableHead className="text-right">ZZ Y80</TableHead>
-            <TableHead className="text-right">ZZ W60</TableHead>
+            <TableHead className="text-right">ZZ G60</TableHead>
             <TableHead className="text-right">ZZ R60</TableHead>
             <TableHead className="text-right">ZZ Y60</TableHead>
             <TableHead className="text-right">Curve</TableHead>
             <TableHead className="text-right">Chequre</TableHead>
+            <TableHead className="text-right">D G80</TableHead>
+            <TableHead className="text-right">D R80</TableHead>
+            <TableHead className="text-right">D Y80</TableHead>
             <TableHead className="text-right">Transport</TableHead>
             <TableHead>Remarks</TableHead>
           </TableRow>
@@ -511,14 +520,17 @@ function ProductionView({ productions }: { productions: Record<string, unknown>[
           {productions.map((p) => (
             <TableRow key={String(p._id || p.id)}>
               <TableCell className="whitespace-nowrap">{formatDate(String(p.date || ''))}</TableCell>
-              <TableCell className="text-right">{Number(p.zigZagWhite80 || 0)}</TableCell>
+              <TableCell className="text-right">{Number(p.zigZagGrey80 || 0)}</TableCell>
               <TableCell className="text-right">{Number(p.zigZagRed80 || 0)}</TableCell>
               <TableCell className="text-right">{Number(p.zigZagYellow80 || 0)}</TableCell>
-              <TableCell className="text-right">{Number(p.zigZagWhite60 || 0)}</TableCell>
+              <TableCell className="text-right">{Number(p.zigZagGrey60 || 0)}</TableCell>
               <TableCell className="text-right">{Number(p.zigZagRed60 || 0)}</TableCell>
               <TableCell className="text-right">{Number(p.zigZagYellow60 || 0)}</TableCell>
               <TableCell className="text-right">{Number(p.curveStone || 0)}</TableCell>
               <TableCell className="text-right">{Number(p.chequreTile || 0)}</TableCell>
+              <TableCell className="text-right">{Number(p.dumbleGrey80 || 0)}</TableCell>
+              <TableCell className="text-right">{Number(p.dumbleRed80 || 0)}</TableCell>
+              <TableCell className="text-right">{Number(p.dumbleYellow80 || 0)}</TableCell>
               <TableCell className="text-right whitespace-nowrap">{formatCurrency(Number(p.transportationCharge || 0))}</TableCell>
               <TableCell className="text-muted-foreground text-xs">{String(p.remarks || '—')}</TableCell>
             </TableRow>

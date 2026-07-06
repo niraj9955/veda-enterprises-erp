@@ -45,14 +45,17 @@ interface Production {
   id: string
   date: string
   cement: number
-  zigZagWhite80: number
+  zigZagGrey80: number
   zigZagRed80: number
   zigZagYellow80: number
-  zigZagWhite60: number
+  zigZagGrey60: number
   zigZagRed60: number
   zigZagYellow60: number
   curveStone: number
   chequreTile: number
+  dumbleGrey80: number
+  dumbleRed80: number
+  dumbleYellow80: number
   transportationCharge: number
   remarks: string
   createdAt: string
@@ -62,14 +65,17 @@ interface Production {
 interface ProductionFormData {
   date: string
   cement: string
-  zigZagWhite80: string
+  zigZagGrey80: string
   zigZagRed80: string
   zigZagYellow80: string
-  zigZagWhite60: string
+  zigZagGrey60: string
   zigZagRed60: string
   zigZagYellow60: string
   curveStone: string
   chequreTile: string
+  dumbleGrey80: string
+  dumbleRed80: string
+  dumbleYellow80: string
   transportationCharge: string
   remarks: string
 }
@@ -96,27 +102,33 @@ const enIN = new Intl.NumberFormat('en-IN')
 const emptyForm: ProductionFormData = {
   date: '',
   cement: '',
-  zigZagWhite80: '',
+  zigZagGrey80: '',
   zigZagRed80: '',
   zigZagYellow80: '',
-  zigZagWhite60: '',
+  zigZagGrey60: '',
   zigZagRed60: '',
   zigZagYellow60: '',
   curveStone: '',
   chequreTile: '',
+  dumbleGrey80: '',
+  dumbleRed80: '',
+  dumbleYellow80: '',
   transportationCharge: '',
   remarks: '',
 }
 
 const PRODUCT_FIELDS: { key: keyof ProductionFormData; label: string }[] = [
-  { key: 'zigZagWhite80', label: 'Zig Zag White 80mm' },
+  { key: 'zigZagGrey80', label: 'Zig Zag Grey 80mm' },
   { key: 'zigZagRed80', label: 'Zig Zag Red 80mm' },
   { key: 'zigZagYellow80', label: 'Zig Zag Yellow 80mm' },
-  { key: 'zigZagWhite60', label: 'Zig Zag White 60mm' },
+  { key: 'zigZagGrey60', label: 'Zig Zag Grey 60mm' },
   { key: 'zigZagRed60', label: 'Zig Zag Red 60mm' },
   { key: 'zigZagYellow60', label: 'Zig Zag Yellow 60mm' },
   { key: 'curveStone', label: 'Curve Stone' },
   { key: 'chequreTile', label: 'Chequre Tile' },
+  { key: 'dumbleGrey80', label: 'Dumble Grey 80mm' },
+  { key: 'dumbleRed80', label: 'Dumble Red 80mm' },
+  { key: 'dumbleYellow80', label: 'Dumble Yellow 80mm' },
 ]
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -190,14 +202,17 @@ export function ProductionModule() {
     setFormData({
       date: prod.date ? prod.date.split('T')[0] : '',
       cement: String(prod.cement || ''),
-      zigZagWhite80: String(prod.zigZagWhite80 || ''),
+      zigZagGrey80: String(prod.zigZagGrey80 || ''),
       zigZagRed80: String(prod.zigZagRed80 || ''),
       zigZagYellow80: String(prod.zigZagYellow80 || ''),
-      zigZagWhite60: String(prod.zigZagWhite60 || ''),
+      zigZagGrey60: String(prod.zigZagGrey60 || ''),
       zigZagRed60: String(prod.zigZagRed60 || ''),
       zigZagYellow60: String(prod.zigZagYellow60 || ''),
       curveStone: String(prod.curveStone || ''),
       chequreTile: String(prod.chequreTile || ''),
+      dumbleGrey80: String(prod.dumbleGrey80 || ''),
+      dumbleRed80: String(prod.dumbleRed80 || ''),
+      dumbleYellow80: String(prod.dumbleYellow80 || ''),
       transportationCharge: String(prod.transportationCharge || ''),
       remarks: prod.remarks || '',
     })
@@ -219,14 +234,17 @@ export function ProductionModule() {
       const payload = {
         date: formData.date,
         cement: Number(formData.cement) || 0,
-        zigZagWhite80: Number(formData.zigZagWhite80) || 0,
+        zigZagGrey80: Number(formData.zigZagGrey80) || 0,
         zigZagRed80: Number(formData.zigZagRed80) || 0,
         zigZagYellow80: Number(formData.zigZagYellow80) || 0,
-        zigZagWhite60: Number(formData.zigZagWhite60) || 0,
+        zigZagGrey60: Number(formData.zigZagGrey60) || 0,
         zigZagRed60: Number(formData.zigZagRed60) || 0,
         zigZagYellow60: Number(formData.zigZagYellow60) || 0,
         curveStone: Number(formData.curveStone) || 0,
         chequreTile: Number(formData.chequreTile) || 0,
+        dumbleGrey80: Number(formData.dumbleGrey80) || 0,
+        dumbleRed80: Number(formData.dumbleRed80) || 0,
+        dumbleYellow80: Number(formData.dumbleYellow80) || 0,
         transportationCharge: Number(formData.transportationCharge) || 0,
         remarks: formData.remarks.trim(),
       }

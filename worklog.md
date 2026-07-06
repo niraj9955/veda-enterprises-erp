@@ -433,3 +433,46 @@ Stage Summary:
 - Triple-layer safety: admin-only backend + ?all=true query gate + type-to-confirm input on frontend
 - Only Production collection is wiped; all other records (Customer, Order, Bill, Payment, Stock, Dispatch) are NOT affected
 - Bill-history aggregations will lose their production totals (since the underlying productions are gone)
+
+---
+Task ID: excel-import-production-fix
+Agent: Main Agent
+Task: Fix wrong data import from Production.xlsx — Excel used "Zig Zag Grey 80mm" headers but production template only had "White" aliases; Excel had Dumble columns not in schema; Excel serial date numbers (e.g. 46178) weren't being parsed.
+
+Work Log:
+- Inspected Production.xlsx — 13 columns: Date, Cement, Zig Zag Grey/Red/Yellow 80mm + 60mm, Chequre Tile, Curve Stone, Dumble Grey/Red/Yellow 80mm. Mixed date formats: strings "DD-MM-YYYY" and Excel serial numbers (e.g. 46178).
+- Root cause #1: production template (excel-import.tsx) only had "White" aliases for zigZagWhite80/60. Excel "Grey" headers didn't match → those columns unmapped → values silently saved as 0. Stock template already used "Grey" aliases (inconsistent).
+- Root cause #2: ProductionSchema (models.ts) had no dumble* fields. Excel's 3 Dumble columns were silently dropped.
+- Root cause #3: parseDate() did `String(value)` first, so Excel serial numbers became "46178" → invalid date string → saved as-is.
+- Root cause #4: import API route.ts (POST /api/import) for production still referenced removed customerName/address fields and was missing cement + dumble.
+
+Decisions:
+- Renamed production fields zigZagWhite80→zigZagGrey80, zigZagWhite60→zigZagGrey60 (consistency with Stock schema and Excel headers).
+- Added dumbleGrey80, dumbleRed80, dumbleYellow80 to ProductionSchema.
+- Added Excel serial date parsing (typeof value === 'number' → (value - 25569) * 86400 * 1000 ms → ISO date).
+
+Files modified:
+- src/lib/models.ts — ProductionSchema: rename zigZagWhite*→zigZagGrey*, add dumble* fields
+- src/components/erp/production-module.tsx — interface/emptyForm/PRODUCT_FIELDS/openEditDialog/handleSubmit: rename + add dumble
+- src/app/api/production/route.ts — POST: rename + add dumble
+- src/app/api/production/[id]/route.ts — PUT allowlist: rename + add dumble
+- src/app/api/customers/[id]/bill-history/route.ts — PRODUCT_FIELDS: rename + add dumble
+- src/components/erp/excel-import.tsx — production template aliases (grey + mm variants + dumble); transformRow numeric list update; Excel serial date parsing
+- src/app/api/import/route.ts — production case: remove customerName/address, add cement + dumble; duplicate key changed to s(row.date); GET /api/import field list updated
+- src/components/erp/bill-module.tsx — PRODUCT_PRESETS + ProductionRow interface + PROD_FIELD_TO_LABEL: rename + add dumble
+- src/components/erp/customer-history-modal.tsx — ProductionTotals interface + badge labels + table headers/cells: rename + add dumble
+- src/app/api/dashboard/stats/route.ts — aggregation pipeline: rename + add dumble
+- src/lib/api.ts — getCustomerBillHistory productions type: rename + add dumble
+
+Validation:
+- Wrote scripts/test_import_mapping.js to simulate parse → autoMap → transformRow against the real Production.xlsx.
+- All 13 Excel columns now correctly auto-mapped (previously 4 unmapped).
+- All 48 rows have valid YYYY-MM-DD dates (both string DD-MM-YYYY and Excel serial 46178 → 2026-06-05).
+- 29 rows with ZZ Grey 80 data, 14 rows with ZZ Grey 60, 2 rows with Dumble data, 48 rows with cement — all preserved (previously Grey/Dumble would have been lost as 0).
+- tsc --noEmit shows zero new errors caused by my changes (3 pre-existing errors in customer-history-modal.tsx unrelated).
+
+Stage Summary:
+- Excel import for Production.xlsx now works correctly: all zigzag Grey quantities, Dumble quantities, cement, and dates (both string + serial) are preserved.
+- Production schema is now consistent with Stock schema (both use zigZagGrey80/60 + dumble* fields).
+- Bill module can bill all 11 product types (cement + 6 zigzag + curve stone + chequre tile + 3 dumble).
+- Dashboard stats correctly sum all production product columns.

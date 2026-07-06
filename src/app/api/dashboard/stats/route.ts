@@ -46,14 +46,17 @@ export async function GET() {
           pieces: {
             $sum: {
               $add: [
-                { $ifNull: ['$zigZagWhite80', 0] },
+                { $ifNull: ['$zigZagGrey80', 0] },
                 { $ifNull: ['$zigZagRed80', 0] },
                 { $ifNull: ['$zigZagYellow80', 0] },
-                { $ifNull: ['$zigZagWhite60', 0] },
+                { $ifNull: ['$zigZagGrey60', 0] },
                 { $ifNull: ['$zigZagRed60', 0] },
                 { $ifNull: ['$zigZagYellow60', 0] },
                 { $ifNull: ['$curveStone', 0] },
                 { $ifNull: ['$chequreTile', 0] },
+                { $ifNull: ['$dumbleGrey80', 0] },
+                { $ifNull: ['$dumbleRed80', 0] },
+                { $ifNull: ['$dumbleYellow80', 0] },
               ],
             },
           },

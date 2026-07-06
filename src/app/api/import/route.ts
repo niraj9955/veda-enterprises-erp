@@ -30,7 +30,8 @@ function rowKey(module: string, row: Record<string, unknown>): string {
     case 'customers':
       return s(row.mobile)
     case 'production':
-      return `${s(row.date)}|${s(row.customerName || row.customer)}|${s(row.address)}`
+      // One production entry per date — same date = duplicate (matches stock semantics)
+      return s(row.date)
     case 'stock':
       // One stock entry per date — same date = duplicate
       return s(row.date)
@@ -296,16 +297,19 @@ export async function POST(request: Request) {
             }
             await Production.create({
               date: String(row.date),
-              customerName: String(row.customerName || row.customer || ''),
-              address: String(row.address || ''),
-              zigZagWhite80: Number(row.zigZagWhite80) || 0,
+              customerId: row.customerId || null,
+              cement: Number(row.cement) || 0,
+              zigZagGrey80: Number(row.zigZagGrey80) || 0,
               zigZagRed80: Number(row.zigZagRed80) || 0,
               zigZagYellow80: Number(row.zigZagYellow80) || 0,
-              zigZagWhite60: Number(row.zigZagWhite60) || 0,
+              zigZagGrey60: Number(row.zigZagGrey60) || 0,
               zigZagRed60: Number(row.zigZagRed60) || 0,
               zigZagYellow60: Number(row.zigZagYellow60) || 0,
               curveStone: Number(row.curveStone) || 0,
               chequreTile: Number(row.chequreTile) || 0,
+              dumbleGrey80: Number(row.dumbleGrey80) || 0,
+              dumbleRed80: Number(row.dumbleRed80) || 0,
+              dumbleYellow80: Number(row.dumbleYellow80) || 0,
               transportationCharge: Number(row.transportationCharge) || 0,
               remarks: String(row.remarks || ''),
             })
@@ -681,7 +685,7 @@ function duplicateRowLabel(module: string, row: Record<string, unknown>): string
 export async function GET() {
   const modules = [
     { id: 'customers', label: 'Customers', fields: ['name', 'mobile', 'address', 'gstNumber', 'creditLimit'] },
-    { id: 'production', label: 'Production', fields: ['date', 'cement', 'zigZagWhite80', 'zigZagRed80', 'zigZagYellow80', 'zigZagWhite60', 'zigZagRed60', 'zigZagYellow60', 'curveStone', 'chequreTile', 'transportationCharge', 'remarks'] },
+    { id: 'production', label: 'Production', fields: ['date', 'cement', 'zigZagGrey80', 'zigZagRed80', 'zigZagYellow80', 'zigZagGrey60', 'zigZagRed60', 'zigZagYellow60', 'curveStone', 'chequreTile', 'dumbleGrey80', 'dumbleRed80', 'dumbleYellow80', 'transportationCharge', 'remarks'] },
     { id: 'stock', label: 'Stock', fields: ['date', 'cement', 'zigZagGrey80', 'zigZagRed80', 'zigZagYellow80', 'zigZagGrey60', 'zigZagRed60', 'zigZagYellow60', 'chequreTile', 'curveStone', 'dumbleGrey80', 'dumbleRed80', 'dumbleYellow80'] },
     { id: 'dailySell', label: 'Daily Sell', fields: ['date', 'customerName', 'address', 'amount', 'remarks', 'contactNumber'] },
     { id: 'customerPayment', label: 'Customer Payment', fields: ['date', 'name', 'address', 'amount', 'remarks'] },

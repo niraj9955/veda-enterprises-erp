@@ -60,15 +60,18 @@ const moduleTemplates: Record<string, {
     label: 'Production',
     fields: [
       { key: 'date', label: 'Date', required: true, aliases: ['date', 'production date', 'production_date', 'date of production', 'दिनांक', 'tarikh'] },
-      { key: 'cement', label: 'Cement', required: false, aliases: ['cement', 'cement bags', 'सीमेंट'] },
-      { key: 'zigZagWhite80', label: 'Zig Zag White 80', required: false, aliases: ['zigzagwhite80', 'zig zag white 80', 'zig_zag_white_80', 'zz white 80', 'white 80'] },
-      { key: 'zigZagRed80', label: 'Zig Zag Red 80', required: false, aliases: ['zigzagred80', 'zig zag red 80', 'zig_zag_red_80', 'zz red 80', 'red 80'] },
-      { key: 'zigZagYellow80', label: 'Zig Zag Yellow 80', required: false, aliases: ['zigzagyellow80', 'zig zag yellow 80', 'zig_zag_yellow_80', 'zz yellow 80', 'yellow 80'] },
-      { key: 'zigZagWhite60', label: 'Zig Zag White 60', required: false, aliases: ['zigzagwhite60', 'zig zag white 60', 'zig_zag_white_60', 'zz white 60', 'white 60'] },
-      { key: 'zigZagRed60', label: 'Zig Zag Red 60', required: false, aliases: ['zigzagred60', 'zig zag red 60', 'zig_zag_red_60', 'zz red 60', 'red 60'] },
-      { key: 'zigZagYellow60', label: 'Zig Zag Yellow 60', required: false, aliases: ['zigzagyellow60', 'zig zag yellow 60', 'zig_zag_yellow_60', 'zz yellow 60', 'yellow 60'] },
+      { key: 'cement', label: 'Cement', required: false, aliases: ['cement', 'cement bags', 'cementbags', 'सीमेंट'] },
+      { key: 'zigZagGrey80', label: 'Zig Zag Grey 80', required: false, aliases: ['zigzaggrey80', 'zig zag grey 80', 'zig_zag_grey_80', 'zz grey 80', 'grey 80', 'zigzagwhite80', 'zig zag white 80', 'zz white 80', 'white 80', 'zigzaggrey80mm', 'zig zag grey 80mm', 'zigzagwhite80mm', 'zig zag white 80mm'] },
+      { key: 'zigZagRed80', label: 'Zig Zag Red 80', required: false, aliases: ['zigzagred80', 'zig zag red 80', 'zig_zag_red_80', 'zz red 80', 'red 80', 'zigzagred80mm', 'zig zag red 80mm'] },
+      { key: 'zigZagYellow80', label: 'Zig Zag Yellow 80', required: false, aliases: ['zigzagyellow80', 'zig zag yellow 80', 'zig_zag_yellow_80', 'zz yellow 80', 'yellow 80', 'zigzagyellow80mm', 'zig zag yellow 80mm'] },
+      { key: 'zigZagGrey60', label: 'Zig Zag Grey 60', required: false, aliases: ['zigzaggrey60', 'zig zag grey 60', 'zig_zag_grey_60', 'zz grey 60', 'grey 60', 'zigzagwhite60', 'zig zag white 60', 'zz white 60', 'white 60', 'zigzaggrey60mm', 'zig zag grey 60mm', 'zigzagwhite60mm', 'zig zag white 60mm'] },
+      { key: 'zigZagRed60', label: 'Zig Zag Red 60', required: false, aliases: ['zigzagred60', 'zig zag red 60', 'zig_zag_red_60', 'zz red 60', 'red 60', 'zigzagred60mm', 'zig zag red 60mm'] },
+      { key: 'zigZagYellow60', label: 'Zig Zag Yellow 60', required: false, aliases: ['zigzagyellow60', 'zig zag yellow 60', 'zig_zag_yellow_60', 'zz yellow 60', 'yellow 60', 'zigzagyellow60mm', 'zig zag yellow 60mm'] },
       { key: 'curveStone', label: 'Curve Stone', required: false, aliases: ['curvestone', 'curve stone', 'curve_stone', 'curve'] },
       { key: 'chequreTile', label: 'Chequre Tile', required: false, aliases: ['chequretile', 'chequre tile', 'chequre_tile', 'chequre', 'tile'] },
+      { key: 'dumbleGrey80', label: 'Dumble Grey 80', required: false, aliases: ['dumblegrey80', 'dumble grey 80', 'dumble_grey_80', 'dumble grey 80mm'] },
+      { key: 'dumbleRed80', label: 'Dumble Red 80', required: false, aliases: ['dumblered80', 'dumble red 80', 'dumble_red_80', 'dumble red 80mm'] },
+      { key: 'dumbleYellow80', label: 'Dumble Yellow 80', required: false, aliases: ['dumbleyellow80', 'dumble yellow 80', 'dumble_yellow_80', 'dumble yellow 80mm'] },
       { key: 'transportationCharge', label: 'Transportation Charge', required: false, aliases: ['transportationcharge', 'transportation charge', 'transportation_charge', 'transport', 'transport charge'] },
       { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note', 'notes', 'comment', 'comments', 'टिप्पणी'] },
     ],
@@ -339,11 +342,10 @@ function transformRow(
     // Handle numeric fields
     if ([
       'quantityProduced', 'quantity', 'creditLimit', 'amount', 'rate',
-      'zigZagWhite80', 'zigZagRed80', 'zigZagYellow80',
-      'zigZagWhite60', 'zigZagRed60', 'zigZagYellow60',
+      'zigZagGrey80', 'zigZagRed80', 'zigZagYellow80',
+      'zigZagGrey60', 'zigZagRed60', 'zigZagYellow60',
       'curveStone', 'chequreTile', 'transportationCharge',
-      'cement', 'zigZagGrey80', 'zigZagGrey60',
-      'dumbleGrey80', 'dumbleRed80', 'dumbleYellow80',
+      'cement', 'dumbleGrey80', 'dumbleRed80', 'dumbleYellow80',
       'quantityTon', 'totalAmount', 'paidAmount', 'remainingAmount',
       'gst',
     ].includes(fieldKey)) {
@@ -354,6 +356,22 @@ function transformRow(
 
     // Handle date fields - try to parse various formats
     if (['date', 'deliveryDate'].includes(fieldKey)) {
+      // Excel may return dates as numeric serial numbers (e.g. 46178).
+      // Detect that case and convert to YYYY-MM-DD before string parsing.
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        // Excel serial date: days since 1899-12-30
+        const ms = Math.round((value - 25569) * 86400 * 1000)
+        const d = new Date(ms)
+        if (!isNaN(d.getTime())) {
+          result[fieldKey] = d.toISOString().split('T')[0]
+          continue
+        }
+      }
+      // Excel may also return a Date object if cellDates:true was used.
+      if (value instanceof Date && !isNaN(value.getTime())) {
+        result[fieldKey] = value.toISOString().split('T')[0]
+        continue
+      }
       result[fieldKey] = parseDate(String(value || ''))
       continue
     }
