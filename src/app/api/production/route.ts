@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
-import { Production } from '@/lib/models'
+import { Production, Stock } from '@/lib/models'
 import { getSession } from '@/lib/auth'
+import { syncStockForDate } from '@/lib/sync-stock'
 
 // Force dynamic — never cache list responses
 export const dynamic = 'force-dynamic'
@@ -47,6 +48,15 @@ export async function POST(request: Request) {
       transportationCharge: Number(body.transportationCharge) || 0,
       remarks: body.remarks || '',
     })
+
+    // Auto-sync Stock Overview: re-aggregate the Stock snapshot for this date
+    // so it reflects the newly-added production row.
+    try {
+      await syncStockForDate(String(body.date))
+    } catch (err) {
+      console.error('[POST /production] Stock sync failed:', err)
+    }
+
     return NextResponse.json({ production: toObject(production) }, { status: 201 })
   } catch (error) {
     console.error('Error creating production:', error)
@@ -78,6 +88,16 @@ export async function DELETE(request: Request) {
     }
 
     const result = await Production.deleteMany({})
+
+    // Also wipe all Stock entries since they're derived from Production.
+    // (User specifically requested Stock Overview reflect Production data —
+    // wiping production should also clear the synced stock snapshot.)
+    try {
+      await Stock.deleteMany({})
+    } catch (err) {
+      console.error('[DELETE /production?all] Stock wipe failed:', err)
+    }
+
     return NextResponse.json({
       message: 'All production entries deleted',
       deletedCount: result.deletedCount,

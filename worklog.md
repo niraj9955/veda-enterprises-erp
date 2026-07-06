@@ -510,3 +510,39 @@ Stage Summary:
 - Production form/table column order also updated to match.
 - Bill module product dropdowns and bill-history line items follow the same order — consistent across the whole app.
 - transportationCharge and remarks are still fully supported in the schema/form/PUT API; they're just no longer in the downloadable template (users can still add those columns to their Excel manually if they want to import them).
+
+---
+Task ID: stock-overview-fix-and-prod-sync
+Agent: Main Agent
+Task: User reported: (1) made changes to Stock Overview but not Production Management — verify, (2) Stock records can't be deleted or edited, (3) when production is imported, data should auto-show in Stock Overview.
+
+Root causes found:
+- BUG #1 (CRITICAL): /api/stock/[id]/route.ts FILE DID NOT EXIST. So PUT /api/stock/[id] and DELETE /api/stock/[id] both returned 404 — that's why edit/delete silently failed in Stock Overview.
+- BUG #2: stock-module.tsx used field keys with "mm" suffix (zigZagGrey80mm, zigZagRed80mm, etc.) but StockSchema in models.ts uses keys without "mm" suffix (zigZagGrey80, zigZagRed80). Same bug as the earlier production-module mismatch — values silently saved as 0.
+- BUG #3: Stock Overview had no auto-sync with Production. User wanted "jb production import ho to auto stock overview me dikhna chahiye sara production management ka data".
+
+Also verified production-module.tsx is correctly using zigZagGrey80 etc. (no "mm" suffix on keys) — Production Management was already fixed in a previous task. User's confusion was that Stock Overview still had bugs while Production Management was OK.
+
+Files modified/created:
+- src/components/erp/stock-module.tsx — renamed all field keys (zigZagGrey80mm→zigZagGrey80, etc.); kept display labels with "mm" suffix.
+- src/app/api/stock/[id]/route.ts (NEW) — created GET/PUT/DELETE handlers. PUT accepts both canonical names (zigZagGrey80) AND legacy "mm" aliases (zigZagGrey80mm) for backward compatibility.
+- src/lib/sync-stock.ts (NEW) — created syncStockForDate(date) and syncStockForDates(dates[]) helpers. For a given date: aggregates all Production rows for that date, sums each product column, upserts (create-or-replace) the Stock entry for that date.
+- src/app/api/import/route.ts — after production import, calls syncStockForDates() with all dates touched by the imported rows. Soft warning appended to errors array if sync fails (does NOT fail the import).
+- src/app/api/production/route.ts — POST (create) calls syncStockForDate(body.date); DELETE ?all=true also wipes Stock collection (since Stock is derived from Production).
+- src/app/api/production/[id]/route.ts — PUT (update) calls syncStockForDate(production.date); DELETE captures production.date BEFORE deletion then re-syncs that date (so stock reflects the now-missing row).
+
+Sync semantics:
+- Production is the source of truth for daily output.
+- Stock is a derived daily snapshot.
+- Manual Stock rows entered directly via the Stock form WILL be overwritten when production is later imported for the same date — by design, since production should win.
+
+Validation:
+- npx tsc --noEmit --skipLibCheck: zero new errors in modified files (all 17 errors shown are pre-existing in unrelated files like admin-panel, login-page, settings-module).
+- Dev server was already running, but local MongoDB is not configured (the app uses MongoDB Atlas via Vercel env). Code compiles fine; runtime test will happen on Vercel deploy.
+
+Stage Summary:
+- Stock Overview Edit + Delete now work (was 404 because /api/stock/[id]/route.ts was missing).
+- Stock Overview records will display correct product quantities (was 0 because of mm-suffix mismatch).
+- Production import now auto-populates Stock Overview — every date touched gets its Stock snapshot re-aggregated from Production rows.
+- Production create/update/delete also syncs Stock so manual entries reflect too.
+- "Delete All" in Production also wipes Stock (so stock isn't left dangling).

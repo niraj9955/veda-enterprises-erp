@@ -5,6 +5,7 @@ import {
   DailySell, CustomerPayment, LabourPayment, TractorPayment,
   DustPurchase, CementPurchase, Hardner, Electricity, FactoryStuff,
 } from '@/lib/models'
+import { syncStockForDates } from '@/lib/sync-stock'
 
 // Force dynamic — this route must never be cached/previewed as a static asset.
 export const dynamic = 'force-dynamic'
@@ -626,6 +627,26 @@ export async function POST(request: Request) {
     // Merge errors and skippedReasons so the UI can show every reason a row
     // was not imported (validation error OR duplicate OR anything else).
     const allReasons = [...errors, ...skippedReasons]
+
+    // Auto-sync Stock Overview from Production — when production rows are
+    // imported, the Stock module must reflect the latest daily totals
+    // automatically. We collect every date touched by THIS import and
+    // re-aggregate the matching Stock snapshot for each.
+    if (module === 'production' && imported > 0) {
+      const touchedDates = data
+        .map((row) => String(row.date || '').split('T')[0])
+        .filter(Boolean)
+      if (touchedDates.length > 0) {
+        try {
+          await syncStockForDates(touchedDates)
+        } catch (err) {
+          console.error('[import] Stock sync failed:', err)
+          // Don't fail the import — production rows were already saved.
+          // Just append a soft warning to the error list.
+          allReasons.push('Warning: production rows imported, but Stock Overview auto-sync failed. Check server logs.')
+        }
+      }
+    }
 
     return NextResponse.json({
       success: true,

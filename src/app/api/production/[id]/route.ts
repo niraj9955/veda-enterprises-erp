@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { Production } from '@/lib/models'
+import { syncStockForDate } from '@/lib/sync-stock'
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -51,6 +52,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Production entry not found' }, { status: 404 })
     }
 
+    // Auto-sync Stock Overview for this production's date so manual edits
+    // to a production row reflect in the stock snapshot.
+    try {
+      await syncStockForDate(String(production.date))
+    } catch (err) {
+      console.error('[PUT /production/[id]] Stock sync failed:', err)
+    }
+
     return NextResponse.json({ production: toObject(production) })
   } catch (error) {
     console.error('Error updating production:', error)
@@ -68,11 +77,24 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       return NextResponse.json({ error: 'Production entry not found' }, { status: 404 })
     }
 
+    const touchedDate = String(production.date || '')
+
     // Note: Stock auto-update on production delete is intentionally omitted —
     // Production tracks daily output quantities per product, while Stock is a
     // separate daily snapshot. The two are reconciled via the Stock module UI.
-
     await Production.findByIdAndDelete(id)
+
+    // Re-aggregate Stock snapshot for the deleted row's date — if no other
+    // production rows exist for that date, the Stock entry will be replaced
+    // with zeros (or could be deleted, but we keep a zero row for visibility).
+    if (touchedDate) {
+      try {
+        await syncStockForDate(touchedDate)
+      } catch (err) {
+        console.error('[DELETE /production/[id]] Stock sync failed:', err)
+      }
+    }
+
     return NextResponse.json({ message: 'Production entry deleted successfully' })
   } catch (error) {
     console.error('Error deleting production:', error)
