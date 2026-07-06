@@ -476,3 +476,37 @@ Stage Summary:
 - Production schema is now consistent with Stock schema (both use zigZagGrey80/60 + dumble* fields).
 - Bill module can bill all 11 product types (cement + 6 zigzag + curve stone + chequre tile + 3 dumble).
 - Dashboard stats correctly sum all production product columns.
+
+---
+Task ID: production-template-match-screenshot
+Agent: Main Agent
+Task: Replace the current Production Excel template with the user's uploaded screenshot template (13 columns: Date, Cement, ZZ Grey/Red/Yellow 80mm, ZZ Grey/Red/Yellow 60mm, Chequre Tile, Curve Stone, Dumble Grey/Red/Yellow 80mm — no Transportation Charge, no Remarks).
+
+Work Log:
+- Used VLM (z-ai vision) to extract exact column headers and order from pasted_image_1783323051397.png.
+- Compared with current template fields. Found 3 mismatches: (1) labels missing "mm" suffix, (2) Curve Stone was before Chequre Tile (image has Chequre Tile first), (3) downloadTemplate() included Transportation Charge + Remarks columns which are not in user's template.
+- Added `inTemplate?: boolean` optional field to moduleTemplates type definition.
+- Marked `transportationCharge` and `remarks` as `inTemplate: false` for production — keeps them importable (auto-mapped when present) but excludes them from the downloadable blank template.
+- Updated `downloadTemplate()` to filter `f.inTemplate !== false` before generating CSV headers.
+- Updated all labels to include "mm" suffix (Zig Zag Grey 80mm, etc.) for consistency with the screenshot.
+- Reordered fields to match screenshot: ... ZZ Y60, Chequre Tile, Curve Stone, Dumble Grey 80mm ...
+- Synced the same order in production-module.tsx PRODUCT_FIELDS (UI table columns), bill-history API PRODUCT_FIELDS (line items), and bill-module.tsx PRODUCT_PRESETS + PROD_FIELD_TO_LABEL.
+- Added alias 'chequr e tile' / 'chequr etile' to chequreTile (in case Excel header has typo as in screenshot OCR).
+
+Files modified:
+- src/components/erp/excel-import.tsx — type def + production template (labels + order + inTemplate flag) + downloadTemplate filter
+- src/components/erp/production-module.tsx — PRODUCT_FIELDS reorder (Chequre before Curve)
+- src/app/api/customers/[id]/bill-history/route.ts — PRODUCT_FIELDS reorder
+- src/components/erp/bill-module.tsx — PRODUCT_PRESETS reorder + PROD_FIELD_TO_LABEL reorder
+
+Validation:
+- Wrote scripts/verify_template.js that mirrors downloadTemplate() logic. Output matches screenshot exactly:
+  Date, Cement, ZZ Grey/Red/Yellow 80mm, ZZ Grey/Red/Yellow 60mm, Chequre Tile, Curve Stone, Dumble Grey/Red/Yellow 80mm
+  (13 columns, MATCH: YES ✓)
+- tsc --noEmit --skipLibCheck: zero errors in modified files.
+
+Stage Summary:
+- "Download Template" button on Production module now generates exactly the 13-column template shown in user's screenshot.
+- Production form/table column order also updated to match.
+- Bill module product dropdowns and bill-history line items follow the same order — consistent across the whole app.
+- transportationCharge and remarks are still fully supported in the schema/form/PUT API; they're just no longer in the downloadable template (users can still add those columns to their Excel manually if they want to import them).

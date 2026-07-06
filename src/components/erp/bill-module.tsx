@@ -144,18 +144,18 @@ interface CustomerBillHistory {
 }
 
 const PRODUCT_PRESETS = [
+  'Cement',
   'Zig Zag Grey 80mm',
   'Zig Zag Red 80mm',
   'Zig Zag Yellow 80mm',
   'Zig Zag Grey 60mm',
   'Zig Zag Red 60mm',
   'Zig Zag Yellow 60mm',
-  'Curve Stone',
   'Chequre Tile',
+  'Curve Stone',
   'Dumble Grey 80mm',
   'Dumble Red 80mm',
   'Dumble Yellow 80mm',
-  'Cement',
   'Dust',
   'Hardner',
   'Other',
@@ -180,18 +180,18 @@ const STATUS_COLORS: Record<string, string> = {
 
 // Map a production field key to the matching PRODUCT_PRESETS label
 const PROD_FIELD_TO_LABEL: Record<string, string> = {
+  cement: 'Cement (bags)',
   zigZagGrey80: 'Zig Zag Grey 80mm',
   zigZagRed80: 'Zig Zag Red 80mm',
   zigZagYellow80: 'Zig Zag Yellow 80mm',
   zigZagGrey60: 'Zig Zag Grey 60mm',
   zigZagRed60: 'Zig Zag Red 60mm',
   zigZagYellow60: 'Zig Zag Yellow 60mm',
-  curveStone: 'Curve Stone',
   chequreTile: 'Chequre Tile',
+  curveStone: 'Curve Stone',
   dumbleGrey80: 'Dumble Grey 80mm',
   dumbleRed80: 'Dumble Red 80mm',
   dumbleYellow80: 'Dumble Yellow 80mm',
-  cement: 'Cement (bags)',
 }
 
 // ════════════════════════════════════════════════════════════════════════════

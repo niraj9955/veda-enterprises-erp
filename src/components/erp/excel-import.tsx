@@ -41,10 +41,14 @@ interface ExcelImportProps {
   onSuccess: () => void
 }
 
-// Field definitions for each module - includes all possible column name aliases
+// Field definitions for each module - includes all possible column name aliases.
+// `inTemplate: false` keeps a field importable (auto-mapped when present in the
+// uploaded Excel) but EXCLUDES it from the downloadable blank template — used
+// when the user's official template (e.g. the production Excel screenshot)
+// does not include that column.
 const moduleTemplates: Record<string, {
   label: string
-  fields: { key: string; label: string; required: boolean; aliases: string[] }[]
+  fields: { key: string; label: string; required: boolean; aliases: string[]; inTemplate?: boolean }[]
 }> = {
   customers: {
     label: 'Customers',
@@ -61,19 +65,19 @@ const moduleTemplates: Record<string, {
     fields: [
       { key: 'date', label: 'Date', required: true, aliases: ['date', 'production date', 'production_date', 'date of production', 'दिनांक', 'tarikh'] },
       { key: 'cement', label: 'Cement', required: false, aliases: ['cement', 'cement bags', 'cementbags', 'सीमेंट'] },
-      { key: 'zigZagGrey80', label: 'Zig Zag Grey 80', required: false, aliases: ['zigzaggrey80', 'zig zag grey 80', 'zig_zag_grey_80', 'zz grey 80', 'grey 80', 'zigzagwhite80', 'zig zag white 80', 'zz white 80', 'white 80', 'zigzaggrey80mm', 'zig zag grey 80mm', 'zigzagwhite80mm', 'zig zag white 80mm'] },
-      { key: 'zigZagRed80', label: 'Zig Zag Red 80', required: false, aliases: ['zigzagred80', 'zig zag red 80', 'zig_zag_red_80', 'zz red 80', 'red 80', 'zigzagred80mm', 'zig zag red 80mm'] },
-      { key: 'zigZagYellow80', label: 'Zig Zag Yellow 80', required: false, aliases: ['zigzagyellow80', 'zig zag yellow 80', 'zig_zag_yellow_80', 'zz yellow 80', 'yellow 80', 'zigzagyellow80mm', 'zig zag yellow 80mm'] },
-      { key: 'zigZagGrey60', label: 'Zig Zag Grey 60', required: false, aliases: ['zigzaggrey60', 'zig zag grey 60', 'zig_zag_grey_60', 'zz grey 60', 'grey 60', 'zigzagwhite60', 'zig zag white 60', 'zz white 60', 'white 60', 'zigzaggrey60mm', 'zig zag grey 60mm', 'zigzagwhite60mm', 'zig zag white 60mm'] },
-      { key: 'zigZagRed60', label: 'Zig Zag Red 60', required: false, aliases: ['zigzagred60', 'zig zag red 60', 'zig_zag_red_60', 'zz red 60', 'red 60', 'zigzagred60mm', 'zig zag red 60mm'] },
-      { key: 'zigZagYellow60', label: 'Zig Zag Yellow 60', required: false, aliases: ['zigzagyellow60', 'zig zag yellow 60', 'zig_zag_yellow_60', 'zz yellow 60', 'yellow 60', 'zigzagyellow60mm', 'zig zag yellow 60mm'] },
+      { key: 'zigZagGrey80', label: 'Zig Zag Grey 80mm', required: false, aliases: ['zigzaggrey80', 'zig zag grey 80', 'zig_zag_grey_80', 'zz grey 80', 'grey 80', 'zigzagwhite80', 'zig zag white 80', 'zz white 80', 'white 80', 'zigzaggrey80mm', 'zig zag grey 80mm', 'zigzagwhite80mm', 'zig zag white 80mm'] },
+      { key: 'zigZagRed80', label: 'Zig Zag Red 80mm', required: false, aliases: ['zigzagred80', 'zig zag red 80', 'zig_zag_red_80', 'zz red 80', 'red 80', 'zigzagred80mm', 'zig zag red 80mm'] },
+      { key: 'zigZagYellow80', label: 'Zig Zag Yellow 80mm', required: false, aliases: ['zigzagyellow80', 'zig zag yellow 80', 'zig_zag_yellow_80', 'zz yellow 80', 'yellow 80', 'zigzagyellow80mm', 'zig zag yellow 80mm'] },
+      { key: 'zigZagGrey60', label: 'Zig Zag Grey 60mm', required: false, aliases: ['zigzaggrey60', 'zig zag grey 60', 'zig_zag_grey_60', 'zz grey 60', 'grey 60', 'zigzagwhite60', 'zig zag white 60', 'zz white 60', 'white 60', 'zigzaggrey60mm', 'zig zag grey 60mm', 'zigzagwhite60mm', 'zig zag white 60mm'] },
+      { key: 'zigZagRed60', label: 'Zig Zag Red 60mm', required: false, aliases: ['zigzagred60', 'zig zag red 60', 'zig_zag_red_60', 'zz red 60', 'red 60', 'zigzagred60mm', 'zig zag red 60mm'] },
+      { key: 'zigZagYellow60', label: 'Zig Zag Yellow 60mm', required: false, aliases: ['zigzagyellow60', 'zig zag yellow 60', 'zig_zag_yellow_60', 'zz yellow 60', 'yellow 60', 'zigzagyellow60mm', 'zig zag yellow 60mm'] },
+      { key: 'chequreTile', label: 'Chequre Tile', required: false, aliases: ['chequretile', 'chequre tile', 'chequre_tile', 'chequre', 'tile', 'chequr e tile', 'chequr etile'] },
       { key: 'curveStone', label: 'Curve Stone', required: false, aliases: ['curvestone', 'curve stone', 'curve_stone', 'curve'] },
-      { key: 'chequreTile', label: 'Chequre Tile', required: false, aliases: ['chequretile', 'chequre tile', 'chequre_tile', 'chequre', 'tile'] },
-      { key: 'dumbleGrey80', label: 'Dumble Grey 80', required: false, aliases: ['dumblegrey80', 'dumble grey 80', 'dumble_grey_80', 'dumble grey 80mm'] },
-      { key: 'dumbleRed80', label: 'Dumble Red 80', required: false, aliases: ['dumblered80', 'dumble red 80', 'dumble_red_80', 'dumble red 80mm'] },
-      { key: 'dumbleYellow80', label: 'Dumble Yellow 80', required: false, aliases: ['dumbleyellow80', 'dumble yellow 80', 'dumble_yellow_80', 'dumble yellow 80mm'] },
-      { key: 'transportationCharge', label: 'Transportation Charge', required: false, aliases: ['transportationcharge', 'transportation charge', 'transportation_charge', 'transport', 'transport charge'] },
-      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note', 'notes', 'comment', 'comments', 'टिप्पणी'] },
+      { key: 'dumbleGrey80', label: 'Dumble Grey 80mm', required: false, aliases: ['dumblegrey80', 'dumble grey 80', 'dumble_grey_80', 'dumble grey 80mm'] },
+      { key: 'dumbleRed80', label: 'Dumble Red 80mm', required: false, aliases: ['dumblered80', 'dumble red 80', 'dumble_red_80', 'dumble red 80mm'] },
+      { key: 'dumbleYellow80', label: 'Dumble Yellow 80mm', required: false, aliases: ['dumbleyellow80', 'dumble yellow 80', 'dumble_yellow_80', 'dumble yellow 80mm'] },
+      { key: 'transportationCharge', label: 'Transportation Charge', required: false, inTemplate: false, aliases: ['transportationcharge', 'transportation charge', 'transportation_charge', 'transport', 'transport charge'] },
+      { key: 'remarks', label: 'Remarks', required: false, inTemplate: false, aliases: ['remarks', 'remark', 'note', 'notes', 'comment', 'comments', 'टिप्पणी'] },
     ],
   },
   stock: {
@@ -613,7 +617,13 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
   }
 
   const downloadTemplate = () => {
-    const headers = template.fields.map((f) => f.label)
+    // Fields flagged `inTemplate: false` (e.g. transportationCharge, remarks on
+    // the Production template) are kept importable but excluded from the
+    // downloadable blank template so the file matches the official template
+    // screenshot the user provided.
+    const headers = template.fields
+      .filter((f) => f.inTemplate !== false)
+      .map((f) => f.label)
     const csvContent = [headers.join(','), ''].join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
