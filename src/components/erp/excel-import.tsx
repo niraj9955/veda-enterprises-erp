@@ -571,8 +571,18 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
       const worksheet = workbook.Sheets[sheetName]
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
 
+      // Empty sheet — keep file name so the Import button stays enabled,
+      // but clear all parsed state. The user will see a "No data found"
+      // popup when they click Import (per product spec).
       if (jsonData.length === 0) {
-        toast({ title: 'Empty file', description: 'No data found in the uploaded file', variant: 'destructive' })
+        setRawData([])
+        setTransformedData([])
+        setExcelColumns([])
+        setColumnMapping({})
+        toast({
+          title: 'File opened',
+          description: 'No data found in the sheet. Click Import to view the report.',
+        })
         return
       }
 
@@ -627,7 +637,20 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
   }
 
   const handleImport = async () => {
-    if (transformedData.length === 0) return
+    // Empty sheet case — don't call the API. Show a "No data found"
+    // popup so the user understands the file had no rows.
+    if (transformedData.length === 0) {
+      setResult({
+        imported: 0,
+        total: 0,
+        duplicatesSkipped: 0,
+        errors: ['No data found in the uploaded file. The Excel sheet appears to be empty — please add at least one row of data and try again.'],
+      })
+      setImportedRows([])
+      handleClose(false)
+      setResultOpen(true)
+      return
+    }
     setImporting(true)
     // Snapshot the rows being sent so the result popup can show them
     // regardless of whether the API call succeeds or fails.
@@ -919,13 +942,18 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
           <Button variant="outline" onClick={() => handleClose()}>Cancel</Button>
           <Button
             onClick={handleImport}
-            disabled={transformedData.length === 0 || importing || unmappedRequired.length > 0}
+            disabled={!fileName || importing || (transformedData.length > 0 && unmappedRequired.length > 0)}
             className="bg-emerald-600 hover:bg-emerald-700"
           >
             {importing ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 Importing...
+              </>
+            ) : transformedData.length === 0 ? (
+              <>
+                <Upload className="h-4 w-4 mr-2" />
+                Import
               </>
             ) : (
               <>
