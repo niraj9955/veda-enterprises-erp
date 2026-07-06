@@ -624,3 +624,47 @@ Stage Summary:
 - "Contact Number" moved from below Amount to below Address as requested
 - Critical bug fixed: Daily Sell edit/delete buttons now actually work (previously the API endpoints didn't exist)
 - Excel import template for Daily Sell updated to include Product column
+
+---
+Task ID: 9
+Agent: Main Agent
+Task: Fix Customer Payment record delete not working in Finance module
+
+Work Log:
+- Investigated user complaint: customer payment records can't be deleted
+- Found root cause: /api/customer-payment/[id]/route.ts was MISSING entirely — same bug pattern as Daily Sell (Task ID 8)
+- Discovered the bug affected 8 modules total, not just customer-payment:
+  - customer-payment (Finance)
+  - labour-payment (Finance)
+  - tractor-payment (Finance)
+  - dust-purchase (Purchases & Expenses)
+  - cement-purchase (Purchases & Expenses)
+  - hardner (Purchases & Expenses)
+  - electricity (Purchases & Expenses)
+  - factory-stuff (Purchases & Expenses)
+- All 8 modules had UI buttons calling api.deleteX() and api.updateX() which pointed to /api/[module]/[id] endpoints that DID NOT EXIST
+- Created /home/z/my-project/scripts/generate_missing_id_routes.py to batch-generate the missing route files
+- Generated /api/[module]/[id]/route.ts for all 8 modules with GET/PUT/DELETE handlers:
+  - GET: fetches single record by ID, returns 404 if not found
+  - PUT: updates record using whitelist of fields from schema, returns 404 if not found
+  - DELETE: deletes record by ID, returns 404 if not found
+- Field whitelists match each schema in src/lib/models.ts:
+  - customer-payment: date, name, address, amount, remarks
+  - labour-payment: date, name, address, amount, remarks
+  - tractor-payment: date, vendorName, quantityTon, rate, totalAmount, paidAmount, remainingAmount, remarks
+  - dust-purchase: date, vendorName, cementName, quantity, rate, totalAmount, paidAmount, transportationCharge, gst, remarks
+  - cement-purchase: date, vendorName, itemName, quantity, rate, totalAmount, paidAmount, transportationCharge, gst, remarks
+  - hardner: date, amount
+  - electricity: date, name, work, amount, remarks
+  - factory-stuff: date, itemName, quantity, amount, remarks
+
+Verification (Vercel production):
+- All 8 DELETE endpoints return 404 for non-existent IDs ✓
+- All 8 PUT endpoints return 404 for non-existent IDs ✓
+- End-to-end test on customer-payment: Create → Edit (amount 5000→6000) → Delete ✓
+- User's existing customer payment data is preserved
+
+Stage Summary:
+- Customer Payment delete now works (root cause was missing API endpoint, not UI bug)
+- Fixed same bug in 7 other modules proactively (labour-payment, tractor-payment, dust-purchase, cement-purchase, hardner, electricity, factory-stuff)
+- All Finance and Purchases & Expenses modules now support full CRUD (Create + Read + Update + Delete)
