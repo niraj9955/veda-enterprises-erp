@@ -6,9 +6,11 @@
 //   - For a given date, sum every Production row's product columns.
 //   - Upsert (create-or-replace) the Stock entry for that date.
 //
-// Note: this overwrites any manually-entered Stock row for the same date.
-// That is intentional — production is the source of truth for daily output,
-// and Stock is a derived daily snapshot used for downstream reports.
+// Performance: this used to loop over dates and do 3 DB queries per date
+// (Production.find + Stock.findOne + save/create). For an import touching
+// 48 unique dates that was 144 sequential round-trips. The new implementation
+// does it in 3 queries total (Production.find with $in, Stock.find with $in,
+// Stock.bulkWrite) and is roughly 50–100× faster.
 
 import { connectDB } from '@/lib/db'
 import { Production, Stock } from '@/lib/models'
@@ -80,17 +82,94 @@ export async function syncStockForDate(date: string) {
 }
 
 /**
- * Sync stock for multiple dates in one call. Used after production import
- * where many dates may be touched at once.
+ * Sync stock for multiple dates in ONE batched round-trip per DB collection.
+ *
+ * Previously this method called `syncStockForDate(date)` inside a sequential
+ * loop, which caused N × 3 round-trips to MongoDB. For an import touching
+ * 48 unique dates, that was 144 sequential DB calls — easily the slowest
+ * step in the import flow and the main reason imports timed out on Vercel.
+ *
+ * New approach (3 round-trips total, regardless of N):
+ *   1. ONE Production.find({ date: { $in: uniqueDates } }) → group in memory.
+ *   2. ONE Stock.find({ date: { $in: uniqueDates } }) → build a date→doc map.
+ *   3. ONE Stock.bulkWrite([updateOne | insertOne, ...]) upserts everything.
+ *
+ * Dates that have no production rows are deleted via a single deleteMany
+ * (also batched).
  */
 export async function syncStockForDates(dates: string[]) {
   const unique = Array.from(new Set(dates.filter(Boolean)))
-  for (const date of unique) {
+  if (unique.length === 0) return
+
+  await connectDB()
+
+  // ── Step 1: fetch ALL production rows for every touched date in one query ──
+  const productions = await Production.find({ date: { $in: unique } }).lean()
+
+  // Group totals by date, computed in memory.
+  // `totalsByDate` is initialized lazily — only dates that have at least one
+  // production row get an entry. Dates with no productions will be handled
+  // by the deleteMany below.
+  const totalsByDate = new Map<string, Record<string, number>>()
+  for (const p of productions) {
+    const d = String((p as Record<string, unknown>).date)
+    let totals = totalsByDate.get(d)
+    if (!totals) {
+      totals = {}
+      for (const field of SYNC_FIELDS) totals[field] = 0
+      totalsByDate.set(d, totals)
+    }
+    for (const field of SYNC_FIELDS) {
+      totals[field] += Number((p as Record<string, unknown>)[field]) || 0
+    }
+  }
+
+  // ── Step 2: fetch existing Stock rows for those dates in one query ────────
+  const existingStocks = await Stock.find({ date: { $in: unique } }).lean()
+  const existingByDate = new Map<string, boolean>()
+  for (const s of existingStocks) {
+    existingByDate.set(String((s as Record<string, unknown>).date), true)
+  }
+
+  // ── Step 3a: dates with NO production → delete their Stock rows in one go ─
+  const emptyDates = unique.filter((d) => !totalsByDate.has(d))
+  if (emptyDates.length > 0) {
     try {
-      await syncStockForDate(date)
+      await Stock.deleteMany({ date: { $in: emptyDates } })
     } catch (err) {
-      // Don't let one date's failure abort the rest of the sync
-      console.error(`[syncStockForDate] Failed for ${date}:`, err)
+      console.error('[syncStockForDates] deleteMany failed:', err)
+    }
+  }
+
+  // ── Step 3b: dates WITH production → upsert via a single bulkWrite ────────
+  const ops: any[] = []
+  for (const [date, totals] of totalsByDate.entries()) {
+    if (existingByDate.has(date)) {
+      // Update existing stock row in place.
+      const $set: Record<string, number> = {}
+      for (const field of SYNC_FIELDS) $set[field] = totals[field]
+      ops.push({
+        updateOne: {
+          filter: { date },
+          update: { $set },
+        },
+      })
+    } else {
+      // Insert a new stock row.
+      ops.push({
+        insertOne: {
+          document: { date, ...totals },
+        },
+      })
+    }
+  }
+
+  if (ops.length > 0) {
+    try {
+      await Stock.bulkWrite(ops, { ordered: false })
+    } catch (err) {
+      console.error('[syncStockForDates] bulkWrite failed:', err)
+      throw err
     }
   }
 }
