@@ -782,3 +782,28 @@ Stage Summary:
   • /home/z/my-project/src/components/erp/production-module.tsx
   • /home/z/my-project/src/lib/api.ts
   • /home/z/my-project/src/app/api/production/bulk-delete/route.ts (new)
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Fix preview/result table horizontal scroll — columns were getting truncated ("Zig Za...") inside the import wizard dialog.
+
+Work Log:
+- User uploaded 2 screenshots of the Import Production dialog showing the preview table with the last column header truncated as "Zig Za..." — confirming that the previous shadcn `ScrollArea` + `<ScrollBar orientation="horizontal" />` approach (Task ID 5) was NOT producing a usable horizontal scrollbar inside the constrained dialog width.
+- Root cause: Radix `ScrollArea`'s horizontal `ScrollBar` is finicky inside flex/max-width containers and often does not render at all when the parent chain has its own overflow constraints. The vertical scrollbar worked but the horizontal one was effectively invisible, so wide tables (Production has 14+ columns) got clipped.
+- Fix: Replaced ALL 4 shadcn `ScrollArea` usages in excel-import.tsx with native `<div className="overflow-auto ...">` wrappers. Native browser scrollbars ALWAYS render at the bottom-right of an overflow region and are reachable regardless of parent constraints.
+- 4 locations updated:
+  1. Step 4 Preview table (`max-h-72 overflow-auto rounded-md border`) — keeps sticky header
+  2. Success popup "Imported Data" table (`flex-1 min-h-0 max-h-[45vh] overflow-auto rounded-md border`)
+  3. Error popup "Error Details" list (`max-h-40 overflow-auto rounded-md border border-destructive/20 bg-destructive/5`)
+  4. Error popup "Data Sent for Import" table (`flex-1 min-h-0 max-h-[35vh] overflow-auto rounded-md border`)
+- Removed the now-unused `ScrollArea, ScrollBar` import; replaced it with an explanatory comment so future maintainers know why native scroll was chosen.
+- Kept the inner `<div className="min-w-max">` so the table uses its natural width and overflows the scroll container (this is what makes horizontal scroll happen).
+- Kept `sticky top-0 bg-background z-10` on `TableHeader` so column headers stay visible while scrolling vertically.
+- Verified: no new TypeScript errors in excel-import.tsx (only pre-existing errors in unrelated files remain).
+
+Stage Summary:
+- All import-related tables (preview, success popup, error popup, error list) now have GUARANTEED-working native horizontal + vertical scrollbars.
+- Wide tables (e.g. Production with 14 columns) can now be fully inspected — no more "Zig Za..." truncation.
+- Sticky column headers remain visible while scrolling vertically.
+- Modified file: /home/z/my-project/src/components/erp/excel-import.tsx

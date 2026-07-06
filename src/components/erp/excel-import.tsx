@@ -6,7 +6,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
+// NOTE: shadcn ScrollArea (Radix) was replaced with native overflow-auto divs
+// because Radix's horizontal ScrollBar did not render reliably inside the
+// constrained dialog widths — columns were getting truncated (e.g. "Zig Za...").
+// Native browser scrollbars always work for both horizontal and vertical scroll.
 import {
   Select,
   SelectContent,
@@ -870,7 +873,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                 Preview ({transformedData.length} rows)
                 <Badge variant="outline" className="text-xs ml-1">Scroll to see all</Badge>
               </h4>
-              <ScrollArea className="max-h-72 rounded-md border">
+              <div className="max-h-72 overflow-auto rounded-md border">
                 <div className="min-w-max">
                   <Table>
                     <TableHeader className="sticky top-0 bg-background z-10">
@@ -899,8 +902,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                     </TableBody>
                   </Table>
                 </div>
-                <ScrollBar orientation="horizontal" />
-              </ScrollArea>
+              </div>
               <p className="text-xs text-muted-foreground text-center">
                 Showing all {transformedData.length} row(s) • use the scroll bar to navigate
               </p>
@@ -988,7 +990,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                   <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                   Imported Data ({importedRows.length} rows)
                 </h4>
-                <ScrollArea className="flex-1 min-h-0 max-h-[45vh] rounded-md border">
+                <div className="flex-1 min-h-0 max-h-[45vh] overflow-auto rounded-md border">
                   <div className="min-w-max">
                     <Table>
                       <TableHeader className="sticky top-0 bg-background z-10">
@@ -1017,8 +1019,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                       </TableBody>
                     </Table>
                   </div>
-                  <ScrollBar orientation="horizontal" />
-                </ScrollArea>
+                </div>
               </div>
             )}
           </div>
@@ -1096,7 +1097,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                   <AlertCircle className="h-4 w-4 text-destructive" />
                   Error Details ({result.errors.length})
                 </h4>
-                <ScrollArea className="max-h-40 rounded-md border border-destructive/20 bg-destructive/5">
+                <div className="max-h-40 overflow-auto rounded-md border border-destructive/20 bg-destructive/5">
                   <ul className="text-xs space-y-1 p-3">
                     {result.errors.map((err, i) => (
                       <li key={i} className="text-destructive flex gap-2">
@@ -1105,7 +1106,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                       </li>
                     ))}
                   </ul>
-                </ScrollArea>
+                </div>
               </div>
             )}
 
@@ -1117,7 +1118,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                   Data Sent for Import ({importedRows.length} rows)
                   <Badge variant="outline" className="text-xs ml-1">Red = failed</Badge>
                 </h4>
-                <ScrollArea className="flex-1 min-h-0 max-h-[35vh] rounded-md border">
+                <div className="flex-1 min-h-0 max-h-[35vh] overflow-auto rounded-md border">
                   <div className="min-w-max">
                     <Table>
                       <TableHeader className="sticky top-0 bg-background z-10">
@@ -1168,8 +1169,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                       </TableBody>
                     </Table>
                   </div>
-                  <ScrollBar orientation="horizontal" />
-                </ScrollArea>
+                </div>
               </div>
             )}
           </div>
