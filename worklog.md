@@ -402,3 +402,34 @@ Stage Summary:
 - User can read errors at their own pace — no more 1.5s/3.5s auto-close timers
 - Errors from network/API failures also surface in the popup (not just toasts)
 - Underlying list still auto-refreshes whenever at least one row imports
+
+---
+Task ID: prod-delete-all-1
+Agent: main
+Task: Add Delete All button in Production module
+
+Work Log:
+- Added DELETE handler to /api/production/route.ts
+  * Accepts ?all=true query param to confirm bulk delete
+  * Gated behind admin session via getSession() — only admins can perform bulk destructive ops
+  * Returns { message, deletedCount }
+- Added deleteAllProductions() method to src/lib/api.ts
+- Added 'Delete All' button to production-module.tsx header
+  * Red outline button with Trash icon
+  * Disabled when productions.length === 0 or loading
+  * Positioned between Import Excel and Add Production Entry
+- Added dedicated AlertDialog for bulk delete confirmation:
+  * Shows dynamic count: "You are about to permanently delete N production entries"
+  * Explains what's affected (bill-history aggregations) vs not affected (Customer/Order/Bill/Payment/Stock/Dispatch)
+  * Requires user to type "DELETE ALL" in an input to enable the destructive button
+  * Cancel and Delete All actions with loading spinner
+  * Closing the dialog resets the confirmation input
+- Success toast reports actual deletedCount from API
+- Build passed (npx next build succeeded)
+- Committed (925e1bd) and pushed to GitHub; Vercel auto-deploy triggered
+
+Stage Summary:
+- Production module now has a 'Delete All' button next to Import Excel + Add Production Entry
+- Triple-layer safety: admin-only backend + ?all=true query gate + type-to-confirm input on frontend
+- Only Production collection is wiped; all other records (Customer, Order, Bill, Payment, Stock, Dispatch) are NOT affected
+- Bill-history aggregations will lose their production totals (since the underlying productions are gone)
