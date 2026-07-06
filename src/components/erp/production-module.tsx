@@ -350,7 +350,10 @@ export function ProductionModule() {
   }
 
   const handleDeleteAll = async () => {
-    if (deleteAllConfirm !== 'DELETE ALL') return
+    // No more 'DELETE ALL' typing requirement — the dialog now uses a
+    // simple Yes / No choice. We keep the deleteAllConfirm state around
+    // only so existing code that resets it (e.g. on dialog close) doesn't
+    // break, but it's no longer gating the delete.
     setDeletingAll(true)
     try {
       const res = await api.deleteAllProductions()
