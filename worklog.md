@@ -367,3 +367,38 @@ Stage Summary:
 - CRITICAL FIX: All 6 zigzag product quantities in Production were silently saving as 0 due to a UI↔model field name mismatch (zigZagWhite80mm vs zigZagWhite80). Now fixed — production entries will correctly persist product quantities going forward.
 - Note: stock-module.tsx has the same naming mismatch (UI uses zigZagRed80mm, model uses zigZagRed80). Not touched since user only asked about production. Available for follow-up if user reports stock not saving.
 - Existing production rows in MongoDB still have 0s for zigzag quantities (from before this fix) — they cannot be recovered. Only newly-created/edited entries going forward will have correct values.
+
+---
+Task ID: excel-import-popup-1
+Agent: main
+Task: Show Excel import result in a dedicated popup box
+
+Work Log:
+- Inspected excel-import.tsx (885 lines) — current flow: result shown inline as Alert banner at bottom of import dialog, with setTimeout auto-close (1.5s full success, 3.5s partial). Errors hard to read in time.
+- Added new state `resultOpen` to control visibility of dedicated result popup
+- Rewrote handleImport():
+  * Removed all setTimeout auto-close logic
+  * Removed toast notifications (replaced by popup)
+  * After import API returns: setResult, call onSuccess() if any rows imported, then handleClose(false) [preserves result state] and open result popup
+  * Network/API errors now also caught and shown in the popup (previously only toast)
+- Refactored handleClose(clearResult = true) so it can be called from handleImport() without wiping the result state needed for the popup
+- Added closeResultPopup() helper that closes popup and clears result state
+- Removed the inline Alert banner from the import dialog body (replaced with comment explaining result is now in popup)
+- Updated main Dialog onOpenChange to use (o) => { if (!o) handleClose() } wrapper (since handleClose now takes a clearResult boolean, not the open boolean)
+- Updated Cancel button to use () => handleClose() wrapper
+- Wrapped return in a React fragment (<>...</>) since there are now two sibling Dialog elements
+- Added new result Dialog after main import Dialog with:
+  * Header: status icon (CheckCircle2 green / AlertCircle red) + dynamic title ("Import Successful" / "Partial Import" / "Import Failed")
+  * 4 summary stat tiles: Imported (green) / Total Rows (neutral) / Skipped (amber) / Duplicates (neutral)
+  * Status Alert with human-readable summary that adapts to: zero imported / all imported / partial
+  * Full error list in scrollable area (max-h-64) with numbered items (#1, #2, ...)
+  * Manual Close button (green) — user dismisses when done reading
+- Build passed (npx next build succeeded)
+- Committed (663641d) and pushed to GitHub; Vercel auto-deploy triggered
+
+Stage Summary:
+- Excel import now opens a dedicated result popup after the import completes
+- Popup shows: status icon + title, 4 summary stat tiles, status message, full scrollable error list, Close button
+- User can read errors at their own pace — no more 1.5s/3.5s auto-close timers
+- Errors from network/API failures also surface in the popup (not just toasts)
+- Underlying list still auto-refreshes whenever at least one row imports
