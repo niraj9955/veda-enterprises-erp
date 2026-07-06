@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Table,
   TableBody,
@@ -18,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ScrollableTable } from '@/components/ui/scrollable-table'
 import {
   Dialog,
   DialogContent,
@@ -36,7 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { ShoppingCart, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload , Search} from 'lucide-react'
+import { ShoppingCart, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload, Search, Trash } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -105,6 +107,20 @@ export function DailySellModule() {
   const [deleteTarget, setDeleteTarget] = React.useState<DailySell | null>(null)
   const [deleting, setDeleting] = React.useState(false)
 
+  // Multi-select state — mirrors the Production module pattern so the user
+  // gets identical UX: tick individual rows or use the header checkbox to
+  // select all currently-filtered rows, then click "Delete Selected".
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false)
+  const [bulkDeleting, setBulkDeleting] = React.useState(false)
+
+  // Delete All state — simple Yes/No confirmation dialog.
+  const [deleteAllOpen, setDeleteAllOpen] = React.useState(false)
+  const [deletingAll, setDeletingAll] = React.useState(false)
+
+  // Excel import
+  const [importOpen, setImportOpen] = React.useState(false)
+
   const fetchData = React.useCallback(async () => {
     setLoading(true)
     try {
@@ -145,10 +161,74 @@ export function DailySellModule() {
     fetchData()
   }, [fetchData])
 
-  // Excel import
+  // ── Selection handlers ─────────────────────────────────────────────
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
-  const [importOpen, setImportOpen] = React.useState(false)
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (prev.size === filteredDailySells.length && filteredDailySells.length > 0) {
+        return new Set()
+      }
+      return new Set(filteredDailySells.map((s) => s.id))
+    })
+  }
 
+  const clearSelection = () => setSelectedIds(new Set())
+
+  // ── Bulk delete selected ───────────────────────────────────────────
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    setBulkDeleting(true)
+    try {
+      const res = await api.bulkDeleteDailySells(ids)
+      toast({
+        title: 'Success',
+        description: `${res.deletedCount} of ${ids.length} daily sell entr${res.deletedCount === 1 ? 'y' : 'ies'} deleted`,
+      })
+      setBulkDeleteOpen(false)
+      clearSelection()
+      fetchData()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete selected daily sell entries',
+        variant: 'destructive',
+      })
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  // ── Delete ALL ─────────────────────────────────────────────────────
+  const handleDeleteAll = async () => {
+    setDeletingAll(true)
+    try {
+      const res = await api.deleteAllDailySells()
+      toast({
+        title: 'Success',
+        description: `${res.deletedCount} daily sell entr${res.deletedCount === 1 ? 'y' : 'ies'} deleted`,
+      })
+      setDeleteAllOpen(false)
+      clearSelection()
+      fetchData()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete all daily sell entries',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeletingAll(false)
+    }
+  }
 
   const openAddDialog = () => {
     setEditingItem(null)
@@ -243,6 +323,7 @@ export function DailySellModule() {
   const renderSkeletons = () =>
     Array.from({ length: 5 }).map((_, i) => (
       <TableRow key={i}>
+        <TableCell><Skeleton className="h-4 w-6" /></TableCell>
         <TableCell><Skeleton className="h-4 w-24" /></TableCell>
         <TableCell><Skeleton className="h-4 w-32" /></TableCell>
         <TableCell><Skeleton className="h-4 w-28" /></TableCell>
@@ -255,7 +336,30 @@ export function DailySellModule() {
     ))
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Full-screen loading overlay shown during any delete operation.
+          Mirrors the Production module pattern so the user always sees
+          that something is happening. */}
+      {(deleting || deletingAll || bulkDeleting) && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl p-8 flex flex-col items-center gap-4 min-w-[280px]">
+            <Loader2 className="size-12 animate-spin text-emerald-600" />
+            <div className="text-center">
+              <p className="text-lg font-semibold">
+                {bulkDeleting
+                  ? `Deleting ${selectedIds.size} entries...`
+                  : deletingAll
+                  ? 'Deleting all entries...'
+                  : 'Deleting entry...'}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Please wait while records are removed.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
@@ -269,13 +373,59 @@ export function DailySellModule() {
             </p>
           </div>
         </div>
-        <Button
-          onClick={openAddDialog}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
-        >
-          <Plus className="size-4" />
-          Add Daily Sell
-        </Button>
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+            className="w-full sm:w-auto"
+          >
+            <Upload className="size-4 mr-2" />
+            Import Excel
+          </Button>
+          {/* Bulk-delete button — only visible when at least one row is
+              selected. Clicking it opens the confirmation dialog below. */}
+          {selectedIds.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={bulkDeleting || loading}
+              className="w-full sm:w-auto text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-4 mr-2" />
+              Delete Selected
+              <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">
+                {selectedIds.size}
+              </Badge>
+            </Button>
+          )}
+          {/* Clear-selection button — small, ghost-styled, only visible when rows are selected */}
+          {selectedIds.size > 0 && (
+            <Button
+              variant="ghost"
+              onClick={clearSelection}
+              disabled={bulkDeleting}
+              className="w-full sm:w-auto"
+            >
+              Clear Selection
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            onClick={() => setDeleteAllOpen(true)}
+            disabled={dailySells.length === 0 || loading}
+            className="w-full sm:w-auto text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash className="size-4 mr-2" />
+            Delete All
+          </Button>
+          <Button
+            onClick={openAddDialog}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
+          >
+            <Plus className="size-4" />
+            Add Daily Sell
+          </Button>
+        </div>
       </div>
 
       {/* Summary */}
@@ -320,24 +470,41 @@ export function DailySellModule() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+          <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
             <span>Daily Sell Records</span>
-            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
-              {filteredDailySells.length} of {dailySells.length} record{dailySells.length !== 1 ? 's' : ''}
-            </Badge>
+            <div className="flex items-center gap-2 flex-wrap">
+              {selectedIds.size > 0 && (
+                <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/30">
+                  {selectedIds.size} selected
+                </Badge>
+              )}
+              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                {filteredDailySells.length} of {dailySells.length} record{dailySells.length !== 1 ? 's' : ''}
+              </Badge>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="max-h-[60vh] overflow-auto rounded-md border">
+          <ScrollableTable maxHeight="max-h-[60vh]">
             <Table>
-              <TableHeader className="sticky top-0 bg-background z-10">
+              <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
+                  <TableHead className="w-10 sticky left-0 bg-background z-20">
+                    <Checkbox
+                      checked={
+                        filteredDailySells.length > 0 &&
+                        selectedIds.size === filteredDailySells.length
+                      }
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all rows"
+                    />
+                  </TableHead>
+                  <TableHead className="sticky left-10 bg-background z-20">Date</TableHead>
                   <TableHead>Customer Name</TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead>Contact Number</TableHead>
                   <TableHead>Product</TableHead>
-                  <TableHead className="text-right">Amount (₹)</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Amount (₹)</TableHead>
                   <TableHead>Remarks</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -347,19 +514,32 @@ export function DailySellModule() {
                   renderSkeletons()
                 ) : filteredDailySells.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
                       No daily sell entries yet. Click &quot;Add Daily Sell&quot; to get started.
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredDailySells.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium whitespace-nowrap">{formatDate(item.date)}</TableCell>
-                      <TableCell className="font-medium">{item.customerName}</TableCell>
+                    <TableRow
+                      key={item.id}
+                      data-state={selectedIds.has(item.id) ? 'selected' : undefined}
+                      className={selectedIds.has(item.id) ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}
+                    >
+                      <TableCell className="w-10 sticky left-0 bg-background z-10">
+                        <Checkbox
+                          checked={selectedIds.has(item.id)}
+                          onCheckedChange={() => toggleSelect(item.id)}
+                          aria-label={`Select row for ${item.customerName}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium whitespace-nowrap sticky left-10 bg-background z-10">
+                        {formatDate(item.date)}
+                      </TableCell>
+                      <TableCell className="font-medium whitespace-nowrap">{item.customerName}</TableCell>
                       <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.address || '—'}</TableCell>
                       <TableCell className="whitespace-nowrap">{item.contactNumber || '—'}</TableCell>
                       <TableCell className="max-w-[150px] truncate">{item.product || '—'}</TableCell>
-                      <TableCell className="text-right font-medium whitespace-nowrap">{formatCurrency(item.amount)}</TableCell>
+                      <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">{formatCurrency(item.amount)}</TableCell>
                       <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.remarks || '—'}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -382,7 +562,7 @@ export function DailySellModule() {
                 )}
               </TableBody>
             </Table>
-          </div>
+          </ScrollableTable>
         </CardContent>
       </Card>
 
@@ -438,7 +618,7 @@ export function DailySellModule() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation */}
+      {/* Delete single confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -452,6 +632,71 @@ export function DailySellModule() {
             <AlertDialogAction onClick={handleDelete} disabled={deleting} className="bg-destructive text-white hover:bg-destructive/90">
               {deleting && <Loader2 className="mr-2 size-4 animate-spin" />}
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete All confirmation — simple Yes / No dialog (mirrors Production) */}
+      <AlertDialog open={deleteAllOpen} onOpenChange={(open) => {
+        if (!open && !deletingAll) setDeleteAllOpen(false)
+      }}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Delete ALL Daily Sell Entries?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-sm">
+              <span className="block">
+                You are about to permanently delete{' '}
+                <strong className="text-destructive">all daily sell entries</strong>.
+                This action <strong>cannot be undone</strong>.
+              </span>
+              <span className="block text-muted-foreground">
+                All {dailySells.length} record{dailySells.length !== 1 ? 's' : ''} will be removed.
+                Customer, Production, Order, Payment, and Dispatch records are NOT affected.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingAll} className="border-border">
+              No, Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAll}
+              disabled={deletingAll}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {deletingAll && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Yes, Delete All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Selected confirmation */}
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => {
+        if (!open && !bulkDeleting) setBulkDeleteOpen(false)
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">
+              Delete {selectedIds.size} Selected Daily Sell {selectedIds.size === 1 ? 'Entry' : 'Entries'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              You are about to permanently delete{' '}
+              <strong className="text-destructive">{selectedIds.size}</strong>{' '}
+              daily sell {selectedIds.size === 1 ? 'entry' : 'entries'}.
+              This action <strong>cannot be undone</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {bulkDeleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Delete Selected
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

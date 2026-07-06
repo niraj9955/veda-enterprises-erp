@@ -1036,3 +1036,98 @@ Stage Summary:
   • /home/z/my-project/src/app/api/stock/summary/route.ts (rewritten response shape)
   • /home/z/my-project/src/lib/api.ts (updated getStockSummary return type)
   • /home/z/my-project/src/components/erp/stock-module.tsx (new column layout + types)
+
+---
+Task ID: 13
+Agent: Main Agent
+Task: Apply same Production-module concepts to Daily Sell — (1) Import Excel button, (2) multi-select delete with checkboxes, (3) Delete All button, (4) ScrollableTable with sticky header.
+
+Work Log:
+
+### Backend changes
+
+#### /api/daily-sell/route.ts — added bulk-delete + delete-all handlers
+- Extended the existing POST handler to detect `{ ids: string[] }` body and route it to a `DailySell.deleteMany({ _id: { $in: ids } })` bulk delete (mirrors the Stock module's POST bulk-delete pattern, which is simpler than the production module's separate /bulk-delete endpoint)
+- Added a new `DELETE` export that handles `?all=true` query param:
+  • Gated behind admin session (only `session.role === 'admin'` can call it — same gate as Production's DELETE)
+  • Returns `{ message, deletedCount }` matching the Production delete-all response shape
+  • Without `?all=true`, returns a clear error pointing the caller to `/api/daily-sell/[id]` for single deletes
+- Single-record DELETE in `/api/daily-sell/[id]/route.ts` was already correct — no changes needed there
+
+#### src/lib/api.ts — added 2 new methods
+- `bulkDeleteDailySells(ids: string[])` — POSTs `{ ids }` to `/daily-sell`, returns `{ message, deletedCount }`
+- `deleteAllDailySells()` — DELETEs `/daily-sell?all=true`, returns `{ message, deletedCount }`
+- Both mirror the existing `bulkDeleteProductions` / `deleteAllProductions` and `bulkDeleteStocks` / `deleteAllStocks` pairs so the client-side code is symmetric
+
+### Frontend changes — daily-sell-module.tsx
+
+#### Imports added
+- `Checkbox` from `@/components/ui/checkbox`
+- `ScrollableTable` from `@/components/ui/scrollable-table` (the shared component from Task ID 11)
+- `Trash` icon from lucide-react (used for the Delete All button — same as Production)
+
+#### State added
+- `selectedIds: Set<string>` — tracks which rows are ticked
+- `bulkDeleteOpen: boolean` — controls the bulk-delete confirmation dialog
+- `bulkDeleting: boolean` — spinner state during bulk delete
+- `deleteAllOpen: boolean` — controls the delete-all confirmation dialog
+- `deletingAll: boolean` — spinner state during delete-all
+
+#### Selection handlers
+- `toggleSelect(id)` — adds/removes a single id from the set
+- `toggleSelectAll()` — if all filtered rows are selected, clears; otherwise selects all filtered rows (so search + select-all works correctly)
+- `clearSelection()` — empties the set (used by "Clear Selection" button and after any delete operation)
+
+#### Bulk delete + Delete All handlers
+- `handleBulkDelete()` — converts the Set to an array, calls `api.bulkDeleteDailySells(ids)`, shows toast with `N of M entries deleted`, clears selection, refetches
+- `handleDeleteAll()` — calls `api.deleteAllDailySells()`, shows toast, clears selection, refetches
+
+#### Header buttons (top-right) — order matches Production module
+1. **Import Excel** (outline) — opens `<ExcelImport module="dailySell">` dialog
+2. **Delete Selected** (outline, red text) — only visible when `selectedIds.size > 0`. Shows a Badge with the count next to the label. Opens the bulk-delete confirmation dialog.
+3. **Clear Selection** (ghost) — only visible when rows are selected. Quickly deselects everything.
+4. **Delete All** (outline, red text) — disabled when list is empty. Opens the delete-all confirmation dialog.
+5. **Add Daily Sell** (emerald green) — opens the add form
+
+#### Table changes
+- Wrapped in `<ScrollableTable maxHeight="max-h-[60vh]">` (replaces the old `<div className="max-h-[60vh] overflow-auto rounded-md border">` wrapper) — same shared component used by Production module
+- Sticky header CSS: `sticky left-0 bg-background z-20` on checkbox + Date cells (Date column is sticky-pinned like Production's) so they stay visible while horizontal-scrolling
+- Added checkbox column as the FIRST column (w-10 width)
+- Updated empty-state `colSpan` from 8 to 9 to account for the new checkbox column
+- Updated skeleton rows to have 9 cells (was 8)
+- Selected rows get `bg-emerald-50/60 dark:bg-emerald-900/15` background + `data-state="selected"` attribute (matches Production)
+- Card title now shows "N selected" badge when rows are selected (next to the existing "X of Y records" badge)
+
+#### Confirmation dialogs — both simple Yes/No (mirrors Production pattern)
+- **Delete All dialog**: red title "Delete ALL Daily Sell Entries?", description explains the action is permanent + lists what's NOT affected (Customer, Production, Order, Payment, Dispatch). Cancel = "No, Cancel", Action = "Yes, Delete All"
+- **Bulk Delete dialog**: red title "Delete N Selected Daily Sell Entr(y/ies)?", shows exact count. Cancel = "Cancel", Action = "Delete Selected"
+- Both dialogs disable their Cancel button while a delete is in-flight, and show a Loader2 spinner on the action button
+
+#### Full-screen loading overlay
+- Added the same modal overlay from Production: a `fixed inset-0 z-[100]` div with `bg-black/50 backdrop-blur-sm` backdrop, centered white card with size-12 spinning Loader2 (emerald), and dynamic message:
+  • Single delete: "Deleting entry..."
+  • Bulk delete: "Deleting N entries..."
+  • Delete All: "Deleting all entries..."
+- Subtext: "Please wait while records are removed."
+- Visible whenever `deleting || deletingAll || bulkDeleting` is true
+
+### Verification
+- TypeScript: no errors in modified files (daily-sell-module.tsx, lib/api.ts, daily-sell/route.ts)
+- Full `next build`: ✓ Compiled successfully in 7.5s
+- `/api/daily-sell` and `/api/daily-sell/[id]` routes registered in build output
+- All existing ExcelImport support for `dailySell` module was already in place (verified via grep — `excel-import.tsx` already has a `dailySell` template with proper field mapping)
+
+Stage Summary:
+- Daily Sell module now has the SAME UX as Production:
+  • Import Excel button (top-right, outline style)
+  • Multi-select with checkboxes (per-row + select-all in header)
+  • Delete Selected button with badge count + confirmation dialog
+  • Delete All button with simple Yes/No confirmation
+  • Clear Selection button to quickly deselect
+  • ScrollableTable with sticky header + sticky left columns (Date + checkbox)
+  • Full-screen loading overlay during any delete operation
+- Backend supports bulk delete via `POST /api/daily-sell { ids: [] }` and delete-all via `DELETE /api/daily-sell?all=true` (admin-gated)
+- Modified files:
+  • /home/z/my-project/src/app/api/daily-sell/route.ts (bulk-delete POST + DELETE ?all=true)
+  • /home/z/my-project/src/lib/api.ts (bulkDeleteDailySells + deleteAllDailySells methods)
+  • /home/z/my-project/src/components/erp/daily-sell-module.tsx (full UI rewrite)

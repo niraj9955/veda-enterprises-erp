@@ -235,6 +235,15 @@ export const api = {
     request<{ dailySell: unknown }>(`/daily-sell/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteDailySell: (id: string) =>
     request<{ message: string }>(`/daily-sell/${id}`, { method: 'DELETE' }),
+  // Bulk delete selected daily sell entries by id.
+  bulkDeleteDailySells: (ids: string[]) =>
+    request<{ message: string; deletedCount: number }>('/daily-sell', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  // Delete ALL daily sell entries (Delete All button).
+  deleteAllDailySells: () =>
+    request<{ message: string; deletedCount: number }>('/daily-sell?all=true', { method: 'DELETE' }),
 
   // Customer Payment
   getCustomerPayments: () => request<{ customerPayments: unknown[] }>('/customer-payment'),
