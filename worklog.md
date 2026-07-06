@@ -716,3 +716,25 @@ Stage Summary:
 - Each popup shows the actual data that was imported/attempted, in a properly scrollable table with sticky headers.
 - In the error popup, failed rows are visually highlighted (red left border + "Failed" badge) so the user can instantly see WHICH rows had problems and WHY (from the error list above the table).
 - Modified file: /home/z/my-project/src/components/erp/excel-import.tsx
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Add vertical scroll to the preview section in the import wizard so all rows can be viewed before import.
+
+Work Log:
+- The preview section (Step 4 of the import wizard) previously only showed the first 10 rows with a "... and N more rows" placeholder — users couldn't see the rest of their data before importing.
+- Removed the `.slice(0, 10)` limit so ALL transformed rows now render in the preview table.
+- Removed the "... and N more rows" placeholder row (no longer needed).
+- Increased ScrollArea max height from `max-h-56` (14rem) to `max-h-72` (18rem) to give more vertical room.
+- Added `sticky top-0 bg-background z-10` to TableHeader so column headers stay visible while scrolling through many rows (matches the result popup pattern).
+- Added a "Scroll to see all" badge next to the section title and a footer line "Showing all N row(s) • use the scroll bar to navigate" so users know they can scroll.
+- Added hover highlight (`hover:bg-emerald-50/50`) to each row for better readability.
+- Wrapped the ScrollArea in a bordered container for visual clarity.
+- Verified: no TypeScript errors in excel-import.tsx.
+
+Stage Summary:
+- Users can now scroll through ALL rows in the preview before clicking Import — no more 10-row limit.
+- Column headers stay sticky at the top while scrolling vertically.
+- Horizontal scroll still works for wide tables (many columns).
+- Modified file: /home/z/my-project/src/components/erp/excel-import.tsx

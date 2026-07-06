@@ -868,11 +868,12 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
               <h4 className="font-medium text-sm flex items-center gap-2">
                 <span className="w-6 h-6 bg-emerald-600 text-white rounded-full flex items-center justify-center text-xs font-bold">4</span>
                 Preview ({transformedData.length} rows)
+                <Badge variant="outline" className="text-xs ml-1">Scroll to see all</Badge>
               </h4>
-              <ScrollArea className="max-h-56">
+              <ScrollArea className="max-h-72 rounded-md border">
                 <div className="overflow-x-auto">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
                         <TableHead className="text-xs w-8">#</TableHead>
                         {template.fields
@@ -883,8 +884,8 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {transformedData.slice(0, 10).map((row, i) => (
-                        <TableRow key={i}>
+                      {transformedData.map((row, i) => (
+                        <TableRow key={i} className="hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10">
                           <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
                           {template.fields
                             .filter((f) => mappedFieldKeys.has(f.key))
@@ -895,17 +896,13 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                             ))}
                         </TableRow>
                       ))}
-                      {transformedData.length > 10 && (
-                        <TableRow>
-                          <TableCell colSpan={template.fields.filter((f) => mappedFieldKeys.has(f.key)).length + 1} className="text-xs text-center text-muted-foreground">
-                            ... and {transformedData.length - 10} more rows
-                          </TableCell>
-                        </TableRow>
-                      )}
                     </TableBody>
                   </Table>
                 </div>
               </ScrollArea>
+              <p className="text-xs text-muted-foreground text-center">
+                Showing all {transformedData.length} row(s) • use the scroll bar to navigate
+              </p>
             </div>
           )}
 
