@@ -722,9 +722,9 @@ export function ProductionModule() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete All confirmation */}
+      {/* Delete All confirmation — simple Yes / No dialog */}
       <AlertDialog open={deleteAllOpen} onOpenChange={(open) => {
-        if (!open) {
+        if (!open && !deletingAll) {
           setDeleteAllOpen(false)
           setDeleteAllConfirm('')
         }
@@ -742,29 +742,23 @@ export function ProductionModule() {
                 Linked customer bill-history aggregations will lose their production totals.
                 Customer, Order, Bill, Payment, Stock, and Dispatch records are NOT affected.
               </span>
-              <span className="block font-medium">
-                Type <code className="px-1 py-0.5 rounded bg-muted text-destructive font-mono text-xs">DELETE ALL</code> below to confirm:
-              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <Input
-            value={deleteAllConfirm}
-            onChange={(e) => setDeleteAllConfirm(e.target.value)}
-            placeholder="Type DELETE ALL to confirm"
-            className="font-mono"
-            autoFocus
-          />
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletingAll} onClick={() => { setDeleteAllOpen(false); setDeleteAllConfirm('') }}>
-              Cancel
+            <AlertDialogCancel
+              disabled={deletingAll}
+              onClick={() => { setDeleteAllOpen(false); setDeleteAllConfirm('') }}
+              className="border-border"
+            >
+              No, Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteAll}
-              disabled={deletingAll || deleteAllConfirm !== 'DELETE ALL'}
+              disabled={deletingAll}
               className="bg-destructive text-white hover:bg-destructive/90"
             >
               {deletingAll && <Loader2 className="mr-2 size-4 animate-spin" />}
-              Delete All
+              Yes, Delete All
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

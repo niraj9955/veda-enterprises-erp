@@ -165,10 +165,22 @@
   position: sticky !important;
   top: 0;
   z-index: 10;
+  /* Solid opaque background — prevents data rows from "ghosting" through
+     the header when scrolling. We use a solid white/near-white instead of
+     hsl(var(--background)) because some browsers render HSL variables with
+     slight alpha in dark mode, causing the overlap/bleed-through the user
+     reported. Two layers: an explicit solid color + the design token on
+     top, so theme overrides still work but we always have a fallback. */
+  background: #ffffff;
   background: hsl(var(--background));
-  /* box-shadow gives the header a subtle bottom border so it visually
-     separates from the data rows below when scrolling. */
-  box-shadow: inset 0 -1px 0 hsl(var(--border));
+  /* `box-shadow` creates a subtle 1px bottom border that visually
+     separates the sticky header from the data rows below it. Using
+     box-shadow instead of border-bottom avoids layout shifts that
+     would push the sticky position out of alignment. */
+  box-shadow: inset 0 -1px 0 hsl(var(--border)), 0 1px 0 hsl(var(--border));
+  /* Extra safety: make absolutely sure no alpha leaks through by
+     forcing isolation. */
+  isolation: isolate;
 }
 
 /* Header cells that are ALSO pinned left (e.g. the checkbox / Date column
@@ -179,9 +191,27 @@
 }
 
 /* Body cells with sticky-left positioning (e.g. pinned checkbox column)
-   need to be above regular body cells but below the header. */
+   need to be above regular body cells but below the header. They also
+   need an explicit opaque background so scrolling data doesn't bleed
+   through them horizontally. */
 .scrollable-table-wrapper [data-slot="table-body"] td.sticky {
   z-index: 5;
+  background: #ffffff;
+  background: hsl(var(--background));
+  isolation: isolate;
+}
+
+/* Dark mode: use the dark background token value so the solid fallback
+   doesn't render as bright white in dark themes. */
+@media (prefers-color-scheme: dark) {
+  .scrollable-table-wrapper [data-slot="table-header"] th,
+  .scrollable-table-wrapper [data-slot="table-body"] td.sticky {
+    background: hsl(var(--background));
+  }
+}
+/* Explicit dark class on <html> (shadcn convention) — same override. */
+.dark .scrollable-table-wrapper [data-slot="table-header"] th,
+.dark .scrollable-table-wrapper [data-slot="table-body"] td.sticky {
   background: hsl(var(--background));
 }
 
