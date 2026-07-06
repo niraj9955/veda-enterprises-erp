@@ -39,6 +39,7 @@ import {
 import { Factory, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload , Search, Trash} from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import ExcelImport from '@/components/erp/excel-import'
+import { ScrollableTable } from '@/components/ui/scrollable-table'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -387,7 +388,29 @@ export function ProductionModule() {
     ))
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Full-screen loading overlay shown during any delete operation.
+          The spinner + message stay visible until the API call completes and
+          the table refreshes, so the user always knows "something is happening". */}
+      {(deleting || deletingAll || bulkDeleting) && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl p-8 flex flex-col items-center gap-4 min-w-[280px]">
+            <Loader2 className="size-12 animate-spin text-emerald-600" />
+            <div className="text-center">
+              <p className="text-lg font-semibold">
+                {bulkDeleting
+                  ? `Deleting ${selectedIds.size} entries...`
+                  : deletingAll
+                  ? 'Deleting all entries...'
+                  : 'Deleting entry...'}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Please wait while records are removed and stock is re-synced.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
@@ -489,7 +512,7 @@ export function ProductionModule() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="max-h-[60vh] overflow-auto rounded-md border">
+          <ScrollableTable maxHeight="max-h-[60vh]">
             <Table>
               <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
@@ -579,7 +602,7 @@ export function ProductionModule() {
                 )}
               </TableBody>
             </Table>
-          </div>
+          </ScrollableTable>
         </CardContent>
       </Card>
 
