@@ -329,3 +329,41 @@ Stage Summary:
 - Existing production rows in MongoDB will still have `customerName`/`address` fields in their documents (MongoDB is schemaless), but they will be silently ignored on read/write — no migration needed.
 - Customer bill-history now links productions to customers via customerId only, which is consistent with how Dispatches, Orders, Payments, and Bills are already linked.
 - Side-fix: PUT /api/production/[id] was previously a no-op for product quantity updates (its field allowlist only included `date`/`brickType`/`quantityProduced`/`shift`/`remarks`, none of which except `date` and `remarks` exist on the schema). Now correctly accepts all product fields.
+
+---
+Task ID: prod-cement-1
+Agent: main
+Task: Add cement field after date in Production module
+
+Work Log:
+- Inspected production-module.tsx + API routes + model + excel-import + bill-history
+- DISCOVERED pre-existing critical bug: Production UI used field keys with "mm" suffix (zigZagWhite80mm, etc.) but the Mongoose model + API routes use the non-mm variant (zigZagWhite80). This meant every production entry saved via the UI was silently writing 0 for all 6 zigzag product quantities — only curveStone, chequreTile, transportationCharge, remarks were actually persisting
+- Added new `cement` field to Production:
+  * production-module.tsx: cement added to Production interface, ProductionFormData, emptyForm, openEditDialog, handleSubmit payload, table header (column right after Date), table body cell, skeleton row, empty-state colSpan (now PRODUCT_FIELDS.length + 5)
+  * Form layout: Date → Cement (bags) → product grid → transport → remarks
+  * Table layout: Date | Cement | <8 product columns> | Transport ₹ | Remarks | Actions
+  * models.ts ProductionSchema: added `cement: { type: Number, default: 0 }` (positioned right after customerId, before zigZagWhite80)
+  * /api/production/route.ts POST: added `cement: Number(body.cement) || 0`
+  * /api/production/[id]/route.ts PUT: added 'cement' to the field allowlist
+  * excel-import.tsx production config: added cement column with aliases ['cement', 'cement bags', 'सीमेंट']
+  * /api/import/route.ts GET endpoint metadata: added 'cement' to production module's field list (so import template includes it)
+  * /api/customers/[id]/bill-history/route.ts PRODUCT_FIELDS: added cement entry as first item with HSN 2523 (cement HSN code) so it shows up in the customer bill history aggregation and "add all unbilled production to bill" workflow
+- FIXED field name mismatch by renaming UI keys to align with model:
+  * zigZagWhite80mm  → zigZagWhite80
+  * zigZagRed80mm    → zigZagRed80
+  * zigZagYellow80mm → zigZagYellow80
+  * zigZagWhite60mm  → zigZagWhite60
+  * zigZagRed60mm    → zigZagRed60
+  * zigZagYellow60mm → zigZagYellow60
+  * User-facing labels ("Zig Zag White 80mm" etc.) are unchanged — only internal TypeScript field keys renamed
+- Build passed (npx next build succeeded)
+- Committed (e86221b) and pushed to GitHub; Vercel auto-deploy triggered
+
+Stage Summary:
+- Production form now has a Cement (bags) input right below Date
+- Production table now has a Cement column right after Date
+- Excel import template now includes Cement as a column
+- Customer bill-history now aggregates cement into the billable line items (HSN 2523)
+- CRITICAL FIX: All 6 zigzag product quantities in Production were silently saving as 0 due to a UI↔model field name mismatch (zigZagWhite80mm vs zigZagWhite80). Now fixed — production entries will correctly persist product quantities going forward.
+- Note: stock-module.tsx has the same naming mismatch (UI uses zigZagRed80mm, model uses zigZagRed80). Not touched since user only asked about production. Available for follow-up if user reports stock not saving.
+- Existing production rows in MongoDB still have 0s for zigzag quantities (from before this fix) — they cannot be recovered. Only newly-created/edited entries going forward will have correct values.
