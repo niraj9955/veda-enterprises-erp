@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -20,6 +20,90 @@ import {
 import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download, Loader2, Sparkles, ArrowRight } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toast } from '@/hooks/use-toast'
+
+// ═══ ScrollableTable ════════════════════════════════════════════════════════
+// A wrapper that gives a table BOTH vertical scroll (capped by maxHeight) AND
+// a horizontal scrollbar that is ALWAYS visible at the bottom of the viewport.
+//
+// Why we need this: a plain `overflow-auto` div puts the horizontal scrollbar
+// at the bottom of the SCROLL CONTENT — so when a table has 48 rows, the user
+// has to scroll all the way down to reach the horizontal scrollbar. That makes
+// wide tables (e.g. Production with 14 columns) unusable.
+//
+// This component uses two synced scroll areas:
+//   1. The main area scrolls both vertically and horizontally (but its native
+//      horizontal scrollbar is hidden via CSS).
+//   2. A thin "fake" horizontal scrollbar below the main area is always
+//      visible and is bidirectionally synced with the main area's scrollLeft.
+//
+// Result: the user always sees a horizontal scrollbar at the bottom of the
+// visible area, no matter how many rows the table has.
+// ════════════════════════════════════════════════════════════════════════════
+function ScrollableTable({
+  children,
+  maxHeight = 'max-h-72',
+  className = '',
+}: {
+  children: React.ReactNode
+  maxHeight?: string
+  className?: string
+}) {
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const fakeScrollRef = useRef<HTMLDivElement>(null)
+  const [contentWidth, setContentWidth] = useState(0)
+
+  // Measure the inner content width so the fake scrollbar has the same
+  // scrollable width as the table.
+  useEffect(() => {
+    const body = bodyRef.current
+    if (!body) return
+    const measure = () => {
+      const inner = body.firstElementChild as HTMLElement | null
+      if (inner) setContentWidth(inner.scrollWidth)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(body)
+    return () => ro.disconnect()
+  }, [])
+
+  const onBodyScroll = useCallback(() => {
+    if (bodyRef.current && fakeScrollRef.current) {
+      fakeScrollRef.current.scrollLeft = bodyRef.current.scrollLeft
+    }
+  }, [])
+
+  const onFakeScroll = useCallback(() => {
+    if (bodyRef.current && fakeScrollRef.current) {
+      bodyRef.current.scrollLeft = fakeScrollRef.current.scrollLeft
+    }
+  }, [])
+
+  return (
+    <div className={`flex flex-col rounded-md border ${className}`}>
+      {/* Main scroll area — vertical + horizontal. Horizontal scrollbar is
+          hidden via CSS so only the fake one at the bottom is visible. */}
+      <div
+        ref={bodyRef}
+        onScroll={onBodyScroll}
+        className={`${maxHeight} overflow-auto scrollable-table-body`}
+      >
+        <div className="min-w-max">{children}</div>
+      </div>
+      {/* Fake horizontal scrollbar — always visible at the bottom of the
+          viewport. Only shown when the content is wider than the container. */}
+      {contentWidth > 0 && (
+        <div
+          ref={fakeScrollRef}
+          onScroll={onFakeScroll}
+          className="overflow-x-auto overflow-y-hidden border-t bg-muted/40 scrollable-table-fakebar"
+        >
+          <div style={{ width: contentWidth, height: 12 }} />
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface ExcelImportProps {
   module:
@@ -799,6 +883,9 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                 <Sparkles className="h-4 w-4 text-amber-500" />
                 Column Mapping (Auto-detected)
               </h4>
+              <p className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md px-3 py-2">
+                ℹ️ Columns are matched by <strong>header name</strong>, not position. You can upload a file with columns in any order — the system will auto-map each column to the correct field below. You can also adjust any mapping manually.
+              </p>
 
               {unmappedRequired.length > 0 && (
                 <Alert variant="destructive" className="py-2">
@@ -873,8 +960,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                 Preview ({transformedData.length} rows)
                 <Badge variant="outline" className="text-xs ml-1">Scroll to see all</Badge>
               </h4>
-              <div className="max-h-72 overflow-auto rounded-md border">
-                <div className="min-w-max">
+              <ScrollableTable maxHeight="max-h-72">
                   <Table>
                     <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
@@ -901,8 +987,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                       ))}
                     </TableBody>
                   </Table>
-                </div>
-              </div>
+              </ScrollableTable>
               <p className="text-xs text-muted-foreground text-center">
                 Showing all {transformedData.length} row(s) • use the scroll bar to navigate
               </p>
@@ -990,8 +1075,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                   <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                   Imported Data ({importedRows.length} rows)
                 </h4>
-                <div className="flex-1 min-h-0 max-h-[45vh] overflow-auto rounded-md border">
-                  <div className="min-w-max">
+                <ScrollableTable maxHeight="max-h-[45vh]" className="flex-1 min-h-0">
                     <Table>
                       <TableHeader className="sticky top-0 bg-background z-10">
                         <TableRow>
@@ -1018,8 +1102,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                         ))}
                       </TableBody>
                     </Table>
-                  </div>
-                </div>
+                </ScrollableTable>
               </div>
             )}
           </div>
@@ -1118,8 +1201,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                   Data Sent for Import ({importedRows.length} rows)
                   <Badge variant="outline" className="text-xs ml-1">Red = failed</Badge>
                 </h4>
-                <div className="flex-1 min-h-0 max-h-[35vh] overflow-auto rounded-md border">
-                  <div className="min-w-max">
+                <ScrollableTable maxHeight="max-h-[35vh]" className="flex-1 min-h-0">
                     <Table>
                       <TableHeader className="sticky top-0 bg-background z-10">
                         <TableRow>
@@ -1168,8 +1250,7 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
                         })}
                       </TableBody>
                     </Table>
-                  </div>
-                </div>
+                </ScrollableTable>
               </div>
             )}
           </div>

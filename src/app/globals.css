@@ -121,6 +121,44 @@
   }
 }
 
+/* ─── ScrollableTable: hide the native horizontal scrollbar on the main ───
+   body so only the synced "fake" scrollbar at the bottom is visible.
+   The vertical scrollbar is kept. This is applied ONLY to elements with
+   the .scrollable-table-body class so it doesn't affect other scroll areas.
+   ---------------------------------------------------------------------- */
+.scrollable-table-body {
+  /* Firefox: hide horizontal scrollbar only via a trick — we can't selectively
+     hide just one axis with scrollbar-width, so we use scrollbar-color to make
+     the horizontal thumb transparent while keeping the vertical one visible. */
+  scrollbar-color: var(--muted-foreground) transparent;
+}
+/* WebKit (Chrome / Safari / Edge): hide the horizontal scrollbar on the
+   main table body. The fake scrollbar at the bottom (.scrollable-table-fakebar)
+   is NOT affected and remains visible. */
+.scrollable-table-body::-webkit-scrollbar:horizontal {
+  display: none;
+  height: 0;
+}
+/* Make sure the vertical scrollbar on the body is still visible and slim. */
+.scrollable-table-body::-webkit-scrollbar:vertical {
+  width: 10px;
+}
+.scrollable-table-body::-webkit-scrollbar-thumb:vertical {
+  background: var(--muted-foreground);
+  border-radius: 9999px;
+}
+/* Style the fake horizontal scrollbar so it's clearly visible at the bottom. */
+.scrollable-table-fakebar::-webkit-scrollbar:horizontal {
+  height: 12px;
+}
+.scrollable-table-fakebar::-webkit-scrollbar-thumb:horizontal {
+  background: var(--muted-foreground);
+  border-radius: 9999px;
+}
+.scrollable-table-fakebar::-webkit-scrollbar-track:horizontal {
+  background: var(--muted);
+}
+
 /* ─── Print styles for Customer History page ─────────────────────────────
    When the user clicks "Print History" inside the customer ledger, we
    hide the entire app chrome (sidebar, header, scrollbars) and show

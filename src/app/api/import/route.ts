@@ -146,13 +146,20 @@ function rowKey(module: string, row: Record<string, unknown>): string {
 }
 
 // Map a DB record back into the same natural-key shape as a row.
+// IMPORTANT: this MUST mirror rowKey() exactly — if rowKey uses just `date`
+// for production, dbKey must also use just `date` for production. A mismatch
+// here means existingKeys will contain keys like "2026-06-21||" while the
+// incoming row key is "2026-06-21", so the duplicate check NEVER matches and
+// duplicates get imported. This was the root cause of duplicate production
+// entries being imported.
 function dbKey(module: string, doc: Record<string, unknown>): string {
   const s = (v: unknown) => String(v ?? '').trim().toLowerCase()
   switch (module) {
     case 'customers':
       return s(doc.mobile)
     case 'production':
-      return `${s(doc.date)}|${s(doc.customerName)}|${s(doc.address)}`
+      // One production entry per date — matches rowKey('production')
+      return s(doc.date)
     case 'stock':
       return s(doc.date)
     case 'dailySell':
@@ -333,20 +340,24 @@ export async function POST(request: Request) {
         normalizeRowDates(row as Record<string, unknown>)
 
         // ── Duplicate check (against DB AND within this batch) ──────────
+        // Duplicates are pushed to the `errors` array (not just skippedReasons)
+        // so they appear in the RED error popup with a clear "Duplicate data
+        // found" message, exactly as the user requested. The row is still
+        // counted in duplicatesSkipped for the summary card.
         const key = rowKey(module, row as Record<string, unknown>)
         if (key) {
           if (existingKeys.has(key)) {
             skipped++
             duplicatesSkipped++
             const label = duplicateRowLabel(module, row as Record<string, unknown>)
-            skippedReasons.push(`Row ${i + 1}: Duplicate — ${label} already exists in records, skipped`)
+            errors.push(`Row ${i + 1}: Duplicate data found — ${label} already exists in records`)
             continue
           }
           if (seenInBatch.has(key)) {
             skipped++
             duplicatesSkipped++
             const label = duplicateRowLabel(module, row as Record<string, unknown>)
-            skippedReasons.push(`Row ${i + 1}: Duplicate — ${label} appears more than once in this Excel file, only first occurrence imported`)
+            errors.push(`Row ${i + 1}: Duplicate data found — ${label} appears more than once in this Excel file`)
             continue
           }
           seenInBatch.add(key)
