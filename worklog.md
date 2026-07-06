@@ -807,3 +807,27 @@ Stage Summary:
 - Wide tables (e.g. Production with 14 columns) can now be fully inspected — no more "Zig Za..." truncation.
 - Sticky column headers remain visible while scrolling vertically.
 - Modified file: /home/z/my-project/src/components/erp/excel-import.tsx
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: Push all unpushed commits to GitHub so Vercel deploys the preview-scroll fix and Production multi-select delete feature.
+
+Work Log:
+- User reported "no change" — screenshot still showed truncated "Zig Za..." column in import preview, AND Production module still had no select-and-delete option.
+- Root cause: Tasks 5 and 6 had been committed locally (6 commits ahead of origin/main) but NEVER pushed to GitHub. Vercel auto-deploys from GitHub, so the user was still seeing the OLD deployed version.
+- Verified both files locally before pushing:
+  • `excel-import.tsx` has 5 `overflow-auto` divs replacing the old shadcn ScrollArea (lines 876, 993, 1100, 1121, plus the outer dialog body at 750)
+  • `production-module.tsx` has full multi-select infrastructure: `Checkbox` import, `selectedIds` state, `bulkDeleteOpen` state, "Delete Selected" button (line 423), select-all header checkbox (line 497), per-row checkboxes (line 533), AlertDialog confirmation (line 750), and the bulk-delete API endpoint at `/api/production/bulk-delete`
+- Ran `git push origin main` — successfully pushed 6 commits (b2aa1f8..16faa82) to GitHub.
+- Ran local `next build` to confirm the deploy will succeed:
+  • ✓ Compiled successfully in 7.0s
+  • ✓ All 12 static pages generated
+  • ✓ `/api/production/bulk-delete` route is registered in the build output
+- Vercel will auto-detect the GitHub push and start a production deployment (typically 1-2 minutes).
+
+Stage Summary:
+- All local fixes are now pushed to GitHub and Vercel will deploy them automatically.
+- After Vercel finishes deploying (1-2 min), the user should HARD-REFRESH their browser (Ctrl+Shift+R / Cmd+Shift+R) to bypass cache and see:
+  1. Import preview/result tables with working horizontal+vertical scrollbars (no more "Zig Za..." truncation)
+  2. Production module with checkbox column, "Delete Selected" button, and confirmation dialog for bulk delete
