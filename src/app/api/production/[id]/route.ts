@@ -27,6 +27,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const fields = [
       'date',
       'customerId',
+      'cement',
       'zigZagWhite80',
       'zigZagRed80',
       'zigZagYellow80',

@@ -55,6 +55,7 @@ CustomerSchema.index({ createdAt: -1 });
 const ProductionSchema = new mongoose.Schema({
   date: { type: String, required: true },
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
+  cement: { type: Number, default: 0 },
   zigZagWhite80: { type: Number, default: 0 },
   zigZagRed80: { type: Number, default: 0 },
   zigZagYellow80: { type: Number, default: 0 },

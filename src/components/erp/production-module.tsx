@@ -44,12 +44,13 @@ import ExcelImport from '@/components/erp/excel-import'
 interface Production {
   id: string
   date: string
-  zigZagWhite80mm: number
-  zigZagRed80mm: number
-  zigZagYellow80mm: number
-  zigZagWhite60mm: number
-  zigZagRed60mm: number
-  zigZagYellow60mm: number
+  cement: number
+  zigZagWhite80: number
+  zigZagRed80: number
+  zigZagYellow80: number
+  zigZagWhite60: number
+  zigZagRed60: number
+  zigZagYellow60: number
   curveStone: number
   chequreTile: number
   transportationCharge: number
@@ -60,12 +61,13 @@ interface Production {
 
 interface ProductionFormData {
   date: string
-  zigZagWhite80mm: string
-  zigZagRed80mm: string
-  zigZagYellow80mm: string
-  zigZagWhite60mm: string
-  zigZagRed60mm: string
-  zigZagYellow60mm: string
+  cement: string
+  zigZagWhite80: string
+  zigZagRed80: string
+  zigZagYellow80: string
+  zigZagWhite60: string
+  zigZagRed60: string
+  zigZagYellow60: string
   curveStone: string
   chequreTile: string
   transportationCharge: string
@@ -93,12 +95,13 @@ const enIN = new Intl.NumberFormat('en-IN')
 
 const emptyForm: ProductionFormData = {
   date: '',
-  zigZagWhite80mm: '',
-  zigZagRed80mm: '',
-  zigZagYellow80mm: '',
-  zigZagWhite60mm: '',
-  zigZagRed60mm: '',
-  zigZagYellow60mm: '',
+  cement: '',
+  zigZagWhite80: '',
+  zigZagRed80: '',
+  zigZagYellow80: '',
+  zigZagWhite60: '',
+  zigZagRed60: '',
+  zigZagYellow60: '',
   curveStone: '',
   chequreTile: '',
   transportationCharge: '',
@@ -106,12 +109,12 @@ const emptyForm: ProductionFormData = {
 }
 
 const PRODUCT_FIELDS: { key: keyof ProductionFormData; label: string }[] = [
-  { key: 'zigZagWhite80mm', label: 'Zig Zag White 80mm' },
-  { key: 'zigZagRed80mm', label: 'Zig Zag Red 80mm' },
-  { key: 'zigZagYellow80mm', label: 'Zig Zag Yellow 80mm' },
-  { key: 'zigZagWhite60mm', label: 'Zig Zag White 60mm' },
-  { key: 'zigZagRed60mm', label: 'Zig Zag Red 60mm' },
-  { key: 'zigZagYellow60mm', label: 'Zig Zag Yellow 60mm' },
+  { key: 'zigZagWhite80', label: 'Zig Zag White 80mm' },
+  { key: 'zigZagRed80', label: 'Zig Zag Red 80mm' },
+  { key: 'zigZagYellow80', label: 'Zig Zag Yellow 80mm' },
+  { key: 'zigZagWhite60', label: 'Zig Zag White 60mm' },
+  { key: 'zigZagRed60', label: 'Zig Zag Red 60mm' },
+  { key: 'zigZagYellow60', label: 'Zig Zag Yellow 60mm' },
   { key: 'curveStone', label: 'Curve Stone' },
   { key: 'chequreTile', label: 'Chequre Tile' },
 ]
@@ -183,12 +186,13 @@ export function ProductionModule() {
     setEditingProduction(prod)
     setFormData({
       date: prod.date ? prod.date.split('T')[0] : '',
-      zigZagWhite80mm: String(prod.zigZagWhite80mm || ''),
-      zigZagRed80mm: String(prod.zigZagRed80mm || ''),
-      zigZagYellow80mm: String(prod.zigZagYellow80mm || ''),
-      zigZagWhite60mm: String(prod.zigZagWhite60mm || ''),
-      zigZagRed60mm: String(prod.zigZagRed60mm || ''),
-      zigZagYellow60mm: String(prod.zigZagYellow60mm || ''),
+      cement: String(prod.cement || ''),
+      zigZagWhite80: String(prod.zigZagWhite80 || ''),
+      zigZagRed80: String(prod.zigZagRed80 || ''),
+      zigZagYellow80: String(prod.zigZagYellow80 || ''),
+      zigZagWhite60: String(prod.zigZagWhite60 || ''),
+      zigZagRed60: String(prod.zigZagRed60 || ''),
+      zigZagYellow60: String(prod.zigZagYellow60 || ''),
       curveStone: String(prod.curveStone || ''),
       chequreTile: String(prod.chequreTile || ''),
       transportationCharge: String(prod.transportationCharge || ''),
@@ -211,12 +215,13 @@ export function ProductionModule() {
     try {
       const payload = {
         date: formData.date,
-        zigZagWhite80mm: Number(formData.zigZagWhite80mm) || 0,
-        zigZagRed80mm: Number(formData.zigZagRed80mm) || 0,
-        zigZagYellow80mm: Number(formData.zigZagYellow80mm) || 0,
-        zigZagWhite60mm: Number(formData.zigZagWhite60mm) || 0,
-        zigZagRed60mm: Number(formData.zigZagRed60mm) || 0,
-        zigZagYellow60mm: Number(formData.zigZagYellow60mm) || 0,
+        cement: Number(formData.cement) || 0,
+        zigZagWhite80: Number(formData.zigZagWhite80) || 0,
+        zigZagRed80: Number(formData.zigZagRed80) || 0,
+        zigZagYellow80: Number(formData.zigZagYellow80) || 0,
+        zigZagWhite60: Number(formData.zigZagWhite60) || 0,
+        zigZagRed60: Number(formData.zigZagRed60) || 0,
+        zigZagYellow60: Number(formData.zigZagYellow60) || 0,
         curveStone: Number(formData.curveStone) || 0,
         chequreTile: Number(formData.chequreTile) || 0,
         transportationCharge: Number(formData.transportationCharge) || 0,
@@ -269,6 +274,7 @@ export function ProductionModule() {
     Array.from({ length: 3 }).map((_, i) => (
       <TableRow key={i}>
         <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+        <TableCell><Skeleton className="h-4 w-16" /></TableCell>
         <TableCell><Skeleton className="h-4 w-32" /></TableCell>
         <TableCell><Skeleton className="h-4 w-24" /></TableCell>
         {PRODUCT_FIELDS.map((_, j) => (
@@ -344,6 +350,7 @@ export function ProductionModule() {
               <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
                   <TableHead className="sticky left-0 bg-background z-10">Date</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Cement</TableHead>
                   {PRODUCT_FIELDS.map((f) => (
                     <TableHead key={f.key} className="text-right whitespace-nowrap">{f.label}</TableHead>
                   ))}
@@ -357,7 +364,7 @@ export function ProductionModule() {
                   renderSkeletons()
                 ) : filteredProductions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={PRODUCT_FIELDS.length + 4} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={PRODUCT_FIELDS.length + 5} className="h-32 text-center text-muted-foreground">
                       No production entries yet. Click &quot;Add Production Entry&quot; to get started.
                     </TableCell>
                   </TableRow>
@@ -366,6 +373,9 @@ export function ProductionModule() {
                     <TableRow key={prod.id}>
                       <TableCell className="font-medium whitespace-nowrap sticky left-0 bg-background z-10">
                         {formatDate(prod.date)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {enIN.format(prod.cement || 0)}
                       </TableCell>
                       {PRODUCT_FIELDS.map((f) => (
                         <TableCell key={f.key} className="text-right font-mono">
@@ -431,6 +441,17 @@ export function ProductionModule() {
                 type="date"
                 value={formData.date}
                 onChange={(e) => handleFormChange('date', e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="prod-cement">Cement (bags)</Label>
+              <Input
+                id="prod-cement"
+                type="number"
+                min="0"
+                placeholder="0"
+                value={formData.cement}
+                onChange={(e) => handleFormChange('cement', e.target.value)}
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

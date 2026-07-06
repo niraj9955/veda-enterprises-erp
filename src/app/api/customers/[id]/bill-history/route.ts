@@ -9,6 +9,7 @@ export const revalidate = 0
 // Product field → human-readable label map. Used to flatten a Production
 // doc into billable line items. Quantities of 0 are skipped downstream.
 const PRODUCT_FIELDS: Array<{ key: string; label: string; hsn: string }> = [
+  { key: 'cement',        label: 'Cement (bags)',        hsn: '2523' },
   { key: 'zigZagWhite80',  label: 'Zig Zag White 80mm',  hsn: '6810' },
   { key: 'zigZagRed80',    label: 'Zig Zag Red 80mm',    hsn: '6810' },
   { key: 'zigZagYellow80', label: 'Zig Zag Yellow 80mm', hsn: '6810' },
