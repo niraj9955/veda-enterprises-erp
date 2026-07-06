@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { Production } from '@/lib/models'
+import { getSession } from '@/lib/auth'
 
 // Force dynamic — never cache list responses
 export const dynamic = 'force-dynamic'
@@ -47,5 +48,39 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error creating production:', error)
     return NextResponse.json({ error: 'Failed to create production entry' }, { status: 500 })
+  }
+}
+
+// DELETE /api/production?all=true
+// Wipes ALL production entries. Gated behind admin session — only admins
+// can perform bulk destructive operations.
+export async function DELETE(request: Request) {
+  try {
+    await connectDB()
+    const session = await getSession()
+    if (!session || session.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Unauthorized — only admins can delete all production entries' },
+        { status: 403 }
+      )
+    }
+
+    const { searchParams } = new URL(request.url)
+    const all = searchParams.get('all')
+    if (all !== 'true' && all !== '1') {
+      return NextResponse.json(
+        { error: 'Missing ?all=true — pass it to confirm bulk delete' },
+        { status: 400 }
+      )
+    }
+
+    const result = await Production.deleteMany({})
+    return NextResponse.json({
+      message: 'All production entries deleted',
+      deletedCount: result.deletedCount,
+    })
+  } catch (error) {
+    console.error('Error deleting all productions:', error)
+    return NextResponse.json({ error: 'Failed to delete all production entries' }, { status: 500 })
   }
 }

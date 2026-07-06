@@ -36,7 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Factory, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload , Search} from 'lucide-react'
+import { Factory, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload , Search, Trash} from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -132,6 +132,9 @@ export function ProductionModule() {
   const [formSubmitting, setFormSubmitting] = React.useState(false)
   const [deleteTarget, setDeleteTarget] = React.useState<Production | null>(null)
   const [deleting, setDeleting] = React.useState(false)
+  const [deleteAllOpen, setDeleteAllOpen] = React.useState(false)
+  const [deletingAll, setDeletingAll] = React.useState(false)
+  const [deleteAllConfirm, setDeleteAllConfirm] = React.useState('')
 
   const fetchProductions = React.useCallback(async () => {
     setLoading(true)
@@ -270,6 +273,29 @@ export function ProductionModule() {
     }
   }
 
+  const handleDeleteAll = async () => {
+    if (deleteAllConfirm !== 'DELETE ALL') return
+    setDeletingAll(true)
+    try {
+      const res = await api.deleteAllProductions()
+      toast({
+        title: 'Success',
+        description: `${res.deletedCount} production entr${res.deletedCount === 1 ? 'y' : 'ies'} deleted`,
+      })
+      setDeleteAllOpen(false)
+      setDeleteAllConfirm('')
+      fetchProductions()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete all production entries',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeletingAll(false)
+    }
+  }
+
   const renderSkeletons = () =>
     Array.from({ length: 3 }).map((_, i) => (
       <TableRow key={i}>
@@ -300,7 +326,7 @@ export function ProductionModule() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
             onClick={() => setImportOpen(true)}
@@ -308,6 +334,15 @@ export function ProductionModule() {
           >
             <Upload className="size-4 mr-2" />
             Import Excel
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setDeleteAllOpen(true)}
+            disabled={productions.length === 0 || loading}
+            className="w-full sm:w-auto text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash className="size-4 mr-2" />
+            Delete All
           </Button>
           <Button
             onClick={openAddDialog}
@@ -529,6 +564,54 @@ export function ProductionModule() {
             >
               {deleting && <Loader2 className="mr-2 size-4 animate-spin" />}
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete All confirmation */}
+      <AlertDialog open={deleteAllOpen} onOpenChange={(open) => {
+        if (!open) {
+          setDeleteAllOpen(false)
+          setDeleteAllConfirm('')
+        }
+      }}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Delete ALL Production Entries?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-sm">
+              <span className="block">
+                You are about to permanently delete{' '}
+                <strong className="text-destructive">{productions.length} production entr{productions.length === 1 ? 'y' : 'ies'}</strong>.
+                This action <strong>cannot be undone</strong>.
+              </span>
+              <span className="block text-muted-foreground">
+                Linked customer bill-history aggregations will lose their production totals.
+                Customer, Order, Bill, Payment, Stock, and Dispatch records are NOT affected.
+              </span>
+              <span className="block font-medium">
+                Type <code className="px-1 py-0.5 rounded bg-muted text-destructive font-mono text-xs">DELETE ALL</code> below to confirm:
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={deleteAllConfirm}
+            onChange={(e) => setDeleteAllConfirm(e.target.value)}
+            placeholder="Type DELETE ALL to confirm"
+            className="font-mono"
+            autoFocus
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingAll} onClick={() => { setDeleteAllOpen(false); setDeleteAllConfirm('') }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAll}
+              disabled={deletingAll || deleteAllConfirm !== 'DELETE ALL'}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {deletingAll && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Delete All
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

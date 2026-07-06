@@ -153,6 +153,8 @@ export const api = {
     request<{ production: unknown }>(`/production/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProduction: (id: string) =>
     request<{ message: string }>(`/production/${id}`, { method: 'DELETE' }),
+  deleteAllProductions: () =>
+    request<{ message: string; deletedCount: number }>('/production?all=true', { method: 'DELETE' }),
 
   // Stock
   getStock: () => request<{ stocks: unknown[] }>('/stock'),
