@@ -831,3 +831,48 @@ Stage Summary:
 - After Vercel finishes deploying (1-2 min), the user should HARD-REFRESH their browser (Ctrl+Shift+R / Cmd+Shift+R) to bypass cache and see:
   1. Import preview/result tables with working horizontal+vertical scrollbars (no more "Zig Za..." truncation)
   2. Production module with checkbox column, "Delete Selected" button, and confirmation dialog for bulk delete
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Three fixes — (1) proper bottom horizontal scrollbar on import tables, (2) stop duplicate data from being imported + show "Duplicate data found" error, (3) ensure shuffled Excel columns auto-map correctly.
+
+Work Log:
+
+### Task 1: Sticky bottom horizontal scrollbar
+- Problem: The previous `overflow-auto` div put the horizontal scrollbar at the bottom of the SCROLL CONTENT. For a 48-row table, the user had to scroll all the way down to reach the horizontal scrollbar — effectively unusable for wide tables (Production has 14 columns).
+- Solution: Created a new `ScrollableTable` React component (inline in excel-import.tsx) that uses TWO synced scroll areas:
+  1. Main body: `overflow-auto` with CSS class `scrollable-table-body` that hides the native horizontal scrollbar (via `::-webkit-scrollbar:horizontal { display: none }`) but keeps the vertical scrollbar.
+  2. Fake bottom scrollbar: A thin div below the main body with `overflow-x-auto` and class `scrollable-table-fakebar` that's always visible at the bottom of the viewport. Its scrollLeft is bidirectionally synced with the main body via `onScroll` handlers.
+- The fake scrollbar's inner spacer div has `width = contentWidth` (measured via ResizeObserver on the main body's firstElementChild.scrollWidth), so it has the exact same scrollable width as the table.
+- Added CSS rules to globals.css for `scrollable-table-body` (hide horizontal, style vertical) and `scrollable-table-fakebar` (style horizontal scrollbar with muted thumb + track).
+- Replaced all 3 table wrappers in excel-import.tsx with `<ScrollableTable>`:
+  1. Step 4 Preview table (max-h-72)
+  2. Success popup "Imported Data" table (max-h-[45vh])
+  3. Error popup "Data Sent for Import" table (max-h-[35vh])
+
+### Task 2: Fix duplicate detection + show as error
+- **CRITICAL BUG FOUND**: In `/api/import/route.ts`, the `dbKey()` function for the `production` module returned `${date}|${customerName}|${address}` but `rowKey()` for production returned just `${date}`. These NEVER matched — `existingKeys` contained `"2026-06-21||"` while incoming row keys were `"2026-06-21"`. Result: DB duplicates were NEVER detected, only within-batch duplicates were caught. This is why the user kept seeing duplicate production entries being imported.
+- Fixed `dbKey()` for production to return just `s(doc.date)`, matching `rowKey()`. Added a prominent comment explaining the mismatch and its consequences.
+- Changed duplicate handling: instead of pushing to `skippedReasons` (which was merged into errors but with a "Duplicate — ... skipped" message), duplicates now push directly to `errors` with the message `"Row N: Duplicate data found — <label> already exists in records"` or `"Row N: Duplicate data found — <label> appears more than once in this Excel file"`.
+- Result: duplicates now appear in the RED error popup (not the green success popup) with "Duplicate data found" message, and the corresponding rows in the data table are highlighted with red "Failed" badge. The `duplicatesSkipped` counter still works for the summary card.
+
+### Task 3: Shuffled column auto-map
+- Verified that `autoMapColumns()` already matches by HEADER NAME (using field key + aliases + fuzzy contains), NOT by column position. So if the Excel has columns in any order (e.g., Date in column F instead of A), they get correctly mapped to the template fields.
+- Verified that `transformRow()` builds the result object using `fieldKey` (not `excelCol`), so data ends up in the correct field regardless of Excel column order.
+- Verified that the preview table renders columns in TEMPLATE order (iterating over `template.fields`), not Excel order — so the preview always shows the standard layout.
+- Added a blue info banner in Step 3 (Column Mapping) that tells the user: "Columns are matched by header name, not position. You can upload a file with columns in any order — the system will auto-map each column to the correct field."
+
+### Verification
+- TypeScript: no errors in modified files (excel-import.tsx, import/route.ts, globals.css)
+- Full `next build`: ✓ Compiled successfully in 6.0s, all 12 static pages generated
+- Committed and pushed to GitHub (commit 6a0bc5c) → Vercel will auto-deploy
+
+Stage Summary:
+- All 3 import tables now have a sticky bottom horizontal scrollbar that's always visible (no need to scroll down to reach it).
+- Duplicate production entries will NO LONGER be imported — the dbKey/rowKey mismatch bug is fixed. Duplicates now show as errors with "Duplicate data found" message in the red error popup.
+- Users can upload Excel files with columns in ANY order — the system auto-maps by header name. A new info banner makes this clear.
+- Modified files:
+  • /home/z/my-project/src/components/erp/excel-import.tsx (ScrollableTable component + 3 table replacements + info banner)
+  • /home/z/my-project/src/app/globals.css (scrollbar styling for scrollable-table-body and scrollable-table-fakebar)
+  • /home/z/my-project/src/app/api/import/route.ts (dbKey fix for production + duplicate errors push to errors array)
