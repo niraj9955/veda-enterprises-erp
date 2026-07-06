@@ -738,3 +738,47 @@ Stage Summary:
 - Column headers stay sticky at the top while scrolling vertically.
 - Horizontal scroll still works for wide tables (many columns).
 - Modified file: /home/z/my-project/src/components/erp/excel-import.tsx
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: (1) Add bottom horizontal scrollbar to all import preview/result tables so all columns are visible. (2) Add multi-select checkbox + bulk delete option in Production module.
+
+Work Log:
+
+### Task 1: Horizontal scrollbar on import tables
+- Diagnosed: shadcn `ScrollArea` only renders a vertical scrollbar by default. The inner `<div className="overflow-x-auto">` did add a native horizontal scrollbar, but it appeared at the BOTTOM of the inner content — so when the table was tall enough to scroll vertically, the horizontal scrollbar was hidden below the fold and effectively unreachable.
+- Imported `ScrollBar` from `@/components/ui/scroll-area` (alongside `ScrollArea`).
+- Updated all 3 ScrollArea wrappers in excel-import.tsx (preview table, success popup table, error popup table) to:
+  • Replace `<div className="overflow-x-auto">` with `<div className="min-w-max">` so the inner content uses its natural maximum width (forcing horizontal overflow within the ScrollArea's viewport).
+  • Add `<ScrollBar orientation="horizontal" />` as a child of `ScrollArea` so a Radix-managed horizontal scrollbar appears at the bottom of the visible viewport, always reachable even when the table is tall.
+
+### Task 2: Multi-select + bulk delete in Production module
+- Created new API endpoint `POST /api/production/bulk-delete` at `/src/app/api/production/bulk-delete/route.ts`:
+  • Accepts `{ ids: string[] }` in the body.
+  • Auth-gated: rejects accountant role (read-only for production); requires admin or operator.
+  • Fetches the `date` field of all matching docs before deletion so Stock snapshots can be re-aggregated.
+  • Uses `Production.deleteMany({ _id: { $in: ids } })` for a single efficient DB operation.
+  • Calls `syncStockForDates(touchedDates)` to re-aggregate the Stock Overview for affected dates.
+  • Returns `{ message, deletedCount, requestedCount, stockResyncedDates }` so the UI can show "X of Y deleted".
+- Added client method `api.bulkDeleteProductions(ids)` in `src/lib/api.ts`.
+- Updated `src/components/erp/production-module.tsx`:
+  • Imported `Checkbox` from `@/components/ui/checkbox`.
+  • Added state: `selectedIds: Set<string>`, `bulkDeleteOpen: boolean`, `bulkDeleting: boolean`.
+  • Added handlers: `toggleSelect(id)`, `toggleSelectAll()` (selects all currently-filtered rows), `clearSelection()`, `handleBulkDelete()` (calls API, shows toast, refreshes list).
+  • Added a new leading column with a checkbox for each row, plus a "select all" checkbox in the header (sticky left, z-20 so it stays visible while scrolling horizontally).
+  • Selected rows get a green tint background (`bg-emerald-50/60`) for visual feedback.
+  • Header buttons: added "Delete Selected" (red outline, with a badge showing the count) and "Clear Selection" — both only appear when at least 1 row is selected.
+  • CardTitle now shows "N selected" badge next to the existing "X of Y records" badge.
+  • Added a dedicated `AlertDialog` for bulk-delete confirmation showing the exact count ("Delete N Selected Production Entries?"). Includes a spinner during deletion and disables Cancel while in-flight.
+  • Updated `colSpan` on the empty-state row from `+5` to `+6` to account for the new checkbox column.
+- Verified: TypeScript clean, ESLint clean, full `next build` succeeds and lists the new `/api/production/bulk-delete` route.
+
+Stage Summary:
+- All import preview/result tables now have BOTH vertical and horizontal scrollbars, so wide tables (e.g. Production with 14 columns) can be fully inspected without losing column headers.
+- Production module now supports multi-select bulk delete: tick individual rows or use the header checkbox to select all filtered rows, then click "Delete Selected" to remove them in a single API call (with confirmation dialog and automatic Stock re-sync).
+- Modified files:
+  • /home/z/my-project/src/components/erp/excel-import.tsx
+  • /home/z/my-project/src/components/erp/production-module.tsx
+  • /home/z/my-project/src/lib/api.ts
+  • /home/z/my-project/src/app/api/production/bulk-delete/route.ts (new)

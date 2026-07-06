@@ -37,6 +37,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Factory, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload , Search, Trash} from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
 import ExcelImport from '@/components/erp/excel-import'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -147,6 +148,62 @@ export function ProductionModule() {
   const [deleteAllOpen, setDeleteAllOpen] = React.useState(false)
   const [deletingAll, setDeletingAll] = React.useState(false)
   const [deleteAllConfirm, setDeleteAllConfirm] = React.useState('')
+
+  // ── Multi-select state ──────────────────────────────────────────────────
+  // Tracks which production rows the user has ticked in the table. The
+  // "Delete Selected" button appears in the header whenever this set is
+  // non-empty. We use a Set for O(1) toggle/lookup, then convert to an
+  // array when sending to the API.
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false)
+  const [bulkDeleting, setBulkDeleting] = React.useState(false)
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      // If everything is already selected, clear. Otherwise select all
+      // currently-filtered rows (so the user can select-all within a search
+      // result without picking rows they can't see).
+      if (prev.size === filteredProductions.length && filteredProductions.length > 0) {
+        return new Set()
+      }
+      return new Set(filteredProductions.map((p) => p.id))
+    })
+  }
+
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    setBulkDeleting(true)
+    try {
+      const res = await api.bulkDeleteProductions(ids)
+      toast({
+        title: 'Success',
+        description: `${res.deletedCount} of ${ids.length} production entr${res.deletedCount === 1 ? 'y' : 'ies'} deleted`,
+      })
+      setBulkDeleteOpen(false)
+      clearSelection()
+      fetchProductions()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete selected production entries',
+        variant: 'destructive',
+      })
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   const fetchProductions = React.useCallback(async () => {
     setLoading(true)
@@ -353,6 +410,33 @@ export function ProductionModule() {
             <Upload className="size-4 mr-2" />
             Import Excel
           </Button>
+          {/* Bulk-delete button — only visible when at least one row is selected.
+              Clicking it opens the confirmation dialog below. */}
+          {selectedIds.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={bulkDeleting || loading}
+              className="w-full sm:w-auto text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-4 mr-2" />
+              Delete Selected
+              <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">
+                {selectedIds.size}
+              </Badge>
+            </Button>
+          )}
+          {/* Clear-selection button — small, ghost-styled, only visible when rows are selected */}
+          {selectedIds.size > 0 && (
+            <Button
+              variant="ghost"
+              onClick={clearSelection}
+              disabled={bulkDeleting}
+              className="w-full sm:w-auto"
+            >
+              Clear Selection
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={() => setDeleteAllOpen(true)}
@@ -392,9 +476,16 @@ export function ProductionModule() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Production Records</span>
-            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
-              {filteredProductions.length} of {productions.length} record{productions.length !== 1 ? 's' : ''}
-            </Badge>
+            <div className="flex items-center gap-2">
+              {selectedIds.size > 0 && (
+                <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/30">
+                  {selectedIds.size} selected
+                </Badge>
+              )}
+              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                {filteredProductions.length} of {productions.length} record{productions.length !== 1 ? 's' : ''}
+              </Badge>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -402,7 +493,17 @@ export function ProductionModule() {
             <Table>
               <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
-                  <TableHead className="sticky left-0 bg-background z-10">Date</TableHead>
+                  <TableHead className="w-10 sticky left-0 bg-background z-20">
+                    <Checkbox
+                      checked={
+                        filteredProductions.length > 0 &&
+                        selectedIds.size === filteredProductions.length
+                      }
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all rows"
+                    />
+                  </TableHead>
+                  <TableHead className="sticky left-10 bg-background z-10">Date</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Cement</TableHead>
                   {PRODUCT_FIELDS.map((f) => (
                     <TableHead key={f.key} className="text-right whitespace-nowrap">{f.label}</TableHead>
@@ -417,14 +518,25 @@ export function ProductionModule() {
                   renderSkeletons()
                 ) : filteredProductions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={PRODUCT_FIELDS.length + 5} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={PRODUCT_FIELDS.length + 6} className="h-32 text-center text-muted-foreground">
                       No production entries yet. Click &quot;Add Production Entry&quot; to get started.
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredProductions.map((prod) => (
-                    <TableRow key={prod.id}>
-                      <TableCell className="font-medium whitespace-nowrap sticky left-0 bg-background z-10">
+                    <TableRow
+                      key={prod.id}
+                      data-state={selectedIds.has(prod.id) ? 'selected' : undefined}
+                      className={selectedIds.has(prod.id) ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}
+                    >
+                      <TableCell className="w-10 sticky left-0 bg-background z-10">
+                        <Checkbox
+                          checked={selectedIds.has(prod.id)}
+                          onCheckedChange={() => toggleSelect(prod.id)}
+                          aria-label={`Select row for ${prod.date}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium whitespace-nowrap">
                         {formatDate(prod.date)}
                       </TableCell>
                       <TableCell className="text-right font-mono">
@@ -630,6 +742,41 @@ export function ProductionModule() {
             >
               {deletingAll && <Loader2 className="mr-2 size-4 animate-spin" />}
               Delete All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Selected confirmation */}
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => {
+        if (!open && !bulkDeleting) setBulkDeleteOpen(false)
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">
+              Delete {selectedIds.size} Selected Production {selectedIds.size === 1 ? 'Entry' : 'Entries'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-sm">
+              <span className="block">
+                You are about to permanently delete{' '}
+                <strong className="text-destructive">{selectedIds.size} production {selectedIds.size === 1 ? 'entry' : 'entries'}</strong>.
+                This action <strong>cannot be undone</strong>.
+              </span>
+              <span className="block text-muted-foreground">
+                Stock snapshots for the affected dates will be re-aggregated automatically.
+                Other records (customers, orders, payments, etc.) are NOT affected.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting || selectedIds.size === 0}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {bulkDeleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Delete {selectedIds.size} {selectedIds.size === 1 ? 'Entry' : 'Entries'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

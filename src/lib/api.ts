@@ -157,6 +157,11 @@ export const api = {
     request<{ production: unknown }>(`/production/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProduction: (id: string) =>
     request<{ message: string }>(`/production/${id}`, { method: 'DELETE' }),
+  bulkDeleteProductions: (ids: string[]) =>
+    request<{ message: string; deletedCount: number; requestedCount: number }>('/production/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
   deleteAllProductions: () =>
     request<{ message: string; deletedCount: number }>('/production?all=true', { method: 'DELETE' }),
 
