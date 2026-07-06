@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Table,
   TableBody,
@@ -17,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ScrollableTable } from '@/components/ui/scrollable-table'
 import {
   Dialog,
   DialogContent,
@@ -35,7 +37,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Package, Plus, Trash2, Pencil, Loader2, Upload , Search} from 'lucide-react'
+import { Package, Plus, Trash2, Pencil, Loader2, Upload, Search } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -57,6 +59,18 @@ interface Stock {
   dumbleYellow80: number
   createdAt: string
   updatedAt: string
+}
+
+interface StockSummaryItem {
+  id: string
+  key: string
+  name: string
+  available: number
+  sold: number
+  soldCount: number
+  soldAmount: number
+  production: number
+  prevYearStock: number
 }
 
 interface StockFormData {
@@ -120,34 +134,44 @@ const PRODUCT_FIELDS: { key: keyof StockFormData; label: string }[] = [
 // ── Component ───────────────────────────────────────────────────────────────
 
 export function StockModule() {
-  const [stocks, setStocks] = React.useState<Stock[]>([])
+  // Summary view (item-wise aggregated rows) — primary view the user wants.
+  const [summary, setSummary] = React.useState<StockSummaryItem[]>([])
+  const [summaryLoading, setSummaryLoading] = React.useState(true)
   const [search, setSearch] = React.useState('')
   const [debouncedSearch, setDebouncedSearch] = React.useState('')
-  const [loading, setLoading] = React.useState(true)
+
+  // Multi-select for bulk delete (mirrors Production module pattern).
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false)
+  const [bulkDeleting, setBulkDeleting] = React.useState(false)
+
+  // Delete All (mirrors Production module pattern).
+  const [deleteAllOpen, setDeleteAllOpen] = React.useState(false)
+  const [deletingAll, setDeletingAll] = React.useState(false)
+
+  // Add/Edit form (still uses per-date stock records under the hood).
   const [formOpen, setFormOpen] = React.useState(false)
   const [editingStock, setEditingStock] = React.useState<Stock | null>(null)
   const [formData, setFormData] = React.useState<StockFormData>(emptyForm)
   const [formSubmitting, setFormSubmitting] = React.useState(false)
-  const [deleteTarget, setDeleteTarget] = React.useState<Stock | null>(null)
-  const [deleting, setDeleting] = React.useState(false)
 
-  // ── Fetch stocks ─────────────────────────────────────────────────────
-  const fetchStocks = React.useCallback(async () => {
-    setLoading(true)
+  // Excel import
+  const [importOpen, setImportOpen] = React.useState(false)
+
+  // ── Fetch summary (item-wise aggregated rows) ──────────────────────
+  const fetchSummary = React.useCallback(async () => {
+    setSummaryLoading(true)
     try {
-      const res = await api.getStock()
-      const data = (res.stocks as Stock[]).sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      )
-      setStocks(data)
+      const res = await api.getStockSummary()
+      setSummary(res.summary as StockSummaryItem[])
     } catch (err) {
       toast({
         title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to fetch stock data',
+        description: err instanceof Error ? err.message : 'Failed to fetch stock summary',
         variant: 'destructive',
       })
     } finally {
-      setLoading(false)
+      setSummaryLoading(false)
     }
   }, [])
 
@@ -157,48 +181,94 @@ export function StockModule() {
     return () => clearTimeout(t)
   }, [search])
 
-  // Client-side filter
-  const filteredStocks = React.useMemo(() => {
-    if (!debouncedSearch.trim()) return stocks
+  const filteredSummary = React.useMemo(() => {
+    if (!debouncedSearch.trim()) return summary
     const q = debouncedSearch.toLowerCase()
-    return stocks.filter((item: any) =>
-      ['date'].some((f) =>
-        String((item as any)[f] ?? '').toLowerCase().includes(q)
-      )
-    )
-  }, [stocks, debouncedSearch])
+    return summary.filter((item) => item.name.toLowerCase().includes(q))
+  }, [summary, debouncedSearch])
 
   React.useEffect(() => {
-    fetchStocks()
-  }, [fetchStocks])
+    fetchSummary()
+  }, [fetchSummary])
 
-  // ── Form handlers ───────────────────────────────────────────────────
-  // Excel import
-  const [importOpen, setImportOpen] = React.useState(false)
+  // ── Selection handlers ─────────────────────────────────────────────
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (prev.size === filteredSummary.length) return new Set()
+      return new Set(filteredSummary.map((s) => s.id))
+    })
+  }
+
+  const clearSelection = () => setSelectedIds(new Set())
+
+  // ── Bulk delete selected ───────────────────────────────────────────
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    setBulkDeleting(true)
+    try {
+      // NOTE: stock summary rows are aggregates — there is no per-item
+      // DB record to delete. Bulk delete here clears the underlying
+      // per-date stock records so the summary recomputes empty.
+      // We fetch the underlying stock ids and pass them to bulkDeleteStocks.
+      const stockRes = await api.getStock()
+      const ids = (stockRes.stocks as Stock[]).map((s) => s.id)
+      if (ids.length > 0) {
+        await api.bulkDeleteStocks(ids)
+      }
+      toast({
+        title: 'Success',
+        description: `${ids.length} stock entr${ids.length === 1 ? 'y' : 'ies'} deleted. Summary refreshed.`,
+      })
+      setBulkDeleteOpen(false)
+      clearSelection()
+      fetchSummary()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete stock entries',
+        variant: 'destructive',
+      })
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  // ── Delete ALL ─────────────────────────────────────────────────────
+  const handleDeleteAll = async () => {
+    setDeletingAll(true)
+    try {
+      const res = await api.deleteAllStocks()
+      toast({
+        title: 'Success',
+        description: `${res.deletedCount} stock entr${res.deletedCount === 1 ? 'y' : 'ies'} deleted`,
+      })
+      setDeleteAllOpen(false)
+      clearSelection()
+      fetchSummary()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete all stock entries',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeletingAll(false)
+    }
+  }
+
+  // ── Add/Edit form handlers ─────────────────────────────────────────
   const openAddDialog = () => {
     setEditingStock(null)
     setFormData(emptyForm)
-    setFormOpen(true)
-  }
-
-  const openEditDialog = (stock: Stock) => {
-    setEditingStock(stock)
-    setFormData({
-      date: stock.date ? stock.date.split('T')[0] : '',
-      cement: String(stock.cement || ''),
-      zigZagGrey80: String(stock.zigZagGrey80 || ''),
-      zigZagRed80: String(stock.zigZagRed80 || ''),
-      zigZagYellow80: String(stock.zigZagYellow80 || ''),
-      zigZagGrey60: String(stock.zigZagGrey60 || ''),
-      zigZagRed60: String(stock.zigZagRed60 || ''),
-      zigZagYellow60: String(stock.zigZagYellow60 || ''),
-      chequreTile: String(stock.chequreTile || ''),
-      curveStone: String(stock.curveStone || ''),
-      dumbleGrey80: String(stock.dumbleGrey80 || ''),
-      dumbleRed80: String(stock.dumbleRed80 || ''),
-      dumbleYellow80: String(stock.dumbleYellow80 || ''),
-    })
     setFormOpen(true)
   }
 
@@ -241,7 +311,7 @@ export function StockModule() {
       setFormOpen(false)
       setFormData(emptyForm)
       setEditingStock(null)
-      fetchStocks()
+      fetchSummary()
     } catch (err) {
       toast({
         title: 'Error',
@@ -253,35 +323,16 @@ export function StockModule() {
     }
   }
 
-  // ── Delete handler ──────────────────────────────────────────────────
-  const handleDelete = async () => {
-    if (!deleteTarget) return
-    setDeleting(true)
-    try {
-      await api.deleteStock(deleteTarget.id)
-      toast({ title: 'Success', description: 'Stock entry deleted successfully' })
-      setDeleteTarget(null)
-      fetchStocks()
-    } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to delete stock entry',
-        variant: 'destructive',
-      })
-    } finally {
-      setDeleting(false)
-    }
-  }
-
-  // ── Render: Loading skeletons ───────────────────────────────────────
+  // ── Render: Loading skeletons ──────────────────────────────────────
   const renderSkeletons = () =>
-    Array.from({ length: 3 }).map((_, i) => (
+    Array.from({ length: 5 }).map((_, i) => (
       <TableRow key={i}>
-        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-        {PRODUCT_FIELDS.map((_, j) => (
-          <TableCell key={j}><Skeleton className="h-4 w-16" /></TableCell>
-        ))}
-        <TableCell><Skeleton className="h-8 w-20" /></TableCell>
+        <TableCell><Skeleton className="h-4 w-6" /></TableCell>
+        <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+        <TableCell className="text-right"><Skeleton className="h-4 w-20" /></TableCell>
+        <TableCell className="text-right"><Skeleton className="h-4 w-20" /></TableCell>
+        <TableCell className="text-right"><Skeleton className="h-4 w-20" /></TableCell>
+        <TableCell className="text-right"><Skeleton className="h-4 w-20" /></TableCell>
       </TableRow>
     ))
 
@@ -294,13 +345,13 @@ export function StockModule() {
             <Package className="size-5" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">Stock Management</h2>
+            <h2 className="text-2xl font-bold tracking-tight">Stock Overview</h2>
             <p className="text-sm text-muted-foreground">
-              Track product-wise stock levels
+              Item-wise stock summary across all dates
             </p>
           </div>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex gap-2 w-full sm:w-auto flex-wrap">
           <Button
             variant="outline"
             onClick={() => setImportOpen(true)}
@@ -325,7 +376,7 @@ export function StockModule() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search across all fields (date, name, remarks, etc.)..."
+              placeholder="Search by item name (e.g. 'cement', 'zig zag grey')..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -337,72 +388,108 @@ export function StockModule() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Stock Records</span>
-            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
-              {filteredStocks.length} of {stocks.length} record{stocks.length !== 1 ? 's' : ''}
-            </Badge>
+          <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
+            <span>Stock Summary</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              {selectedIds.size > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setBulkDeleteOpen(true)}
+                  className="h-8"
+                >
+                  <Trash2 className="size-4 mr-1" />
+                  Delete Selected ({selectedIds.size})
+                </Button>
+              )}
+              {summary.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeleteAllOpen(true)}
+                  className="h-8 text-destructive border-destructive/30 hover:bg-destructive/10"
+                >
+                  <Trash2 className="size-4 mr-1" />
+                  Delete All
+                </Button>
+              )}
+              {selectedIds.size > 0 && (
+                <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/30">
+                  {selectedIds.size} selected
+                </Badge>
+              )}
+              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                {filteredSummary.length} of {summary.length} item{summary.length !== 1 ? 's' : ''}
+              </Badge>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="max-h-[60vh] overflow-auto rounded-md border">
+          <ScrollableTable maxHeight="max-h-[60vh]">
             <Table>
-              <TableHeader className="sticky top-0 bg-background z-10">
+              <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 bg-background z-10">Date</TableHead>
-                  {PRODUCT_FIELDS.map((f) => (
-                    <TableHead key={f.key} className="text-right whitespace-nowrap">{f.label}</TableHead>
-                  ))}
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-10 sticky left-0 bg-background z-20">
+                    <Checkbox
+                      checked={
+                        filteredSummary.length > 0 &&
+                        selectedIds.size === filteredSummary.length
+                      }
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all rows"
+                    />
+                  </TableHead>
+                  <TableHead className="sticky left-10 bg-background z-20">Item Name</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Available Quantity</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Sell Number</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Production</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Previous Year Stock</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading ? (
+                {summaryLoading ? (
                   renderSkeletons()
-                ) : filteredStocks.length === 0 ? (
+                ) : filteredSummary.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={PRODUCT_FIELDS.length + 2} className="h-32 text-center text-muted-foreground">
-                      No stock entries yet. Click &quot;Add Stock Entry&quot; to get started.
+                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                      No stock data yet. Production entries will auto-populate the summary.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredStocks.map((stock) => (
-                    <TableRow key={stock.id}>
-                      <TableCell className="font-medium whitespace-nowrap sticky left-0 bg-background z-10">
-                        {formatDate(stock.date)}
+                  filteredSummary.map((item) => (
+                    <TableRow
+                      key={item.id}
+                      data-state={selectedIds.has(item.id) ? 'selected' : undefined}
+                      className={selectedIds.has(item.id) ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}
+                    >
+                      <TableCell className="w-10 sticky left-0 bg-background z-10 sticky">
+                        <Checkbox
+                          checked={selectedIds.has(item.id)}
+                          onCheckedChange={() => toggleSelect(item.id)}
+                          aria-label={`Select ${item.name}`}
+                        />
                       </TableCell>
-                      {PRODUCT_FIELDS.map((f) => (
-                        <TableCell key={f.key} className="text-right font-mono">
-                          {enIN.format((stock as unknown as Record<string, unknown>)[f.key] as number || 0)}
-                        </TableCell>
-                      ))}
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEditDialog(stock)}
-                            title="Edit"
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteTarget(stock)}
-                            title="Delete"
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
-                        </div>
+                      <TableCell className="font-medium whitespace-nowrap sticky left-10 bg-background z-10 sticky">
+                        {item.name}
+                      </TableCell>
+                      <TableCell className="text-right font-mono whitespace-nowrap">
+                        {enIN.format(item.available)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono whitespace-nowrap">
+                        {enIN.format(item.sold)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono whitespace-nowrap">
+                        {enIN.format(item.production)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono whitespace-nowrap">
+                        {enIN.format(item.prevYearStock)}
                       </TableCell>
                     </TableRow>
                   ))
                 )}
               </TableBody>
             </Table>
-          </div>
+          </ScrollableTable>
         </CardContent>
       </Card>
 
@@ -416,7 +503,7 @@ export function StockModule() {
             <DialogDescription>
               {editingStock
                 ? 'Update the stock entry details below.'
-                : 'Fill in the product quantities for this date.'}
+                : 'Fill in the product quantities for this date. Stock Overview will auto-refresh.'}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
@@ -463,30 +550,80 @@ export function StockModule() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
+      {/* Delete All confirmation — simple Yes / No dialog (mirrors Production) */}
+      <AlertDialog open={deleteAllOpen} onOpenChange={(open) => {
+        if (!open && !deletingAll) setDeleteAllOpen(false)
+      }}>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Stock Entry</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this stock entry? This action cannot be undone.
+            <AlertDialogTitle className="text-destructive">Delete ALL Stock Entries?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-sm">
+              <span className="block">
+                You are about to permanently delete{' '}
+                <strong className="text-destructive">all stock entries</strong>.
+                This action <strong>cannot be undone</strong>.
+              </span>
+              <span className="block text-muted-foreground">
+                Stock Overview summary will refresh to show all zeros after deletion.
+                Production, Customer, Order, Payment, and Dispatch records are NOT affected.
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel
+              disabled={deletingAll}
+              className="border-border"
+            >
+              No, Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleting}
+              onClick={handleDeleteAll}
+              disabled={deletingAll}
               className="bg-destructive text-white hover:bg-destructive/90"
             >
-              {deleting && <Loader2 className="mr-2 size-4 animate-spin" />}
-              Delete
+              {deletingAll && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Yes, Delete All
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <ExcelImport module="stock" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchStocks} />
+      {/* Bulk Delete Selected confirmation */}
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => {
+        if (!open && !bulkDeleting) setBulkDeleteOpen(false)
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">
+              Delete All Stock Records?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-sm">
+              <span className="block">
+                You are about to permanently delete{' '}
+                <strong className="text-destructive">all underlying stock records</strong>{' '}
+                that feed this summary.
+                This action <strong>cannot be undone</strong>.
+              </span>
+              <span className="block text-muted-foreground">
+                The Stock Overview summary will refresh to show all zeros after deletion.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {bulkDeleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Delete Records
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <ExcelImport module="stock" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchSummary} />
     </div>
   )
 }

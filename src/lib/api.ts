@@ -167,12 +167,23 @@ export const api = {
 
   // Stock
   getStock: () => request<{ stocks: unknown[] }>('/stock'),
+  getStockSummary: () =>
+    request<{ summary: Array<{ id: string; key: string; name: string; available: number; sold: number; soldCount: number; soldAmount: number; production: number; prevYearStock: number }> }>('/stock/summary'),
   createStock: (data: Record<string, unknown>) =>
     request<{ stock: unknown }>('/stock', { method: 'POST', body: JSON.stringify(data) }),
   updateStock: (id: string, data: Record<string, unknown>) =>
     request<{ stock: unknown }>(`/stock/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteStock: (id: string) =>
     request<{ message: string }>(`/stock/${id}`, { method: 'DELETE' }),
+  // Bulk delete selected stock entries by id.
+  bulkDeleteStocks: (ids: string[]) =>
+    request<{ message: string; deletedCount: number }>('/stock', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  // Delete ALL stock entries (Delete All button).
+  deleteAllStocks: () =>
+    request<{ message: string; deletedCount: number }>('/stock?all=true', { method: 'DELETE' }),
 
   // Orders
   getOrders: () => request<{ orders: unknown[] }>('/orders'),

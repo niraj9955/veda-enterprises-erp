@@ -21,6 +21,22 @@ export async function POST(request: Request) {
   try {
     await connectDB()
     const body = await request.json()
+
+    // ── Bulk delete: POST /api/stock with { ids: [...] } ───────────────
+    // Mirrors the production bulk-delete API so the same client-side
+    // pattern works for both modules.
+    if (body && Array.isArray(body.ids)) {
+      const ids = body.ids.filter((id: unknown) => typeof id === 'string' && id.length > 0)
+      if (ids.length === 0) {
+        return NextResponse.json({ error: 'No ids provided' }, { status: 400 })
+      }
+      const result = await Stock.deleteMany({ _id: { $in: ids } })
+      return NextResponse.json({
+        message: 'Stock entries deleted successfully',
+        deletedCount: result.deletedCount || 0,
+      })
+    }
+
     if (!body.date) {
       return NextResponse.json({ error: 'Date is required' }, { status: 400 })
     }
@@ -43,5 +59,33 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error creating stock:', error)
     return NextResponse.json({ error: 'Failed to create stock entry' }, { status: 500 })
+  }
+}
+
+// DELETE /api/stock?all=true — delete every stock entry (Delete All button).
+// Mirrors the production delete-all API so the same client-side pattern works.
+export async function DELETE(request: Request) {
+  try {
+    await connectDB()
+    const { searchParams } = new URL(request.url)
+    const all = searchParams.get('all')
+
+    if (all === 'true') {
+      const result = await Stock.deleteMany({})
+      return NextResponse.json({
+        message: 'All stock entries deleted successfully',
+        deletedCount: result.deletedCount || 0,
+      })
+    }
+
+    // Without ?all=true this route is not used for single deletes —
+    // those go through /api/stock/[id]. Return a clear error.
+    return NextResponse.json(
+      { error: 'Use DELETE /api/stock/[id] for single deletes, or ?all=true to delete every entry.' },
+      { status: 400 }
+    )
+  } catch (error) {
+    console.error('Error deleting stock entries:', error)
+    return NextResponse.json({ error: 'Failed to delete stock entries' }, { status: 500 })
   }
 }
