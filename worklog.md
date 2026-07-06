@@ -584,3 +584,43 @@ Stage Summary:
 - Stale MongoDB indexes that were blocking inserts are now dropped
 - Backfill completed: all 48 historical production dates have corresponding Stock entries
 - New admin endpoints available: /api/admin/fix-indexes (drop stale indexes), /api/admin/sync-all-stock (backfill), /api/debug/sync?date=YYYY-MM-DD (single-date debug)
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Add Product field above Amount and Contact below Address in Daily Sell module
+
+Work Log:
+- Analyzed user screenshot showing Daily Sell "Add" form with fields: Date, Customer Name, Address, Amount, Contact Number, Remarks
+- User requested: add "Product" above Amount, move "Contact" below Address
+- Discovered critical bug: /api/daily-sell/[id]/route.ts was MISSING entirely — PUT and DELETE endpoints didn't exist, so edit/delete buttons in Daily Sell were broken at the API level
+
+Changes made:
+1. src/lib/models.ts: Added `product: { type: String, default: '' }` to DailySellSchema; reordered fields to match new UI order
+2. src/app/api/daily-sell/route.ts: Added `product: body.product || ''` to POST handler
+3. src/app/api/daily-sell/[id]/route.ts: NEW FILE — created GET/PUT/DELETE handlers for individual daily sell entries (PUT uses whitelist of updatable fields, DELETE returns 404 if not found)
+4. src/components/erp/daily-sell-module.tsx:
+   - Added `product: string` to DailySell interface and DailySellFormData
+   - Updated emptyForm to include product
+   - Updated openEditDialog to populate product field
+   - Updated handleSubmit payload to include product
+   - Updated search filter to include 'product'
+   - Updated table columns: Date | Customer Name | Address | Contact Number | Product | Amount (₹) | Remarks | Actions
+   - Updated form field order: Date | Customer Name | Address | Contact Number (moved here) | Product (new, above Amount) | Amount (₹) | Remarks
+   - Updated colSpan from 7 to 8 for empty state
+5. src/components/erp/excel-import.tsx: Added `product` field to dailySell template with aliases ['product', 'item', 'material', 'goods']
+6. src/app/api/import/route.ts: Added `product: String(row.product || '')` to dailySell import case; updated GET /api/import field list
+
+Verification (Vercel production):
+- POST /api/daily-sell with product field → 201 Created, product saved correctly ✓
+- GET /api/daily-sell → returns product field ✓
+- PUT /api/daily-sell/[id] → updates product and amount correctly (was BROKEN before — no endpoint existed) ✓
+- DELETE /api/daily-sell/[id] → deletes entry successfully (was BROKEN before) ✓
+- Vercel JS bundle contains "Enter product name" placeholder ✓
+
+Stage Summary:
+- Daily Sell form now has the requested order: Date, Customer Name, Address, Contact Number, Product, Amount, Remarks
+- "Product" field is now available in both the form and the table (above Amount as requested)
+- "Contact Number" moved from below Amount to below Address as requested
+- Critical bug fixed: Daily Sell edit/delete buttons now actually work (previously the API endpoints didn't exist)
+- Excel import template for Daily Sell updated to include Product column
