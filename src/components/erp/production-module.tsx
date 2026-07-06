@@ -44,8 +44,6 @@ import ExcelImport from '@/components/erp/excel-import'
 interface Production {
   id: string
   date: string
-  customerName: string
-  address: string
   zigZagWhite80mm: number
   zigZagRed80mm: number
   zigZagYellow80mm: number
@@ -62,8 +60,6 @@ interface Production {
 
 interface ProductionFormData {
   date: string
-  customerName: string
-  address: string
   zigZagWhite80mm: string
   zigZagRed80mm: string
   zigZagYellow80mm: string
@@ -97,8 +93,6 @@ const enIN = new Intl.NumberFormat('en-IN')
 
 const emptyForm: ProductionFormData = {
   date: '',
-  customerName: '',
-  address: '',
   zigZagWhite80mm: '',
   zigZagRed80mm: '',
   zigZagYellow80mm: '',
@@ -166,7 +160,7 @@ export function ProductionModule() {
     if (!debouncedSearch.trim()) return productions
     const q = debouncedSearch.toLowerCase()
     return productions.filter((item: any) =>
-      ['date', 'customerName', 'address', 'remarks'].some((f) =>
+      ['date', 'remarks'].some((f) =>
         String((item as any)[f] ?? '').toLowerCase().includes(q)
       )
     )
@@ -189,8 +183,6 @@ export function ProductionModule() {
     setEditingProduction(prod)
     setFormData({
       date: prod.date ? prod.date.split('T')[0] : '',
-      customerName: prod.customerName || '',
-      address: prod.address || '',
       zigZagWhite80mm: String(prod.zigZagWhite80mm || ''),
       zigZagRed80mm: String(prod.zigZagRed80mm || ''),
       zigZagYellow80mm: String(prod.zigZagYellow80mm || ''),
@@ -219,8 +211,6 @@ export function ProductionModule() {
     try {
       const payload = {
         date: formData.date,
-        customerName: formData.customerName.trim(),
-        address: formData.address.trim(),
         zigZagWhite80mm: Number(formData.zigZagWhite80mm) || 0,
         zigZagRed80mm: Number(formData.zigZagRed80mm) || 0,
         zigZagYellow80mm: Number(formData.zigZagYellow80mm) || 0,
@@ -354,8 +344,6 @@ export function ProductionModule() {
               <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
                   <TableHead className="sticky left-0 bg-background z-10">Date</TableHead>
-                  <TableHead>Customer Name</TableHead>
-                  <TableHead>Address</TableHead>
                   {PRODUCT_FIELDS.map((f) => (
                     <TableHead key={f.key} className="text-right whitespace-nowrap">{f.label}</TableHead>
                   ))}
@@ -369,7 +357,7 @@ export function ProductionModule() {
                   renderSkeletons()
                 ) : filteredProductions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={PRODUCT_FIELDS.length + 6} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={PRODUCT_FIELDS.length + 4} className="h-32 text-center text-muted-foreground">
                       No production entries yet. Click &quot;Add Production Entry&quot; to get started.
                     </TableCell>
                   </TableRow>
@@ -379,8 +367,6 @@ export function ProductionModule() {
                       <TableCell className="font-medium whitespace-nowrap sticky left-0 bg-background z-10">
                         {formatDate(prod.date)}
                       </TableCell>
-                      <TableCell className="font-medium">{prod.customerName || '—'}</TableCell>
-                      <TableCell className="max-w-[150px] truncate text-muted-foreground">{prod.address || '—'}</TableCell>
                       {PRODUCT_FIELDS.map((f) => (
                         <TableCell key={f.key} className="text-right font-mono">
                           {enIN.format((prod as unknown as Record<string, unknown>)[f.key] as number || 0)}
@@ -446,26 +432,6 @@ export function ProductionModule() {
                 value={formData.date}
                 onChange={(e) => handleFormChange('date', e.target.value)}
               />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="prod-customer">Customer Name</Label>
-                <Input
-                  id="prod-customer"
-                  placeholder="Enter customer name"
-                  value={formData.customerName}
-                  onChange={(e) => handleFormChange('customerName', e.target.value)}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="prod-address">Address</Label>
-                <Input
-                  id="prod-address"
-                  placeholder="Enter address"
-                  value={formData.address}
-                  onChange={(e) => handleFormChange('address', e.target.value)}
-                />
-              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {PRODUCT_FIELDS.map((f) => (

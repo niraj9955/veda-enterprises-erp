@@ -45,16 +45,10 @@ export async function GET(
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     }
 
-    // Match production by customerId OR by customerName (some legacy rows
-    // may not have customerId set). Dispatches, orders, payments, and bills
-    // use customerId only.
-    const customerName = String(customer.name || '').trim()
-    const prodQuery: Record<string, unknown> = {
-      $or: [{ customerId: id }, ...(customerName ? [{ customerName }] : [])],
-    }
-
+    // Match production by customerId only. (customerName/address fields
+    // have been removed from Production — only customerId links them now.)
     const [productions, dispatches, bills, orders, payments] = await Promise.all([
-      Production.find(prodQuery).sort({ date: -1 }).lean(),
+      Production.find({ customerId: id }).sort({ date: -1 }).lean(),
       Dispatch.find({ customerId: id }).sort({ date: -1 }).lean(),
       Bill.find({ customerId: id }).sort({ createdAt: -1 }).lean(),
       Order.find({ customerId: id }).sort({ createdAt: -1 }).lean(),

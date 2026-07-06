@@ -60,8 +60,6 @@ const moduleTemplates: Record<string, {
     label: 'Production',
     fields: [
       { key: 'date', label: 'Date', required: true, aliases: ['date', 'production date', 'production_date', 'date of production', 'दिनांक', 'tarikh'] },
-      { key: 'customerName', label: 'Customer Name', required: false, aliases: ['customer name', 'customer_name', 'customername', 'cust name', 'customer', 'party', 'name'] },
-      { key: 'address', label: 'Address', required: false, aliases: ['address', 'addr', 'location', 'पता'] },
       { key: 'zigZagWhite80', label: 'Zig Zag White 80', required: false, aliases: ['zigzagwhite80', 'zig zag white 80', 'zig_zag_white_80', 'zz white 80', 'white 80'] },
       { key: 'zigZagRed80', label: 'Zig Zag Red 80', required: false, aliases: ['zigzagred80', 'zig zag red 80', 'zig_zag_red_80', 'zz red 80', 'red 80'] },
       { key: 'zigZagYellow80', label: 'Zig Zag Yellow 80', required: false, aliases: ['zigzagyellow80', 'zig zag yellow 80', 'zig_zag_yellow_80', 'zz yellow 80', 'yellow 80'] },

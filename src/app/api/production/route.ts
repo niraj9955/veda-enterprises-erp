@@ -31,8 +31,6 @@ export async function POST(request: Request) {
     const production = await Production.create({
       date: body.date,
       customerId: body.customerId || null,
-      customerName: body.customerName || '',
-      address: body.address || '',
       zigZagWhite80: Number(body.zigZagWhite80) || 0,
       zigZagRed80: Number(body.zigZagRed80) || 0,
       zigZagYellow80: Number(body.zigZagYellow80) || 0,

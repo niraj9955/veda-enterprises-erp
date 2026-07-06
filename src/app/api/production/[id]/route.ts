@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
-import { Production, Stock } from '@/lib/models'
+import { Production } from '@/lib/models'
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -24,7 +24,20 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const body = await request.json()
 
     const updateData: Record<string, unknown> = {}
-    const fields = ['date', 'brickType', 'quantityProduced', 'shift', 'remarks']
+    const fields = [
+      'date',
+      'customerId',
+      'zigZagWhite80',
+      'zigZagRed80',
+      'zigZagYellow80',
+      'zigZagWhite60',
+      'zigZagRed60',
+      'zigZagYellow60',
+      'curveStone',
+      'chequreTile',
+      'transportationCharge',
+      'remarks',
+    ]
     for (const field of fields) {
       if (body[field] !== undefined) updateData[field] = body[field]
     }
@@ -51,12 +64,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       return NextResponse.json({ error: 'Production entry not found' }, { status: 404 })
     }
 
-    // Reduce stock
-    const stock = await Stock.findOne({ brickType: production.brickType })
-    if (stock) {
-      stock.currentStock = Math.max(0, stock.currentStock - production.quantityProduced)
-      await stock.save()
-    }
+    // Note: Stock auto-update on production delete is intentionally omitted —
+    // Production tracks daily output quantities per product, while Stock is a
+    // separate daily snapshot. The two are reconciled via the Stock module UI.
 
     await Production.findByIdAndDelete(id)
     return NextResponse.json({ message: 'Production entry deleted successfully' })

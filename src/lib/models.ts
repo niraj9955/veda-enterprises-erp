@@ -55,8 +55,6 @@ CustomerSchema.index({ createdAt: -1 });
 const ProductionSchema = new mongoose.Schema({
   date: { type: String, required: true },
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
-  customerName: { type: String, default: '' },
-  address: { type: String, default: '' },
   zigZagWhite80: { type: Number, default: 0 },
   zigZagRed80: { type: Number, default: 0 },
   zigZagYellow80: { type: Number, default: 0 },
@@ -69,7 +67,6 @@ const ProductionSchema = new mongoose.Schema({
   remarks: { type: String, default: '' },
 }, { timestamps: true });
 ProductionSchema.index({ date: -1 });
-ProductionSchema.index({ customerName: 1 });
 
 // ─── Stock (Product-wise tracking) ─────────────────────────────────────────
 const StockSchema = new mongoose.Schema({

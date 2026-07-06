@@ -643,7 +643,7 @@ function duplicateRowLabel(module: string, row: Record<string, unknown>): string
     case 'customers':
       return `customer "${row.name}" (mobile ${row.mobile})`
     case 'production':
-      return `production for "${row.customerName || row.customer}" on ${row.date}`
+      return `production entry on ${row.date}`
     case 'stock':
       return `stock entry for ${row.date}`
     case 'dailySell':
@@ -681,7 +681,7 @@ function duplicateRowLabel(module: string, row: Record<string, unknown>): string
 export async function GET() {
   const modules = [
     { id: 'customers', label: 'Customers', fields: ['name', 'mobile', 'address', 'gstNumber', 'creditLimit'] },
-    { id: 'production', label: 'Production', fields: ['date', 'customerName', 'address', 'zigZagWhite80', 'zigZagRed80', 'zigZagYellow80', 'zigZagWhite60', 'zigZagRed60', 'zigZagYellow60', 'curveStone', 'chequreTile', 'transportationCharge', 'remarks'] },
+    { id: 'production', label: 'Production', fields: ['date', 'zigZagWhite80', 'zigZagRed80', 'zigZagYellow80', 'zigZagWhite60', 'zigZagRed60', 'zigZagYellow60', 'curveStone', 'chequreTile', 'transportationCharge', 'remarks'] },
     { id: 'stock', label: 'Stock', fields: ['date', 'cement', 'zigZagGrey80', 'zigZagRed80', 'zigZagYellow80', 'zigZagGrey60', 'zigZagRed60', 'zigZagYellow60', 'chequreTile', 'curveStone', 'dumbleGrey80', 'dumbleRed80', 'dumbleYellow80'] },
     { id: 'dailySell', label: 'Daily Sell', fields: ['date', 'customerName', 'address', 'amount', 'remarks', 'contactNumber'] },
     { id: 'customerPayment', label: 'Customer Payment', fields: ['date', 'name', 'address', 'amount', 'remarks'] },
