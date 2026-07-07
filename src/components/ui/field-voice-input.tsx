@@ -26,6 +26,24 @@ import { cn } from '@/lib/utils'
 // be "enabled" in Admin Panel). The mic should always be visible as long as
 // the browser supports speech recognition. This is intentionally different
 // from the AiFillButton / AiChatWidget which DO need an API key.
+//
+// ─── GLOBAL SINGLETON (mic-reliability fix) ─────────────────────────────────
+//
+// Browsers only allow ONE active SpeechRecognition session at a time. If
+// two FieldVoiceInput instances (or a FieldVoiceInput + the AiChatWidget's
+// VoiceInput) are running simultaneously, Chrome silently kills one of them,
+// which is the #1 cause of "mic doesn't work everywhere".
+//
+// Solution: a single shared `ActiveVoiceController` (in voice-active-controller.ts)
+// that owns the only active recognition. When a new FieldVoiceInput wants to
+// listen, it asks the controller to `takeOver`. If another input was listening,
+// it is told to stop first. This guarantees only one mic runs at any time
+// across the whole app — including the AI chat widget and the AI fill dialog.
+
+import { activeVoiceControllerLike as activeVoiceController, stopAllVoiceInputs as stopAllFieldVoiceInputs } from '@/components/ui/voice-active-controller'
+
+// Re-export so existing imports keep working
+export { stopAllFieldVoiceInputs }
 
 interface FieldVoiceInputProps {
   /** Called with the final transcript when the user stops speaking. */
@@ -56,6 +74,13 @@ interface SpeechRecognitionLike {
   onstart: (() => void) | null
 }
 
+// Unique id generator for each FieldVoiceInput instance
+let _voiceInputIdCounter = 0
+function nextVoiceInputId(): string {
+  _voiceInputIdCounter += 1
+  return `field-voice-${_voiceInputIdCounter}`
+}
+
 export function FieldVoiceInput({
   onChange,
   onInterim,
@@ -67,6 +92,9 @@ export function FieldVoiceInput({
   const [listening, setListening] = React.useState(false)
   const [supported, setSupported] = React.useState(true)
   const [interimText, setInterimText] = React.useState('')
+
+  // STABLE instance id — used for the global singleton registry
+  const instanceIdRef = React.useRef<string>(nextVoiceInputId())
 
   const onChangeRef = React.useRef(onChange)
   const onInterimRef = React.useRef(onInterim)
@@ -179,6 +207,8 @@ export function FieldVoiceInput({
         // ignore
       }
       recognitionRef.current = null
+      // Release the global slot if we still own it
+      activeVoiceController.release(instanceIdRef.current)
     }
   }, [language])
 
@@ -197,7 +227,27 @@ export function FieldVoiceInput({
       }
       setListening(false)
       setInterimText('')
+      activeVoiceController.release(instanceIdRef.current)
     } else {
+      // ─── KEY FIX ──────────────────────────────────────────────────────
+      // Tell the global controller we want to take over. If another
+      // FieldVoiceInput is listening, it will be stopped first.
+      activeVoiceController.takeOver(instanceIdRef.current, () => {
+        // This stop function will be invoked if another input asks to take over
+        userWantsToListenRef.current = false
+        if (restartTimerRef.current) {
+          clearTimeout(restartTimerRef.current)
+          restartTimerRef.current = null
+        }
+        try {
+          recognitionRef.current?.stop()
+        } catch {
+          // ignore
+        }
+        setListening(false)
+        setInterimText('')
+      })
+
       userWantsToListenRef.current = true
       setInterimText('')
       try {
@@ -212,6 +262,7 @@ export function FieldVoiceInput({
             } catch {
               userWantsToListenRef.current = false
               setListening(false)
+              activeVoiceController.release(instanceIdRef.current)
             }
           }
         }, 250)

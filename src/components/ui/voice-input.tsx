@@ -25,6 +25,19 @@ import { Button } from '@/components/ui/button'
 // This pattern is used by every production voice-input library (e.g.
 // react-speech-recognition, @mui/x-voice) because it's the only one that
 // actually works reliably on Chrome.
+//
+// ─── GLOBAL SINGLETON (mic-reliability fix) ─────────────────────────────────
+//
+// Browsers only allow ONE active SpeechRecognition session at a time. We share
+// the same singleton controller that FieldVoiceInput uses, so that only ONE
+// mic (per-field OR AI Fill dialog OR AI Chat widget) is ever listening at a
+// time across the whole app. This is the #1 cause of "mic not working
+// everywhere".
+
+// Re-use the same singleton controller as FieldVoiceInput.
+// We import it lazily to avoid circular imports — but since field-voice-input
+// has no other dependencies on this file, we can import directly.
+import { activeVoiceControllerLike } from '@/components/ui/voice-active-controller'
 
 interface VoiceInputProps {
   onResult: (text: string) => void
@@ -48,6 +61,13 @@ interface SpeechRecognitionLike {
   onstart: (() => void) | null
 }
 
+// Unique id generator for each VoiceInput instance
+let _voiceInputIdCounter = 0
+function nextVoiceInputId(): string {
+  _voiceInputIdCounter += 1
+  return `voice-${_voiceInputIdCounter}`
+}
+
 export function VoiceInput({
   onResult,
   onInterim,
@@ -59,6 +79,7 @@ export function VoiceInput({
   const [supported, setSupported] = React.useState(true)
 
   // STABLE refs — never cause re-render or effect re-run
+  const instanceIdRef = React.useRef<string>(nextVoiceInputId())
   const onResultRef = React.useRef(onResult)
   const onInterimRef = React.useRef(onInterim)
   const userWantsToListenRef = React.useRef(false)
@@ -165,6 +186,7 @@ export function VoiceInput({
         // ignore
       }
       recognitionRef.current = null
+      activeVoiceControllerLike.release(instanceIdRef.current)
     }
   }, [language])
 
@@ -183,7 +205,24 @@ export function VoiceInput({
         // ignore
       }
       setListening(false)
+      activeVoiceControllerLike.release(instanceIdRef.current)
     } else {
+      // ─── KEY FIX ──────────────────────────────────────────────────────
+      // Take over the global mic slot — stops any other active mic first.
+      activeVoiceControllerLike.takeOver(instanceIdRef.current, () => {
+        userWantsToListenRef.current = false
+        if (restartTimerRef.current) {
+          clearTimeout(restartTimerRef.current)
+          restartTimerRef.current = null
+        }
+        try {
+          recognitionRef.current?.stop()
+        } catch {
+          // ignore
+        }
+        setListening(false)
+      })
+
       userWantsToListenRef.current = true
       try {
         recognitionRef.current.start()
@@ -199,6 +238,7 @@ export function VoiceInput({
             } catch {
               userWantsToListenRef.current = false
               setListening(false)
+              activeVoiceControllerLike.release(instanceIdRef.current)
             }
           }
         }, 250)

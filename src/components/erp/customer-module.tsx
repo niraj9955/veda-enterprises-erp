@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ScrollableTable } from '@/components/ui/scrollable-table'
 import {
   Dialog,
   DialogContent,
@@ -641,16 +642,16 @@ export function CustomerModule() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="max-h-[60vh] overflow-auto rounded-md border">
+          <ScrollableTable maxHeight="max-h-[60vh]">
             <Table>
-              <TableHeader className="sticky top-0 bg-background z-10">
+              <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Mobile</TableHead>
-                  <TableHead>GST Number</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead className="text-right">Credit Limit (₹)</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="sticky left-0 bg-background z-20 min-w-[140px]">Name</TableHead>
+                  <TableHead className="whitespace-nowrap">Mobile</TableHead>
+                  <TableHead className="whitespace-nowrap">GST Number</TableHead>
+                  <TableHead className="min-w-[180px]">Address</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Credit Limit (₹)</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -667,7 +668,7 @@ export function CustomerModule() {
                 ) : (
                   customers.map((customer) => (
                     <TableRow key={customer.id} className="cursor-pointer hover:bg-emerald-50/40" onClick={() => setHistoryCustomerId(customer.id)}>
-                      <TableCell className="font-medium">
+                      <TableCell className="font-medium sticky left-0 bg-background z-10 min-w-[140px]">
                         <button
                           type="button"
                           className="text-emerald-700 hover:text-emerald-900 hover:underline text-left"
@@ -733,7 +734,7 @@ export function CustomerModule() {
                 )}
               </TableBody>
             </Table>
-          </div>
+          </ScrollableTable>
           <p className="text-xs text-muted-foreground mt-2">
             💡 Tip: Click on a customer's name or the book icon to view their complete transaction history (orders, dispatch, payments, sells, production, balance).
           </p>
