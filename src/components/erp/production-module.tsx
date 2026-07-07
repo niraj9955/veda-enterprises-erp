@@ -685,27 +685,45 @@ export function ProductionModule() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="prod-cement">Cement (bags)</Label>
-              <Input
-                id="prod-cement"
-                type="number"
-                min="0"
-                placeholder="0"
-                value={formData.cement}
-                onChange={(e) => handleFormChange('cement', e.target.value)}
-              />
+              <div className="relative">
+                <Input
+                  id="prod-cement"
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  value={formData.cement}
+                  onChange={(e) => handleFormChange('cement', e.target.value)}
+                  className="pr-10"
+                />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <FieldVoiceInput
+                    fieldLabel="cement bags"
+                    onChange={(text) => handleFormChange('cement', text.replace(/[^0-9.]/g, ''))}
+                  />
+                </div>
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {PRODUCT_FIELDS.map((f) => (
                 <div key={f.key} className="grid gap-2">
                   <Label htmlFor={`prod-${f.key}`}>{f.label}</Label>
-                  <Input
-                    id={`prod-${f.key}`}
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={formData[f.key]}
-                    onChange={(e) => handleFormChange(f.key, e.target.value)}
-                  />
+                  <div className="relative">
+                    <Input
+                      id={`prod-${f.key}`}
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={formData[f.key]}
+                      onChange={(e) => handleFormChange(f.key, e.target.value)}
+                      className="pr-10"
+                    />
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                      <FieldVoiceInput
+                        fieldLabel={f.label}
+                        onChange={(text) => handleFormChange(f.key, text.replace(/[^0-9.]/g, ''))}
+                      />
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -718,21 +736,35 @@ export function ProductionModule() {
                   type="number"
                   min="0"
                   placeholder="0"
-                  className="pl-9"
+                  className="pl-9 pr-10"
                   value={formData.transportationCharge}
                   onChange={(e) => handleFormChange('transportationCharge', e.target.value)}
                 />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <FieldVoiceInput
+                    fieldLabel="transportation charge"
+                    onChange={(text) => handleFormChange('transportationCharge', text.replace(/[^0-9.]/g, ''))}
+                  />
+                </div>
               </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="prod-remarks">Remarks</Label>
-              <Textarea
-                id="prod-remarks"
-                placeholder="Optional remarks..."
-                value={formData.remarks}
-                onChange={(e) => handleFormChange('remarks', e.target.value)}
-                className="min-h-[80px]"
-              />
+              <div className="relative">
+                <Textarea
+                  id="prod-remarks"
+                  placeholder="Optional remarks..."
+                  value={formData.remarks}
+                  onChange={(e) => handleFormChange('remarks', e.target.value)}
+                  className="min-h-[80px] pr-10"
+                />
+                <div className="absolute right-1.5 top-2">
+                  <FieldVoiceInput
+                    fieldLabel="remarks"
+                    onChange={(text) => handleFormChange('remarks', text)}
+                  />
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
