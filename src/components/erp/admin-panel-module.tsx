@@ -505,37 +505,38 @@ export default function AdminPanelModule() {
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-          <ShieldCheck className="size-5" />
+      <div className="flex items-start gap-3">
+        <div className="flex size-9 md:size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 shrink-0">
+          <ShieldCheck className="size-4 md:size-5" />
         </div>
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Admin Panel</h2>
-          <p className="text-sm text-muted-foreground">
+        <div className="min-w-0">
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight">Admin Panel</h2>
+          <p className="text-xs md:text-sm text-muted-foreground">
             Full control over company settings, users, roles, and system data
           </p>
         </div>
       </div>
 
       {/* Main Tabs */}
-      <Tabs defaultValue="company" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="company" className="gap-2">
-            <Building2 className="h-4 w-4" /> Company
+      <Tabs defaultValue="company" className="space-y-4 md:space-y-6">
+        {/* Mobile: horizontally scrollable tabs (no text cut-off); Desktop: 5-col grid */}
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-5 gap-1 h-auto">
+          <TabsTrigger value="company" className="gap-1.5 md:gap-2 px-2 md:px-3 py-2 text-xs md:text-sm">
+            <Building2 className="h-3.5 w-3.5 md:h-4 md:w-4" /> <span className="truncate">Company</span>
           </TabsTrigger>
-          <TabsTrigger value="logo" className="gap-2">
-            <ImagePlus className="h-4 w-4" /> Logo & Branding
+          <TabsTrigger value="logo" className="gap-1.5 md:gap-2 px-2 md:px-3 py-2 text-xs md:text-sm">
+            <ImagePlus className="h-3.5 w-3.5 md:h-4 md:w-4" /> <span className="truncate">Logo</span>
           </TabsTrigger>
-          <TabsTrigger value="users" className="gap-2">
-            <Users className="h-4 w-4" /> Users & Access
+          <TabsTrigger value="users" className="gap-1.5 md:gap-2 px-2 md:px-3 py-2 text-xs md:text-sm">
+            <Users className="h-3.5 w-3.5 md:h-4 md:w-4" /> <span className="truncate">Users</span>
           </TabsTrigger>
-          <TabsTrigger value="database" className="gap-2">
-            <Database className="h-4 w-4" /> Database
+          <TabsTrigger value="database" className="gap-1.5 md:gap-2 px-2 md:px-3 py-2 text-xs md:text-sm col-span-3 md:col-span-1">
+            <Database className="h-3.5 w-3.5 md:h-4 md:w-4" /> <span className="truncate">Database</span>
           </TabsTrigger>
-          <TabsTrigger value="ai" className="gap-2">
-            <Sparkles className="h-4 w-4" /> AI Assistant
+          <TabsTrigger value="ai" className="gap-1.5 md:gap-2 px-2 md:px-3 py-2 text-xs md:text-sm col-span-3 md:col-span-1">
+            <Sparkles className="h-3.5 w-3.5 md:h-4 md:w-4" /> <span className="truncate">AI Assistant</span>
           </TabsTrigger>
         </TabsList>
 
