@@ -430,7 +430,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               'group relative hidden md:flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300 shrink-0',
               'bg-gradient-to-br shadow-md ring-1',
               sidebarVisible
-                ? 'from-rose-500/80 to-rose-600/80 ring-white/20 hover:from-rose-500 hover:to-rose-600 shadow-rose-900/30'
+                ? 'from-[#4299E1] to-[#3182CE] ring-white/25 hover:from-[#3182CE] hover:to-[#4299E1] shadow-blue-900/30'
                 : 'from-[#4299E1] to-[#3182CE] ring-white/25 hover:from-[#3182CE] hover:to-[#4299E1] shadow-blue-900/30'
             )}
             title={sidebarVisible ? 'Hide menu' : 'Show menu'}
@@ -438,10 +438,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           >
             {/* Subtle inner top highlight */}
             <span className="absolute inset-x-1 top-0.5 h-px bg-white/30 rounded-full pointer-events-none" />
+            {/* Single horizontal line that animates into 3 lines when hidden, single line when visible */}
             <span className="relative flex flex-col gap-[5px] items-center justify-center">
-              <span className={cn('block h-0.5 w-4 bg-white rounded-full transition-all duration-300', sidebarVisible && 'rotate-45 translate-y-[7px]')} />
-              <span className={cn('block h-0.5 w-4 bg-white rounded-full transition-all duration-300', sidebarVisible && 'opacity-0')} />
-              <span className={cn('block h-0.5 w-4 bg-white rounded-full transition-all duration-300', sidebarVisible && '-rotate-45 -translate-y-[7px]')} />
+              <span className={cn('block h-0.5 bg-white rounded-full transition-all duration-300', sidebarVisible ? 'w-5' : 'w-4 opacity-100')} />
+              <span className={cn('block h-0.5 bg-white rounded-full transition-all duration-300', sidebarVisible ? 'w-0 opacity-0' : 'w-4 opacity-100')} />
+              <span className={cn('block h-0.5 bg-white rounded-full transition-all duration-300', sidebarVisible ? 'w-0 opacity-0' : 'w-4 opacity-100')} />
             </span>
           </button>
           {/* Mobile menu */}
