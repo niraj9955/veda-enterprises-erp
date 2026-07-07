@@ -45,37 +45,37 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --background: oklch(0.97 0.003 247); /* #F1F5F9 soft cool slate-100 */
+  --foreground: oklch(0.21 0.02 256); /* deep slate text */
+  --card: oklch(1 0 0); /* pure white cards for crisp content surfaces */
+  --card-foreground: oklch(0.21 0.02 256);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.21 0.02 256);
+  --primary: oklch(0.55 0.18 256); /* accent blue #4299E1 */
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.94 0.01 256);
+  --secondary-foreground: oklch(0.21 0.02 256);
+  --muted: oklch(0.94 0.01 256);
+  --muted-foreground: oklch(0.55 0.02 256);
+  --accent: oklch(0.94 0.01 256);
+  --accent-foreground: oklch(0.21 0.02 256);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.9 0.01 256);
+  --input: oklch(0.9 0.01 256);
+  --ring: oklch(0.55 0.18 256);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar: oklch(0.27 0.02 256);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.55 0.18 256);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-accent: oklch(0.33 0.02 256);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-ring: oklch(0.55 0.18 256);
 }
 
 .dark {
@@ -175,13 +175,13 @@
      overlap/ghosting bug the user reported).
 
      We layer TWO backgrounds:
-       1. A solid #ffffff fallback (rendered first, painted on the bottom).
+       1. A solid #F1F5F9 fallback (rendered first, painted on the bottom).
        2. The theme's --background token on top.
 
-     If --background is somehow undefined or invalid, the white layer
+     If --background is somehow undefined or invalid, the slate-100 layer
      still hides the data rows. In dark mode we override both layers
      with the dark --background value via the .dark selector below. */
-  background-color: #ffffff;
+  background-color: #f1f5f9;
   background-color: var(--background);
   /* `box-shadow` creates a subtle 1px bottom border that visually
      separates the sticky header from the data rows below it. Using
@@ -207,7 +207,7 @@
 .scrollable-table-wrapper [data-slot="table-body"] td.sticky {
   z-index: 5;
   background-color: #ffffff;
-  background-color: var(--background);
+  background-color: var(--card);
   isolation: isolate;
 }
 

@@ -387,7 +387,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen bg-[#F7FAFC] dark:bg-gray-950 overflow-hidden">
+    <div className="flex h-screen bg-[#F1F5F9] dark:bg-gray-950 overflow-hidden">
       {/* Desktop sidebar */}
       <aside
         className={cn(
