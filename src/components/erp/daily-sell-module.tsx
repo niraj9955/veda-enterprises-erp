@@ -41,6 +41,7 @@ import {
 import { ShoppingCart, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload, Search, Trash } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 import { AiFillButton } from '@/components/ui/ai-fill-button'
+import { FieldVoiceInput } from '@/components/ui/field-voice-input'
 import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -615,30 +616,58 @@ export function DailySellModule() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ds-customer">Customer Name <span className="text-destructive">*</span></Label>
-              <Input id="ds-customer" placeholder="Enter customer name" value={formData.customerName} onChange={(e) => handleFormChange('customerName', e.target.value)} />
+              <div className="relative">
+                <Input id="ds-customer" placeholder="Enter customer name" value={formData.customerName} onChange={(e) => handleFormChange('customerName', e.target.value)} className="pr-9" />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <FieldVoiceInput fieldLabel="customer name" onChange={(text) => handleFormChange('customerName', text)} />
+                </div>
+              </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ds-address">Address</Label>
-              <Input id="ds-address" placeholder="Enter address" value={formData.address} onChange={(e) => handleFormChange('address', e.target.value)} />
+              <div className="relative">
+                <Input id="ds-address" placeholder="Enter address" value={formData.address} onChange={(e) => handleFormChange('address', e.target.value)} className="pr-9" />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <FieldVoiceInput fieldLabel="address" onChange={(text) => handleFormChange('address', text)} />
+                </div>
+              </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ds-contact">Contact Number</Label>
-              <Input id="ds-contact" placeholder="Enter contact number" value={formData.contactNumber} onChange={(e) => handleFormChange('contactNumber', e.target.value)} />
+              <div className="relative">
+                <Input id="ds-contact" placeholder="Enter contact number" value={formData.contactNumber} onChange={(e) => handleFormChange('contactNumber', e.target.value)} className="pr-9" />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <FieldVoiceInput fieldLabel="contact number" onChange={(text) => handleFormChange('contactNumber', text.replace(/[^0-9+\-\s]/g, '').trim())} />
+                </div>
+              </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ds-product">Product</Label>
-              <Input id="ds-product" placeholder="Enter product name" value={formData.product} onChange={(e) => handleFormChange('product', e.target.value)} />
+              <div className="relative">
+                <Input id="ds-product" placeholder="Enter product name" value={formData.product} onChange={(e) => handleFormChange('product', e.target.value)} className="pr-9" />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <FieldVoiceInput fieldLabel="product" onChange={(text) => handleFormChange('product', text)} />
+                </div>
+              </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ds-amount">Amount (₹)</Label>
               <div className="relative">
                 <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                <Input id="ds-amount" type="number" min="0" placeholder="0" className="pl-9" value={formData.amount} onChange={(e) => handleFormChange('amount', e.target.value)} />
+                <Input id="ds-amount" type="number" min="0" placeholder="0" className="pl-9 pr-9" value={formData.amount} onChange={(e) => handleFormChange('amount', e.target.value)} />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <FieldVoiceInput fieldLabel="amount" onChange={(text) => handleFormChange('amount', text.replace(/[^0-9.]/g, ''))} />
+                </div>
               </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ds-remarks">Remarks</Label>
-              <Textarea id="ds-remarks" placeholder="Optional remarks..." value={formData.remarks} onChange={(e) => handleFormChange('remarks', e.target.value)} className="min-h-[80px]" />
+              <div className="relative">
+                <Textarea id="ds-remarks" placeholder="Optional remarks..." value={formData.remarks} onChange={(e) => handleFormChange('remarks', e.target.value)} className="min-h-[80px] pr-9" />
+                <div className="absolute right-1.5 top-2">
+                  <FieldVoiceInput fieldLabel="remarks" onChange={(text) => handleFormChange('remarks', text)} />
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>

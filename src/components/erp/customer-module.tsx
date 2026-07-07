@@ -50,6 +50,7 @@ import {
 import ExcelImport from '@/components/erp/excel-import'
 import { CustomerHistoryPage } from '@/components/erp/customer-history-page'
 import { AiFillButton } from '@/components/ui/ai-fill-button'
+import { FieldVoiceInput } from '@/components/ui/field-voice-input'
 import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -344,12 +345,21 @@ export function CustomerModule() {
             <Label htmlFor="cust-name">
               Customer Name <span className="text-destructive">*</span>
             </Label>
-            <Input
-              id="cust-name"
-              placeholder="Enter customer name"
-              value={formData.name}
-              onChange={(e) => handleFormChange('name', e.target.value)}
-            />
+            <div className="relative">
+              <Input
+                id="cust-name"
+                placeholder="Enter customer name"
+                value={formData.name}
+                onChange={(e) => handleFormChange('name', e.target.value)}
+                className="pr-9"
+              />
+              <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                <FieldVoiceInput
+                  fieldLabel="customer name"
+                  onChange={(text) => handleFormChange('name', text)}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Mobile Number */}
@@ -357,35 +367,61 @@ export function CustomerModule() {
             <Label htmlFor="cust-mobile">
               Mobile Number <span className="text-destructive">*</span>
             </Label>
-            <Input
-              id="cust-mobile"
-              placeholder="Enter mobile number"
-              value={formData.mobile}
-              onChange={(e) => handleFormChange('mobile', e.target.value)}
-            />
+            <div className="relative">
+              <Input
+                id="cust-mobile"
+                placeholder="Enter mobile number"
+                value={formData.mobile}
+                onChange={(e) => handleFormChange('mobile', e.target.value)}
+                className="pr-9"
+              />
+              <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                <FieldVoiceInput
+                  fieldLabel="mobile number"
+                  onChange={(text) => handleFormChange('mobile', text.replace(/[^0-9+\-\s]/g, '').trim())}
+                />
+              </div>
+            </div>
           </div>
 
           {/* GST Number */}
           <div className="grid gap-2">
             <Label htmlFor="cust-gst">GST Number</Label>
-            <Input
-              id="cust-gst"
-              placeholder="Enter GST number (optional)"
-              value={formData.gstNumber}
-              onChange={(e) => handleFormChange('gstNumber', e.target.value)}
-            />
+            <div className="relative">
+              <Input
+                id="cust-gst"
+                placeholder="Enter GST number (optional)"
+                value={formData.gstNumber}
+                onChange={(e) => handleFormChange('gstNumber', e.target.value)}
+                className="pr-9"
+              />
+              <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                <FieldVoiceInput
+                  fieldLabel="GST number"
+                  onChange={(text) => handleFormChange('gstNumber', text.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Address */}
           <div className="grid gap-2">
             <Label htmlFor="cust-address">Address</Label>
-            <Textarea
-              id="cust-address"
-              placeholder="Enter address"
-              value={formData.address}
-              onChange={(e) => handleFormChange('address', e.target.value)}
-              className="min-h-[80px]"
-            />
+            <div className="relative">
+              <Textarea
+                id="cust-address"
+                placeholder="Enter address"
+                value={formData.address}
+                onChange={(e) => handleFormChange('address', e.target.value)}
+                className="min-h-[80px] pr-9"
+              />
+              <div className="absolute right-1.5 top-2">
+                <FieldVoiceInput
+                  fieldLabel="address"
+                  onChange={(text) => handleFormChange('address', text)}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Credit Limit */}

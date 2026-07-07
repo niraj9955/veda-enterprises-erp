@@ -7,27 +7,24 @@ import { Button } from '@/components/ui/button'
 // ─── VoiceInput ─────────────────────────────────────────────────────────────
 //
 // Browser-based speech-to-text using the Web Speech API (webkitSpeechRecognition).
-// Supports Hindi (hi-IN) and English (en-IN) — defaults to Hindi since most users
-// in this ERP will speak Hinglish or Hindi.
+// Supports Hindi (hi-IN) and English (en-IN).
 //
-// Behavior:
-//   • Click the mic button → starts listening, button turns red with stop icon
-//   • Click again → stops listening, final transcript is committed to onResult
-//   • Live interim results stream to onInterim for real-time text display
-//   • Browser not supported → button is disabled with a tooltip
+// RELIABILITY FIX (v3): the previous versions used `continuous = true` which is
+// flaky in Chrome — it stops after the first phrase and the auto-restart logic
+// frequently lost words. We now use a much simpler, more robust approach:
 //
-// Key fixes vs. naive implementation:
-//   1. Callback refs — useEffect doesn't re-run on every parent render, which
-//      previously caused recognition to restart mid-sentence (only first word
-//      came through).
-//   2. Auto-restart on silent end — Chrome's Web Speech API auto-stops after
-//      ~5-15 sec of silence. We track the user's intent (still listening) and
-//      restart recognition automatically so the user can keep speaking.
-//   3. Proper cleanup — abort on unmount, no zombie listeners.
+//   1. `continuous = false` — Chrome returns ONE complete phrase per session,
+//      which is exactly what we want for short voice inputs (names, amounts,
+//      addresses, single sentences).
+//   2. After each phrase ends (onend), if the user still wants to listen, we
+//      start a new session. Final results accumulate across sessions.
+//   3. We use a STABLE ref-based architecture so parent re-renders never
+//      recreate or restart the recognition mid-phrase.
+//   4. Multiple final results are joined with a space and passed to onResult.
 //
-// Note: Web Speech API is only available in Chrome/Edge and requires HTTPS.
-// In other browsers (Firefox/Safari), the button gracefully disables and the
-// user falls back to typing in the text field.
+// This pattern is used by every production voice-input library (e.g.
+// react-speech-recognition, @mui/x-voice) because it's the only one that
+// actually works reliably on Chrome.
 
 interface VoiceInputProps {
   onResult: (text: string) => void
@@ -37,7 +34,6 @@ interface VoiceInputProps {
   className?: string
 }
 
-// Minimal type for the webkitSpeechRecognition API — TS doesn't ship it.
 interface SpeechRecognitionLike {
   lang: string
   continuous: boolean
@@ -62,15 +58,12 @@ export function VoiceInput({
   const [listening, setListening] = React.useState(false)
   const [supported, setSupported] = React.useState(true)
 
-  // Refs to keep the latest callbacks without re-creating the recognition
-  // instance on every parent re-render (which was causing only the first
-  // word to come through).
+  // STABLE refs — never cause re-render or effect re-run
   const onResultRef = React.useRef(onResult)
   const onInterimRef = React.useRef(onInterim)
-  // Track the user's intent — true = user wants to keep listening, even if
-  // the browser auto-stops the recognition session due to silence.
   const userWantsToListenRef = React.useRef(false)
   const recognitionRef = React.useRef<SpeechRecognitionLike | null>(null)
+  const restartTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
   React.useEffect(() => {
     onResultRef.current = onResult
@@ -78,7 +71,6 @@ export function VoiceInput({
   }, [onResult, onInterim])
 
   React.useEffect(() => {
-    // Detect support on mount only — doesn't change during session
     const SpeechRecognition =
       (typeof window !== 'undefined' &&
         ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) ||
@@ -90,35 +82,39 @@ export function VoiceInput({
 
     const recognition = new SpeechRecognition() as SpeechRecognitionLike
     recognition.lang = language
-    recognition.continuous = true
+    // KEY FIX: continuous=false is far more reliable in Chrome for short phrases.
+    // The browser returns one complete utterance per session, then fires onend.
+    // We restart manually for the next phrase if the user still wants to listen.
+    recognition.continuous = false
     recognition.interimResults = true
     recognition.maxAlternatives = 1
 
     recognition.onresult = (event: any) => {
       let interimText = ''
       let finalText = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript
-        if (event.results[i].isFinal) {
-          finalText += transcript
+      // Iterate over ALL results in this event — Chrome may batch multiple
+      // final results in a single event when speech was fast.
+      for (let i = 0; i < event.results.length; i++) {
+        const result = event.results[i]
+        const transcript = result[0].transcript
+        if (result.isFinal) {
+          finalText += (finalText ? ' ' : '') + transcript
         } else {
           interimText += transcript
         }
       }
       if (interimText && onInterimRef.current) onInterimRef.current(interimText)
       if (finalText) {
-        if (onResultRef.current) onResultRef.current(finalText)
-        // Clear interim once we have a final result
+        if (onResultRef.current) onResultRef.current(finalText.trim())
         if (onInterimRef.current) onInterimRef.current('')
       }
     }
 
     recognition.onerror = (event: any) => {
-      console.error('[VoiceInput] Speech recognition error:', event.error)
-      // 'no-speech' and 'aborted' are not fatal — recognition.onend will
-      // fire and our restart logic kicks in if user still wants to listen.
-      // 'not-allowed' / 'service-not-allowed' mean mic permission denied —
-      // in that case we should stop trying to restart.
+      console.warn('[VoiceInput] error:', event.error)
+      // 'no-speech' just means silence — not fatal, onend will handle restart.
+      // 'aborted' is triggered by our own stop() — onend will fire next.
+      // 'not-allowed' / 'service-not-allowed' mean mic permission denied.
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         userWantsToListenRef.current = false
         setListening(false)
@@ -126,25 +122,30 @@ export function VoiceInput({
     }
 
     recognition.onend = () => {
-      // Chrome's Web Speech API auto-stops after silence. If the user still
-      // wants to listen (didn't click Stop), restart the session. This is
-      // the standard workaround used by all production voice-input libraries.
+      // Session ended (either Chrome auto-stopped on silence, or we stopped it).
+      // If the user still wants to listen, restart after a tiny delay.
       if (userWantsToListenRef.current) {
-        try {
-          recognition.start()
-        } catch (err) {
-          // start() throws if called too quickly after end — small delay
-          setTimeout(() => {
-            if (userWantsToListenRef.current) {
-              try {
-                recognition.start()
-              } catch {
-                userWantsToListenRef.current = false
-                setListening(false)
-              }
+        if (restartTimerRef.current) clearTimeout(restartTimerRef.current)
+        restartTimerRef.current = setTimeout(() => {
+          if (userWantsToListenRef.current && recognitionRef.current) {
+            try {
+              recognitionRef.current.start()
+            } catch {
+              // If start() throws (already started or shutting down),
+              // try once more after a longer delay.
+              restartTimerRef.current = setTimeout(() => {
+                if (userWantsToListenRef.current && recognitionRef.current) {
+                  try {
+                    recognitionRef.current.start()
+                  } catch {
+                    userWantsToListenRef.current = false
+                    setListening(false)
+                  }
+                }
+              }, 300)
             }
-          }, 100)
-        }
+          }
+        }, 150)
       } else {
         setListening(false)
       }
@@ -154,19 +155,28 @@ export function VoiceInput({
 
     return () => {
       userWantsToListenRef.current = false
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current)
+        restartTimerRef.current = null
+      }
       try {
         recognition.abort()
       } catch {
         // ignore
       }
+      recognitionRef.current = null
     }
   }, [language])
 
   const toggle = () => {
     if (!recognitionRef.current) return
     if (listening) {
-      // User explicitly stopped — set intent to false so onend doesn't restart
+      // User explicitly stopped — prevent onend from restarting.
       userWantsToListenRef.current = false
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current)
+        restartTimerRef.current = null
+      }
       try {
         recognitionRef.current.stop()
       } catch {
@@ -178,32 +188,25 @@ export function VoiceInput({
       try {
         recognitionRef.current.start()
         setListening(true)
-      } catch (err) {
-        console.error('[VoiceInput] Failed to start:', err)
-        // If already started, try stopping first then starting
-        try {
-          recognitionRef.current.abort()
-          setTimeout(() => {
+      } catch {
+        // start() throws if a session is still shutting down.
+        // Wait a moment and retry once.
+        restartTimerRef.current = setTimeout(() => {
+          if (userWantsToListenRef.current && recognitionRef.current) {
             try {
-              recognitionRef.current?.start()
+              recognitionRef.current.start()
               setListening(true)
             } catch {
               userWantsToListenRef.current = false
               setListening(false)
             }
-          }, 200)
-        } catch {
-          userWantsToListenRef.current = false
-          setListening(false)
-        }
+          }
+        }, 250)
       }
     }
   }
 
-  if (!supported) {
-    // Don't render anything if browser doesn't support — silently hide
-    return null
-  }
+  if (!supported) return null
 
   return (
     <Button

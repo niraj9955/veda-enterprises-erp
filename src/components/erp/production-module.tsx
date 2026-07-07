@@ -41,6 +41,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import ExcelImport from '@/components/erp/excel-import'
 import { ScrollableTable } from '@/components/ui/scrollable-table'
 import { AiFillButton } from '@/components/ui/ai-fill-button'
+import { FieldVoiceInput } from '@/components/ui/field-voice-input'
 import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
 
 // ── Types ───────────────────────────────────────────────────────────────────
