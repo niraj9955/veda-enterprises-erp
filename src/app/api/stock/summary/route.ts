@@ -30,7 +30,7 @@ export const revalidate = 0
 // Why we removed `sold`, `soldCount`, `soldAmount`, `prevYearStock`:
 //   • DailySell.product is a free-text field with no quantity column — we
 //     could only count records, not units sold, and the count was always 0
-//     in practice because nobody fills DailySell for paver blocks.
+//     in practice because nobody fills DailySell for paper blocks.
 //   • Dispatch.brickType uses Red Brick / Fly Ash Brick / etc. — different
 //     product line, never matches "Zig Zag Grey 80mm".
 //   • Previous-year stock was always 0 because Stock is auto-synced from

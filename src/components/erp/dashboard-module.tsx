@@ -112,7 +112,7 @@ export default function DashboardModule() {
           Dashboard
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Paver Block Manufacturing &mdash; Overview of operations and performance
+          Paper Block Manufacturing &mdash; Overview of operations and performance
         </p>
         <p className="text-muted-foreground/70 text-xs mt-1">
           Tip: click any card below to jump straight to that module.

@@ -449,7 +449,7 @@ export function ProductionModule() {
           <div>
             <h2 className="text-2xl font-bold tracking-tight">Production Management</h2>
             <p className="text-sm text-muted-foreground">
-              Track daily paver block production entries
+              Track daily paper block production entries
             </p>
           </div>
         </div>

@@ -234,7 +234,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
         )}
         <div className={cn('overflow-hidden transition-all duration-300', sidebarOpen ? 'w-40' : 'w-0')}>
           <h2 className="font-bold text-sm text-emerald-700 dark:text-emerald-400 whitespace-nowrap truncate">{companyName || 'Veda Enterprises'}</h2>
-          <p className="text-[11px] text-muted-foreground whitespace-nowrap truncate">{companyTagline || 'Paver Block ERP'}</p>
+          <p className="text-[11px] text-muted-foreground whitespace-nowrap truncate">{companyTagline || 'Paper Block ERP'}</p>
         </div>
       </div>
 
@@ -433,7 +433,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     {company?.name || 'Veda Enterprises'}
                   </span>
                   <span className="text-muted-foreground/60">·</span>
-                  <span>Paver Block ERP</span>
+                  <span>Paper Block ERP</span>
                   <span className="text-muted-foreground/60">·</span>
                   <span className="inline-flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
