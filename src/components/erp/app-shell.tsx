@@ -419,6 +419,48 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="p-4 md:p-6 max-w-7xl mx-auto">
             {children}
           </div>
+
+          {/* Footer */}
+          <footer className="border-t border-border/50 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm mt-4">
+            <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
+                {/* Left: brand + version */}
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <div className="w-6 h-6 rounded-md bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-sm">
+                    <Building2 className="h-3.5 w-3.5 text-white" />
+                  </div>
+                  <span className="font-semibold text-foreground/80">
+                    {company?.name || 'Veda Enterprises'}
+                  </span>
+                  <span className="text-muted-foreground/60">·</span>
+                  <span>Paver Block ERP</span>
+                  <span className="text-muted-foreground/60">·</span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    v1.0
+                  </span>
+                </div>
+
+                {/* Center: quick info */}
+                <div className="flex items-center gap-3 text-muted-foreground/80">
+                  <span className="inline-flex items-center gap-1">
+                    <ShieldCheck className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                    Secure
+                  </span>
+                  <span className="text-muted-foreground/40">·</span>
+                  <span className="inline-flex items-center gap-1">
+                    <Zap className="h-3 w-3 text-amber-500" />
+                    AI-assisted
+                  </span>
+                </div>
+
+                {/* Right: copyright */}
+                <div className="text-muted-foreground/70">
+                  © {new Date().getFullYear()} {(company?.name || 'Veda Enterprises')}. All rights reserved.
+                </div>
+              </div>
+            </div>
+          </footer>
         </main>
       </div>
 
