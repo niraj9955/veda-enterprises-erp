@@ -334,6 +334,17 @@ BillSchema.index({ date: -1 });
 BillSchema.index({ billType: 1, status: 1 });
 BillSchema.index({ customerId: 1 });
 
+// ─── AI Config (OpenAI API key storage) ─────────────────────────────────────
+// Stores the OpenAI API key used by the AI form-fill feature.
+// Single document (singleton pattern) — we always read the first doc.
+const AiConfigSchema = new mongoose.Schema({
+  openaiApiKey: { type: String, default: '' },
+  // Whether AI features are enabled (admin can toggle off without deleting the key)
+  enabled: { type: Boolean, default: false },
+  // Which model to use — defaults to gpt-4o-mini (cheap + fast + good Hindi)
+  model: { type: String, default: 'gpt-4o-mini' },
+}, { timestamps: true });
+
 // ─── Models ─────────────────────────────────────────────────────────────────
 export const Company = mongoose.models.Company || mongoose.model('Company', CompanySchema);
 export const User = mongoose.models.User || mongoose.model('User', UserSchema);
@@ -354,3 +365,4 @@ export const Hardner = mongoose.models.Hardner || mongoose.model('Hardner', Hard
 export const Electricity = mongoose.models.Electricity || mongoose.model('Electricity', ElectricitySchema);
 export const FactoryStuff = mongoose.models.FactoryStuff || mongoose.model('FactoryStuff', FactoryStuffSchema);
 export const Bill = mongoose.models.Bill || mongoose.model('Bill', BillSchema);
+export const AiConfig = mongoose.models.AiConfig || mongoose.model('AiConfig', AiConfigSchema);

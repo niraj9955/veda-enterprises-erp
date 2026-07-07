@@ -39,6 +39,7 @@ import {
   Briefcase,
   FileText,
 } from 'lucide-react'
+import { AiChatWidget } from '@/components/ui/ai-chat-widget'
 
 // Navigation structure with collapsible sections
 interface NavItem {
@@ -420,6 +421,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </main>
       </div>
+
+      {/* Floating AI chat widget — shown only if AI is enabled in Admin Panel */}
+      <AiChatWidget />
     </div>
   )
 }

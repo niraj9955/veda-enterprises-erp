@@ -377,4 +377,18 @@ export const api = {
       perCollection?: Record<string, { inserted: number; replaced: number; skipped: number }>
       errors?: Record<string, string>
     }>('/database', { method: 'PUT', body: JSON.stringify({ data }) }),
+
+  // AI Form-Fill
+  aiParse: (module: string, text: string) =>
+    request<{ fields: Record<string, unknown>; raw: Record<string, unknown> }>('/ai/parse', {
+      method: 'POST',
+      body: JSON.stringify({ module, text }),
+    }),
+  getAiConfig: () =>
+    request<{ enabled: boolean; model: string; hasKey: boolean; keyMasked: string }>('/ai/config'),
+  updateAiConfig: (data: { openaiApiKey?: string; enabled?: boolean; model?: string }) =>
+    request<{ enabled: boolean; model: string; hasKey: boolean; keyMasked: string }>('/ai/config', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 }

@@ -69,6 +69,9 @@ import {
   AlertCircle,
   X,
   Check,
+  Sparkles,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -518,7 +521,7 @@ export default function AdminPanelModule() {
 
       {/* Main Tabs */}
       <Tabs defaultValue="company" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="company" className="gap-2">
             <Building2 className="h-4 w-4" /> Company
           </TabsTrigger>
@@ -530,6 +533,9 @@ export default function AdminPanelModule() {
           </TabsTrigger>
           <TabsTrigger value="database" className="gap-2">
             <Database className="h-4 w-4" /> Database
+          </TabsTrigger>
+          <TabsTrigger value="ai" className="gap-2">
+            <Sparkles className="h-4 w-4" /> AI Assistant
           </TabsTrigger>
         </TabsList>
 
@@ -942,6 +948,11 @@ export default function AdminPanelModule() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* ── AI Assistant Tab ──────────────────────────────────────────── */}
+        <TabsContent value="ai" className="space-y-6">
+          <AiConfigSection />
         </TabsContent>
       </Tabs>
 
