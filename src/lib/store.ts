@@ -99,7 +99,7 @@ export const useAppStore = create<AppState>((set) => ({
   // Sidebar
   sidebarOpen: true,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
-  sidebarVisible: true,
+  sidebarVisible: false,
   setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
 
   // Company branding

@@ -401,26 +401,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex-1 min-h-0 flex flex-col">
           <SidebarContent {...sidebarProps} />
         </div>
-        <div className="border-t border-white/15 p-2.5 flex justify-center gap-1.5 shrink-0 bg-black/20 backdrop-blur-sm mt-auto">
-          {/* Collapse/Expand button (toggles sidebarOpen — keeps mini rail) */}
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-white hover:bg-white/15 hover:text-white shrink-0" title={sidebarOpen ? 'Collapse' : 'Expand'}>
-            {sidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </Button>
-          {/* Hide button — fully hides the sidebar (shown only when expanded) */}
-          {sidebarOpen && (
-            <Button variant="ghost" size="sm" onClick={() => setSidebarVisible(false)} className="text-white/80 hover:bg-rose-500/40 hover:text-white shrink-0 gap-1.5 px-3 h-9" title="Hide sidebar">
-              <ChevronLeft className="h-4 w-4" />
-              <span className="text-xs font-medium">Hide</span>
-            </Button>
-          )}
-        </div>
       </aside>
 
-      {/* Floating "Show Sidebar" button — visible only when sidebar is hidden */}
+      {/* Floating "Show Sidebar" button — visible only when sidebar is hidden (edge tab) */}
       {!sidebarVisible && (
         <button
           onClick={() => setSidebarVisible(true)}
-          className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-30 items-center justify-center w-8 h-16 bg-gradient-to-r from-[#2D3748] to-[#3182CE] text-white rounded-r-xl shadow-2xl ring-1 ring-black/30 hover:w-10 hover:from-[#3182CE] hover:to-[#4299E1] transition-all duration-300 group"
+          className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-30 items-center justify-center w-7 h-20 bg-gradient-to-r from-[#2D3748] to-[#3182CE] text-white rounded-r-xl shadow-2xl ring-1 ring-black/30 hover:w-9 hover:from-[#3182CE] hover:to-[#4299E1] transition-all duration-300 group"
           title="Show sidebar"
           aria-label="Show sidebar"
         >
@@ -435,18 +422,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <header className="relative flex items-center gap-2 px-4 py-2.5 border-b border-black/30 bg-gradient-to-r from-[#2D3748] via-[#2F3947] to-[#2D3748] backdrop-blur-sm sticky top-0 z-10 shrink-0 text-white shadow-lg ring-1 ring-black/20">
           {/* Subtle top highlight for 3D pop */}
           <div className="absolute inset-x-0 top-0 h-px bg-white/15 pointer-events-none" />
-          {/* Desktop "Show sidebar" button in header (only when sidebar hidden) */}
-          {!sidebarVisible && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarVisible(true)}
-              className="hidden md:flex text-white hover:bg-white/15 hover:text-white"
-              title="Show sidebar"
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-          )}
+          {/* Attractive sidebar toggle button (desktop) — always visible in header */}
+          <button
+            onClick={() => setSidebarVisible(!sidebarVisible)}
+            className={cn(
+              'group relative hidden md:flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300 shrink-0',
+              'bg-gradient-to-br shadow-md ring-1',
+              sidebarVisible
+                ? 'from-rose-500/80 to-rose-600/80 ring-white/20 hover:from-rose-500 hover:to-rose-600 shadow-rose-900/30'
+                : 'from-[#4299E1] to-[#3182CE] ring-white/25 hover:from-[#3182CE] hover:to-[#4299E1] shadow-blue-900/30'
+            )}
+            title={sidebarVisible ? 'Hide menu' : 'Show menu'}
+            aria-label={sidebarVisible ? 'Hide menu' : 'Show menu'}
+          >
+            {/* Subtle inner top highlight */}
+            <span className="absolute inset-x-1 top-0.5 h-px bg-white/30 rounded-full pointer-events-none" />
+            <span className="relative flex flex-col gap-[5px] items-center justify-center">
+              <span className={cn('block h-0.5 w-4 bg-white rounded-full transition-all duration-300', sidebarVisible && 'rotate-45 translate-y-[7px]')} />
+              <span className={cn('block h-0.5 w-4 bg-white rounded-full transition-all duration-300', sidebarVisible && 'opacity-0')} />
+              <span className={cn('block h-0.5 w-4 bg-white rounded-full transition-all duration-300', sidebarVisible && '-rotate-45 -translate-y-[7px]')} />
+            </span>
+          </button>
           {/* Mobile menu */}
           <Sheet>
             <SheetTrigger asChild>
