@@ -1079,6 +1079,7 @@ function AiConfigSection() {
   const { refresh: refreshAiConfig } = useAiConfig()
 
   const [apiKey, setApiKey] = React.useState('')
+  const [provider, setProvider] = React.useState<'openai' | 'groq'>('openai')
   const [model, setModel] = React.useState('gpt-4o-mini')
   const [enabled, setEnabled] = React.useState(false)
   const [showKey, setShowKey] = React.useState(false)
@@ -1086,12 +1087,39 @@ function AiConfigSection() {
   const [saving, setSaving] = React.useState(false)
   const [hasExistingKey, setHasExistingKey] = React.useState(false)
 
+  // Model presets — change when provider changes
+  const MODEL_OPTIONS: Record<'openai' | 'groq', { value: string; label: string }[]> = {
+    openai: [
+      { value: 'gpt-4o-mini', label: 'gpt-4o-mini (recommended — fast & cheap)' },
+      { value: 'gpt-4o', label: 'gpt-4o (more accurate)' },
+      { value: 'gpt-4-turbo', label: 'gpt-4-turbo (legacy)' },
+      { value: 'gpt-3.5-turbo', label: 'gpt-3.5-turbo (cheapest)' },
+    ],
+    groq: [
+      { value: 'llama-3.3-70b-versatile', label: 'llama-3.3-70b-versatile (recommended — FREE tier)' },
+      { value: 'llama-3.1-8b-instant', label: 'llama-3.1-8b-instant (fastest, more free calls)' },
+      { value: 'meta-llama/llama-4-scout-17b-16e-instruct', label: 'llama-4-scout-17b (newest)' },
+    ],
+  }
+
+  const handleProviderChange = (newProvider: 'openai' | 'groq') => {
+    setProvider(newProvider)
+    // Auto-switch model to the new provider's recommended default
+    setModel(MODEL_OPTIONS[newProvider][0].value)
+    // Clear the API key field — user must enter the right key for the new provider
+    setApiKey('')
+    // We don't know yet if there's an existing key for the new provider,
+    // so optimistically set to false. handleSave will update hasExistingKey.
+    setHasExistingKey(false)
+  }
+
   React.useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
         const cfg = await api.getAiConfig()
         if (cancelled) return
+        setProvider(cfg.provider || 'openai')
         setModel(cfg.model || 'gpt-4o-mini')
         setEnabled(!!cfg.enabled)
         setHasExistingKey(!!cfg.hasKey)
@@ -1114,17 +1142,26 @@ function AiConfigSection() {
     }
     setSaving(true)
     try {
-      const payload: { model: string; enabled: boolean; openaiApiKey?: string } = {
+      const payload: {
+        provider: 'openai' | 'groq'
+        model: string
+        enabled: boolean
+        openaiApiKey?: string
+      } = {
+        provider,
         model,
         enabled,
       }
       if (apiKey.trim()) {
         payload.openaiApiKey = apiKey.trim()
       }
-      await api.updateAiConfig(payload)
-      toast({ title: 'AI settings saved', description: 'Configuration updated successfully.' })
+      const res = await api.updateAiConfig(payload)
+      toast({
+        title: 'AI settings saved',
+        description: `${provider === 'groq' ? 'Groq' : 'OpenAI'} configuration updated successfully.`,
+      })
       setApiKey('')
-      setHasExistingKey(true)
+      setHasExistingKey(!!res.hasKey)
       // Refresh the shared cache so the floating chat button + AI Fill
       // buttons appear immediately across the app (no page reload needed).
       await refreshAiConfig()
@@ -1175,7 +1212,7 @@ function AiConfigSection() {
             AI Assistant Configuration
           </CardTitle>
           <CardDescription>
-            Configure OpenAI API key to enable AI-powered voice and text entry for all ERP forms.
+            Configure AI provider to enable voice &amp; text entry for all ERP forms.
             Users can speak or type in Hindi/English/Hinglish and forms auto-fill.
           </CardDescription>
         </CardHeader>
@@ -1204,15 +1241,84 @@ function AiConfigSection() {
             </Button>
           </div>
 
+          {/* Provider selection */}
+          <div className="grid gap-2">
+            <Label htmlFor="ai-provider">AI Provider</Label>
+            <Select
+              value={provider}
+              onValueChange={(v) => handleProviderChange(v as 'openai' | 'groq')}
+            >
+              <SelectTrigger id="ai-provider">
+                <SelectValue placeholder="Select provider" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="groq">
+                  <div className="flex flex-col">
+                    <span>Groq (Llama 3) — FREE tier available</span>
+                    <span className="text-xs text-muted-foreground">
+                      1,000 free requests/day on llama-3.3-70b. Recommended for cost.
+                    </span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="openai">
+                  <div className="flex flex-col">
+                    <span>OpenAI (GPT-4o / GPT-3.5)</span>
+                    <span className="text-xs text-muted-foreground">
+                      Best quality, ~₹10-20/month for normal use. Paid only.
+                    </span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {provider === 'groq' ? (
+                <>
+                  🆓 Groq free tier: 1,000 requests/day (70b model) or 14,400/day (8b).
+                  Get your free key at{' '}
+                  <a
+                    href="https://console.groq.com/keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-600 hover:underline"
+                  >
+                    console.groq.com/keys
+                  </a>
+                  . No credit card needed.
+                </>
+              ) : (
+                <>
+                  OpenAI is paid — get your key at{' '}
+                  <a
+                    href="https://platform.openai.com/api-keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-600 hover:underline"
+                  >
+                    platform.openai.com/api-keys
+                  </a>
+                  . gpt-4o-mini is recommended (cheap + fast + good Hindi).
+                </>
+              )}
+            </p>
+          </div>
+
           {/* API Key */}
           <div className="grid gap-2">
-            <Label htmlFor="ai-api-key">OpenAI API Key</Label>
+            <Label htmlFor="ai-api-key">
+              {provider === 'groq' ? 'Groq API Key' : 'OpenAI API Key'}
+            </Label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Input
                   id="ai-api-key"
                   type={showKey ? 'text' : 'password'}
-                  placeholder={hasExistingKey ? '•••••••• (saved, leave blank to keep)' : 'sk-...'}
+                  placeholder={
+                    hasExistingKey
+                      ? '•••••••• (saved, leave blank to keep)'
+                      : provider === 'groq'
+                      ? 'gsk_...'
+                      : 'sk-...'
+                  }
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   className="pr-10 font-mono"
@@ -1231,20 +1337,11 @@ function AiConfigSection() {
             {hasExistingKey && (
               <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                 <Check className="h-3 w-3" />
-                API key is saved. Enter a new key above to replace it.
+                {provider === 'groq' ? 'Groq' : 'OpenAI'} API key is saved. Enter a new key above to replace it.
               </p>
             )}
             <p className="text-xs text-muted-foreground">
-              Get your API key from{' '}
-              <a
-                href="https://platform.openai.com/api-keys"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-emerald-600 hover:underline"
-              >
-                platform.openai.com/api-keys
-              </a>
-              . The key is stored securely in the database and never exposed to non-admin users.
+              The key is stored securely in the database and never exposed to non-admin users.
             </p>
           </div>
 
@@ -1256,14 +1353,24 @@ function AiConfigSection() {
                 <SelectValue placeholder="Select model" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="gpt-4o-mini">gpt-4o-mini (recommended — fast & cheap)</SelectItem>
-                <SelectItem value="gpt-4o">gpt-4o (more accurate)</SelectItem>
-                <SelectItem value="gpt-4-turbo">gpt-4-turbo (legacy)</SelectItem>
-                <SelectItem value="gpt-3.5-turbo">gpt-3.5-turbo (cheapest)</SelectItem>
+                {MODEL_OPTIONS[provider].map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              gpt-4o-mini is recommended — it's fast, accurate enough for form extraction, and very affordable.
+              {provider === 'groq' ? (
+                <>
+                  <strong>llama-3.3-70b-versatile</strong> is recommended — fast, accurate, FREE.
+                  Switch to 8b-instant if you need more daily requests (14,400 vs 1,000).
+                </>
+              ) : (
+                <>
+                  <strong>gpt-4o-mini</strong> is recommended — it&apos;s fast, accurate enough for form extraction, and very affordable.
+                </>
+              )}
             </p>
           </div>
 

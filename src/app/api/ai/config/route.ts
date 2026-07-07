@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 // GET /api/ai/config
-// Returns the AI config. The OpenAI API key is MASKED (only last 4 chars
+// Returns the AI config. The API key is MASKED (only last 4 chars
 // shown) so the client can display "sk-...abcd" without exposing the full
 // secret. Any logged-in user can read this — they need to know if AI is
 // enabled to show/hide the AI buttons in the UI.
@@ -20,6 +20,7 @@ export async function GET() {
     if (!config) {
       // No config yet — return defaults (AI disabled, no key)
       return NextResponse.json({
+        provider: 'openai',
         enabled: false,
         model: 'gpt-4o-mini',
         hasKey: false,
@@ -28,9 +29,16 @@ export async function GET() {
     }
 
     const key = String((config as Record<string, unknown>).openaiApiKey || '')
-    const masked = key.length > 8 ? `sk-...${key.slice(-4)}` : ''
+    // Mask differently based on provider so user knows which kind of key is saved
+    const provider = String((config as Record<string, unknown>).provider || 'openai')
+    const masked = key.length > 8
+      ? provider === 'groq'
+        ? `gsk_...${key.slice(-4)}`
+        : `sk-...${key.slice(-4)}`
+      : ''
 
     return NextResponse.json({
+      provider,
       enabled: !!(config as Record<string, unknown>).enabled,
       model: String((config as Record<string, unknown>).model || 'gpt-4o-mini'),
       hasKey: key.length > 0,
@@ -44,8 +52,8 @@ export async function GET() {
 
 // PUT /api/ai/config
 // Updates the AI config. Admin-only — operators/accountants cannot change
-// the OpenAI key (would be a security hole).
-// Body: { openaiApiKey?: string, enabled?: boolean, model?: string }
+// the API key (would be a security hole).
+// Body: { provider?: 'openai'|'groq', openaiApiKey?: string, enabled?: boolean, model?: string }
 export async function PUT(request: Request) {
   try {
     await connectDB()
@@ -60,6 +68,9 @@ export async function PUT(request: Request) {
     const body = await request.json()
     const update: Record<string, unknown> = {}
 
+    if (body.provider === 'openai' || body.provider === 'groq') {
+      update.provider = body.provider
+    }
     if (typeof body.openaiApiKey === 'string') {
       // Allow empty string to clear the key
       update.openaiApiKey = body.openaiApiKey.trim()
@@ -79,6 +90,7 @@ export async function PUT(request: Request) {
       saved = await existing.save()
     } else {
       saved = await AiConfig.create({
+        provider: 'openai',
         openaiApiKey: '',
         enabled: false,
         model: 'gpt-4o-mini',
@@ -88,9 +100,15 @@ export async function PUT(request: Request) {
 
     // Return masked — never echo the full key back
     const key = String((saved as Record<string, unknown>).openaiApiKey || '')
-    const masked = key.length > 8 ? `sk-...${key.slice(-4)}` : ''
+    const provider = String((saved as Record<string, unknown>).provider || 'openai')
+    const masked = key.length > 8
+      ? provider === 'groq'
+        ? `gsk_...${key.slice(-4)}`
+        : `sk-...${key.slice(-4)}`
+      : ''
 
     return NextResponse.json({
+      provider,
       enabled: !!(saved as Record<string, unknown>).enabled,
       model: String((saved as Record<string, unknown>).model || 'gpt-4o-mini'),
       hasKey: key.length > 0,

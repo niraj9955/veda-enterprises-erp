@@ -55,10 +55,11 @@ export async function POST(request: Request) {
       )
     }
 
-    // ── Load AI config (API key + model) ───────────────────────────────
+    // ── Load AI config (API key + model + provider) ──────────────────
     const configDoc = await AiConfig.findOne().lean()
     const apiKey = String((configDoc as Record<string, unknown> | null)?.openaiApiKey || '')
     const enabled = !!(configDoc as Record<string, unknown> | null)?.enabled
+    const provider = String((configDoc as Record<string, unknown> | null)?.provider || 'openai')
     const model = String((configDoc as Record<string, unknown> | null)?.model || 'gpt-4o-mini')
 
     if (!enabled) {
@@ -69,13 +70,21 @@ export async function POST(request: Request) {
     }
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'No OpenAI API key configured. Ask an admin to add one in Admin Panel.' },
+        { error: 'No AI API key configured. Ask an admin to add one in Admin Panel.' },
         { status: 403 }
       )
     }
 
-    // ── Call OpenAI ────────────────────────────────────────────────────
-    const client = new OpenAI({ apiKey })
+    // ── Build OpenAI-compatible client ────────────────────────────────
+    // Groq exposes an OpenAI-compatible endpoint at https://api.groq.com/openai/v1
+    // — same request/response shapes, just a different baseURL + key prefix (gsk_).
+    // OpenAI SDK supports this via the baseURL option.
+    const clientOptions: ConstructorParameters<typeof OpenAI>[0] = { apiKey }
+    if (provider === 'groq') {
+      clientOptions.baseURL = 'https://api.groq.com/openai/v1'
+    }
+    // For OpenAI, we omit baseURL — the SDK defaults to api.openai.com/v1
+    const client = new OpenAI(clientOptions)
     const systemPrompt = buildSystemPrompt(schema)
 
     // Build a JSON schema for structured output. Each field is optional

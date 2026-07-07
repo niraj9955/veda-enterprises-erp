@@ -385,9 +385,9 @@ export const api = {
       body: JSON.stringify({ module, text }),
     }),
   getAiConfig: () =>
-    request<{ enabled: boolean; model: string; hasKey: boolean; keyMasked: string }>('/ai/config'),
-  updateAiConfig: (data: { openaiApiKey?: string; enabled?: boolean; model?: string }) =>
-    request<{ enabled: boolean; model: string; hasKey: boolean; keyMasked: string }>('/ai/config', {
+    request<{ provider: 'openai' | 'groq'; enabled: boolean; model: string; hasKey: boolean; keyMasked: string }>('/ai/config'),
+  updateAiConfig: (data: { provider?: 'openai' | 'groq'; openaiApiKey?: string; enabled?: boolean; model?: string }) =>
+    request<{ provider: 'openai' | 'groq'; enabled: boolean; model: string; hasKey: boolean; keyMasked: string }>('/ai/config', {
       method: 'PUT',
       body: JSON.stringify(data),
     }),

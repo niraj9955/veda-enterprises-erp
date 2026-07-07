@@ -335,13 +335,21 @@ BillSchema.index({ billType: 1, status: 1 });
 BillSchema.index({ customerId: 1 });
 
 // ─── AI Config (OpenAI API key storage) ─────────────────────────────────────
-// Stores the OpenAI API key used by the AI form-fill feature.
+// Stores the API key + provider config used by the AI form-fill feature.
 // Single document (singleton pattern) — we always read the first doc.
+// Supports two providers:
+//   • openai (default) — OpenAI's official API
+//   • groq — GroqCloud (OpenAI-compatible endpoint at api.groq.com/openai/v1)
+//            Free tier: 1,000 req/day on llama-3.3-70b-versatile
 const AiConfigSchema = new mongoose.Schema({
+  // Which AI provider to use ('openai' | 'groq')
+  provider: { type: String, default: 'openai', enum: ['openai', 'groq'] },
+  // API key — works for whichever provider is selected
   openaiApiKey: { type: String, default: '' },
   // Whether AI features are enabled (admin can toggle off without deleting the key)
   enabled: { type: Boolean, default: false },
   // Which model to use — defaults to gpt-4o-mini (cheap + fast + good Hindi)
+  // For Groq, admin will typically switch this to 'llama-3.3-70b-versatile'
   model: { type: String, default: 'gpt-4o-mini' },
 }, { timestamps: true });
 

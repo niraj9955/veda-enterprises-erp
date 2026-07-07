@@ -13,6 +13,7 @@ import { api } from '@/lib/api'
 // with the new value — no page reload needed.
 
 interface AiConfigState {
+  provider: 'openai' | 'groq'
   enabled: boolean
   model: string
   hasKey: boolean
@@ -35,6 +36,7 @@ async function fetchAiConfig(force = false): Promise<AiConfigState | null> {
     try {
       const res = await api.getAiConfig()
       cachedConfig = {
+        provider: res.provider,
         enabled: res.enabled,
         model: res.model,
         hasKey: res.hasKey,
