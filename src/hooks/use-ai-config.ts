@@ -5,11 +5,12 @@ import { api } from '@/lib/api'
 
 // ─── useAiConfig ────────────────────────────────────────────────────────────
 //
-// Shared hook that fetches the AI config once on mount and exposes a
-// `isEnabled` boolean the UI can use to conditionally show/hide AI buttons.
+// Shared hook that fetches the AI config once and exposes a `isEnabled`
+// boolean the UI can use to conditionally show/hide AI buttons.
 //
-// Multiple components can call this hook — the fetch is deduped by React
-// Query-style caching in a module-level promise.
+// Uses a tiny pub-sub so when one component (e.g. the Admin Panel config
+// form) refreshes the cache, ALL mounted components instantly re-render
+// with the new value — no page reload needed.
 
 interface AiConfigState {
   enabled: boolean
@@ -18,13 +19,18 @@ interface AiConfigState {
   keyMasked: string
 }
 
-// Module-level cache so multiple components share one fetch
+// Module-level cache + subscriber set (pub-sub)
 let cachedConfig: AiConfigState | null = null
 let inflight: Promise<AiConfigState | null> | null = null
+const subscribers = new Set<(c: AiConfigState | null) => void>()
 
-async function fetchAiConfig(): Promise<AiConfigState | null> {
-  if (cachedConfig) return cachedConfig
-  if (inflight) return inflight
+function notify(c: AiConfigState | null) {
+  subscribers.forEach((fn) => fn(c))
+}
+
+async function fetchAiConfig(force = false): Promise<AiConfigState | null> {
+  if (!force && cachedConfig) return cachedConfig
+  if (!force && inflight) return inflight
   inflight = (async () => {
     try {
       const res = await api.getAiConfig()
@@ -34,6 +40,7 @@ async function fetchAiConfig(): Promise<AiConfigState | null> {
         hasKey: res.hasKey,
         keyMasked: res.keyMasked,
       }
+      notify(cachedConfig)
       return cachedConfig
     } catch (err) {
       console.error('[useAiConfig] Failed to fetch AI config:', err)
@@ -50,27 +57,33 @@ export function useAiConfig() {
   const [loading, setLoading] = React.useState(!cachedConfig)
 
   React.useEffect(() => {
+    // Subscribe to cache updates so we re-render when another component
+    // refreshes the cache (e.g. admin saves new API key in Admin Panel).
+    const unsub = (c: AiConfigState | null) => {
+      setConfig(c)
+      setLoading(false)
+    }
+    subscribers.add(unsub)
+
     if (cachedConfig) {
       setConfig(cachedConfig)
       setLoading(false)
-      return
+    } else {
+      fetchAiConfig().then((c) => {
+        setConfig(c)
+        setLoading(false)
+      })
     }
-    let cancelled = false
-    fetchAiConfig().then((c) => {
-      if (cancelled) return
-      setConfig(c)
-      setLoading(false)
-    })
+
     return () => {
-      cancelled = true
+      subscribers.delete(unsub)
     }
   }, [])
 
   const refresh = React.useCallback(async () => {
-    cachedConfig = null
     setLoading(true)
-    const c = await fetchAiConfig()
-    setConfig(c)
+    await fetchAiConfig(true)
+    // fetchAiConfig(true) already calls notify() which updates our state
     setLoading(false)
   }, [])
 

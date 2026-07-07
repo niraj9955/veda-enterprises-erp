@@ -4,6 +4,7 @@ import * as React from 'react'
 import { api } from '@/lib/api'
 import { useAppStore } from '@/lib/store'
 import { toast } from '@/hooks/use-toast'
+import { useAiConfig } from '@/hooks/use-ai-config'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -1072,6 +1073,10 @@ export default function AdminPanelModule() {
 function AiConfigSection() {
   const { user } = useAppStore()
   const isAdmin = user?.role === 'admin'
+  // We need to refresh the shared AI config cache after saving so the
+  // floating chat widget + AI Fill buttons re-render and become visible
+  // immediately (without requiring a page reload).
+  const { refresh: refreshAiConfig } = useAiConfig()
 
   const [apiKey, setApiKey] = React.useState('')
   const [model, setModel] = React.useState('gpt-4o-mini')
@@ -1120,6 +1125,9 @@ function AiConfigSection() {
       toast({ title: 'AI settings saved', description: 'Configuration updated successfully.' })
       setApiKey('')
       setHasExistingKey(true)
+      // Refresh the shared cache so the floating chat button + AI Fill
+      // buttons appear immediately across the app (no page reload needed).
+      await refreshAiConfig()
     } catch (e) {
       toast({ title: 'Failed to save', description: (e as Error).message, variant: 'destructive' })
     } finally {
