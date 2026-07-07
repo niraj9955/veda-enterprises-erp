@@ -10,8 +10,17 @@ export async function GET() {
 
     let company = await Company.findOne({})
     if (!company) {
+      // Seed sensible defaults so the footer / invoices show real contact
+      // info even before an admin opens Settings to customize them.
       company = await Company.create({
-        name: 'My Company',
+        name: 'Veda Enterprises',
+        tagline: 'Paper Block ERP',
+        address: 'Purushottampur, Muzaffarpur',
+        city: 'Muzaffarpur',
+        state: 'Bihar',
+        pincode: '842002',
+        phone: '9572831213',
+        email: 'vedaenterprises@gmail.com',
         setupComplete: false,
       })
     }

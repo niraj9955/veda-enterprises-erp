@@ -357,6 +357,20 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
   )
 }
 
+// Format a 10-digit Indian mobile number as "+91 XXXXX XXXXX" for display.
+// Falls back to the original string if it doesn't look like a 10-digit number.
+function formatPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  // Handle "9572831213" or "919572831213" or "+919572831213"
+  if (digits.length === 10) {
+    return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`
+  }
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`
+  }
+  return phone
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { user, activeModule, setActiveModule, sidebarOpen, setSidebarOpen, logout, company } = useAppStore()
 
@@ -465,14 +479,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <ul className="space-y-2 text-xs">
                     <li className="flex items-start gap-2.5 text-blue-100">
                       <Mail className="h-3.5 w-3.5 text-emerald-300 mt-0.5 shrink-0" />
-                      <a href={`mailto:${company?.email || '#'}`} className="hover:text-white transition-colors break-all">
-                        {company?.email || 'contact@example.com'}
+                      <a href={`mailto:${company?.email || 'vedaenterprises@gmail.com'}`} className="hover:text-white transition-colors break-all">
+                        {company?.email || 'vedaenterprises@gmail.com'}
                       </a>
                     </li>
                     <li className="flex items-start gap-2.5 text-blue-100">
                       <Phone className="h-3.5 w-3.5 text-emerald-300 mt-0.5 shrink-0" />
-                      <a href={`tel:${company?.phone || ''}`} className="hover:text-white transition-colors">
-                        {company?.phone || '+91 90000 00000'}
+                      <a href={`tel:${company?.phone || '9572831213'}`} className="hover:text-white transition-colors font-medium">
+                        {company?.phone ? formatPhone(company.phone) : '+91 95728 31213'}
                       </a>
                     </li>
                   </ul>
@@ -492,8 +506,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                         </>
                       ) : (
                         <>
-                          Factory Address Line<br />
-                          City, State - 000000<br />
+                          Purushottampur, Muzaffarpur<br />
+                          Bihar - 842002<br />
                           India
                         </>
                       )}
