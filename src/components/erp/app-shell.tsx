@@ -38,6 +38,9 @@ import {
   ClipboardList,
   Briefcase,
   FileText,
+  Mail,
+  Phone,
+  MapPin,
 } from 'lucide-react'
 import { AiChatWidget } from '@/components/ui/ai-chat-widget'
 
@@ -421,43 +424,92 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Footer */}
-          <footer className="border-t border-border/50 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm mt-4">
-            <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
-                {/* Left: brand + version */}
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <div className="w-6 h-6 rounded-md bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-sm">
-                    <Building2 className="h-3.5 w-3.5 text-white" />
+          <footer className="bg-gradient-to-br from-blue-900 via-blue-950 to-slate-950 text-blue-50 mt-4 shadow-lg">
+            <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
+              {/* Top row: brand + tagline + contact info in 3 cols */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {/* Brand column */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    {company?.logoUrl ? (
+                      <img src={company.logoUrl} alt="Logo" className="w-11 h-11 rounded-xl object-cover shadow-md ring-2 ring-white/20" />
+                    ) : (
+                      <div className="w-11 h-11 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center shadow-md">
+                        <Building2 className="h-5 w-5 text-white" />
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="font-bold text-base text-white tracking-tight">{company?.name || 'Veda Enterprises'}</h3>
+                      <p className="text-[11px] text-blue-300">{company?.tagline || 'Paper Block ERP'}</p>
+                    </div>
                   </div>
-                  <span className="font-semibold text-foreground/80">
-                    {company?.name || 'Veda Enterprises'}
-                  </span>
-                  <span className="text-muted-foreground/60">·</span>
-                  <span>Paper Block ERP</span>
-                  <span className="text-muted-foreground/60">·</span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    v1.0
-                  </span>
+                  <p className="text-xs text-blue-200/80 leading-relaxed pr-4">
+                    Complete enterprise resource planning system for paper block manufacturing — production, sales, payments, purchases, expenses & reports all in one place.
+                  </p>
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      v1.0 · Secure
+                    </span>
+                    <span className="text-blue-400/50">·</span>
+                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-300">
+                      <Zap className="h-3 w-3" />
+                      AI-assisted
+                    </span>
+                  </div>
                 </div>
 
-                {/* Center: quick info */}
-                <div className="flex items-center gap-3 text-muted-foreground/80">
-                  <span className="inline-flex items-center gap-1">
-                    <ShieldCheck className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-                    Secure
-                  </span>
-                  <span className="text-muted-foreground/40">·</span>
-                  <span className="inline-flex items-center gap-1">
-                    <Zap className="h-3 w-3 text-amber-500" />
-                    AI-assisted
-                  </span>
+                {/* Contact column */}
+                <div className="space-y-3">
+                  <h4 className="text-[11px] font-bold text-blue-300 uppercase tracking-widest">Contact</h4>
+                  <ul className="space-y-2 text-xs">
+                    <li className="flex items-start gap-2.5 text-blue-100">
+                      <Mail className="h-3.5 w-3.5 text-emerald-300 mt-0.5 shrink-0" />
+                      <a href={`mailto:${company?.email || '#'}`} className="hover:text-white transition-colors break-all">
+                        {company?.email || 'contact@example.com'}
+                      </a>
+                    </li>
+                    <li className="flex items-start gap-2.5 text-blue-100">
+                      <Phone className="h-3.5 w-3.5 text-emerald-300 mt-0.5 shrink-0" />
+                      <a href={`tel:${company?.phone || ''}`} className="hover:text-white transition-colors">
+                        {company?.phone || '+91 90000 00000'}
+                      </a>
+                    </li>
+                  </ul>
                 </div>
 
-                {/* Right: copyright */}
-                <div className="text-muted-foreground/70">
-                  © {new Date().getFullYear()} {(company?.name || 'Veda Enterprises')}. All rights reserved.
+                {/* Location column */}
+                <div className="space-y-3">
+                  <h4 className="text-[11px] font-bold text-blue-300 uppercase tracking-widest">Location</h4>
+                  <div className="flex items-start gap-2.5 text-xs text-blue-100">
+                    <MapPin className="h-3.5 w-3.5 text-emerald-300 mt-0.5 shrink-0" />
+                    <address className="not-italic leading-relaxed">
+                      {company?.address ? (
+                        <>
+                          {company.address}<br />
+                          {[company.city, company.state].filter(Boolean).join(', ')}
+                          {company.pincode ? ` - ${company.pincode}` : ''}
+                        </>
+                      ) : (
+                        <>
+                          Factory Address Line<br />
+                          City, State - 000000<br />
+                          India
+                        </>
+                      )}
+                    </address>
+                  </div>
                 </div>
+              </div>
+
+              {/* Bottom row: copyright bar */}
+              <div className="mt-7 pt-4 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-2 text-[11px] text-blue-300/80">
+                <p>© {new Date().getFullYear()} {(company?.name || 'Veda Enterprises')}. All rights reserved.</p>
+                <p className="flex items-center gap-2">
+                  <span>Built with Next.js</span>
+                  <span className="text-blue-500/50">·</span>
+                  <span>Powered by AI</span>
+                </p>
               </div>
             </div>
           </footer>
