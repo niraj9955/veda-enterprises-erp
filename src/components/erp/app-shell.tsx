@@ -230,13 +230,15 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
     section.items.some((item) => item.key === activeModule)
 
   return (
-    <div className="flex flex-col h-full bg-[#2D3748] text-white">
+    <div className="flex flex-col h-full bg-gradient-to-b from-[#2D3748] via-[#2A3340] to-[#1F2733] text-white relative">
+      {/* Subtle inner top highlight for 3D depth */}
+      <div className="absolute inset-x-0 top-0 h-px bg-white/20 pointer-events-none" />
       {/* Logo / Brand */}
-      <div className="p-4 border-b border-white/15 flex items-center gap-3 shrink-0">
+      <div className="p-4 border-b border-white/10 flex items-center gap-3 shrink-0 bg-white/[0.03] backdrop-blur-sm shadow-inner">
         {logoUrl ? (
           <img src={logoUrl} alt="Logo" className="w-10 h-10 rounded-xl object-cover flex-shrink-0 shadow-sm" />
         ) : (
-          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md ring-1 ring-white/30">
+          <div className="w-10 h-10 bg-gradient-to-br from-white/30 to-white/5 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg ring-1 ring-white/20">
             <Building2 className="h-5 w-5 text-white" />
           </div>
         )}
@@ -257,7 +259,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                 activeModule === item.key
-                  ? 'bg-[#4299E1] text-white shadow-sm'
+                  ? 'bg-gradient-to-r from-[#4299E1] to-[#3182CE] text-white shadow-md ring-1 ring-white/20'
                   : 'text-slate-300 hover:bg-white/10 hover:text-white'
               )}
             >
@@ -269,7 +271,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
           ))}
 
           {/* Divider */}
-          <div className="h-px bg-white/10 mx-2 my-1" />
+          <div className="h-px bg-gradient-to-r from-transparent via-white/15 to-transparent mx-2 my-1" />
 
           {/* Collapsible Sections */}
           {navSections.filter(sectionVisible).map((section) => {
@@ -288,8 +290,8 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
                   )}
                 >
                   <div className={cn(
-                    'flex items-center justify-center w-7 h-7 rounded-md transition-all shrink-0',
-                    isActive || isExpanded ? cn(colors.iconBg, colors.iconText) : 'bg-muted text-muted-foreground group-hover:bg-accent'
+                    'flex items-center justify-center w-7 h-7 rounded-md transition-all shrink-0 shadow-sm',
+                    isActive || isExpanded ? cn(colors.iconBg, colors.iconText, 'ring-1 ring-white/10') : 'bg-white/5 text-slate-300 group-hover:bg-white/10'
                   )}>
                     {section.icon}
                   </div>
@@ -316,7 +318,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
                         className={cn(
                           'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium transition-all duration-200',
                           activeModule === item.key
-                            ? cn(colors.activeItem, colors.activeItemText, 'shadow-sm')
+                            ? cn(colors.activeItem, colors.activeItemText, 'shadow-md ring-1 ring-white/15')
                             : 'text-slate-300 hover:bg-white/10 hover:text-white'
                         )}
                       >
@@ -331,7 +333,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
           })}
 
           {/* Divider */}
-          {filteredAdmin.length > 0 && <div className="h-px bg-white/10 mx-2 my-1" />}
+          {filteredAdmin.length > 0 && <div className="h-px bg-gradient-to-r from-transparent via-white/15 to-transparent mx-2 my-1" />}
 
           {/* Admin items */}
           {filteredAdmin.length > 0 && sidebarOpen && (
@@ -346,7 +348,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                 activeModule === item.key
-                  ? 'bg-[#4299E1] text-white shadow-sm'
+                  ? 'bg-gradient-to-r from-[#4299E1] to-[#3182CE] text-white shadow-md ring-1 ring-white/20'
                   : 'text-slate-300 hover:bg-white/10 hover:text-white'
               )}
             >
@@ -391,12 +393,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          'hidden md:flex flex-col border-r border-black/20 bg-[#2D3748] transition-all duration-300 shadow-lg',
+          'hidden md:flex flex-col border-r border-black/30 bg-gradient-to-b from-[#2D3748] via-[#2A3340] to-[#1F2733] transition-all duration-300 shadow-2xl ring-1 ring-black/20',
           sidebarOpen ? 'w-60' : 'w-16'
         )}
       >
         <SidebarContent {...sidebarProps} />
-        <div className="border-t border-white/10 p-2 flex justify-center shrink-0">
+        <div className="border-t border-white/10 p-2 flex justify-center shrink-0 bg-white/[0.03] backdrop-blur-sm">
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-white hover:bg-white/15 hover:text-white">
             {sidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </Button>
@@ -406,7 +408,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top header bar */}
-        <header className="flex items-center gap-2 px-4 py-2.5 border-b border-black/20 bg-[#2D3748]/95 backdrop-blur-sm sticky top-0 z-10 shrink-0 text-white shadow-sm">
+        <header className="relative flex items-center gap-2 px-4 py-2.5 border-b border-black/30 bg-gradient-to-r from-[#2D3748] via-[#2F3947] to-[#2D3748] backdrop-blur-sm sticky top-0 z-10 shrink-0 text-white shadow-lg ring-1 ring-black/20">
+          {/* Subtle top highlight for 3D pop */}
+          <div className="absolute inset-x-0 top-0 h-px bg-white/15 pointer-events-none" />
           {/* Mobile menu */}
           <Sheet>
             <SheetTrigger asChild>
@@ -422,7 +426,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-1.5">
             <ThemeToggle className="text-white hover:bg-white/15 hover:text-white" />
             <div className="hidden md:flex items-center gap-2 ml-1">
-              <div className="w-8 h-8 bg-white/25 rounded-full flex items-center justify-center text-white font-semibold text-xs shadow-sm ring-1 ring-white/30">
+              <div className="w-8 h-8 bg-gradient-to-br from-[#4299E1] to-[#3182CE] rounded-full flex items-center justify-center text-white font-semibold text-xs shadow-md ring-1 ring-white/30">
                 {user?.name?.charAt(0) || 'U'}
               </div>
               <div className="hidden lg:block">
