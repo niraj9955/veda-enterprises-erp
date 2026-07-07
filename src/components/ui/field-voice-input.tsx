@@ -2,14 +2,13 @@
 
 import * as React from 'react'
 import { Mic, Square, Check } from 'lucide-react'
-import { useAiConfig } from '@/hooks/use-ai-config'
 import { cn } from '@/lib/utils'
 
 // ─── FieldVoiceInput ────────────────────────────────────────────────────────
 //
 // A small mic icon button designed to be placed INSIDE an input field
 // (overlapping the right edge). When clicked:
-//   1. Starts listening in Hindi (hi-IN) by default
+//   1. Starts listening (en-IN by default — Hindi spoken → Latin script out)
 //   2. Live transcript is shown as a tiny floating badge above the field
 //   3. When user stops speaking, the final transcript REPLACES the field value
 //      (via onChange) — direct, no preview, no chat, no AI round-trip.
@@ -21,14 +20,19 @@ import { cn } from '@/lib/utils'
 // the AiFillButton + AiFillDialog flow instead — that one uses AI to extract
 // multiple fields at once.
 //
-// The button hides itself if AI is disabled in Admin Panel.
+// IMPORTANT: This component uses the browser's NATIVE SpeechRecognition API
+// (Chrome/Edge `webkitSpeechRecognition`). It does NOT call OpenAI/Groq, so
+// it does NOT depend on the AI config (no API key needed, no need for AI to
+// be "enabled" in Admin Panel). The mic should always be visible as long as
+// the browser supports speech recognition. This is intentionally different
+// from the AiFillButton / AiChatWidget which DO need an API key.
 
 interface FieldVoiceInputProps {
   /** Called with the final transcript when the user stops speaking. */
   onChange: (text: string) => void
   /** Optional: live interim text for preview. */
   onInterim?: (text: string) => void
-  /** Optional: language — defaults to Hindi (hi-IN). */
+  /** Optional: language — defaults to en-IN (Hindi spoken → Latin output). */
   language?: 'hi-IN' | 'en-IN'
   /** Optional: extra className for the button. */
   className?: string
@@ -60,7 +64,6 @@ export function FieldVoiceInput({
   disabled,
   fieldLabel = 'this field',
 }: FieldVoiceInputProps) {
-  const { isEnabled, loading } = useAiConfig()
   const [listening, setListening] = React.useState(false)
   const [supported, setSupported] = React.useState(true)
   const [interimText, setInterimText] = React.useState('')
@@ -216,9 +219,10 @@ export function FieldVoiceInput({
     }
   }
 
-  // Hidden while AI config is loading, or if AI is disabled, or browser unsupported.
-  if (loading) return null
-  if (!isEnabled) return null
+  // Hidden only if browser doesn't support SpeechRecognition.
+  // NOTE: We intentionally do NOT hide this when AI is "disabled" in the
+  // Admin Panel — per-field voice uses the browser's native speech API,
+  // not OpenAI/Groq, so it works without any API key.
   if (!supported) return null
 
   return (

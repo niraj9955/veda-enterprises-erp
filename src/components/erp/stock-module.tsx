@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Package, Plus, Trash2, Pencil, Loader2, Upload, Search } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
+import { FieldVoiceInput } from '@/components/ui/field-voice-input'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -526,14 +527,23 @@ export function StockModule() {
               {PRODUCT_FIELDS.map((f) => (
                 <div key={f.key} className="grid gap-2">
                   <Label htmlFor={`stock-${f.key}`}>{f.label}</Label>
-                  <Input
-                    id={`stock-${f.key}`}
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={formData[f.key]}
-                    onChange={(e) => handleFormChange(f.key, e.target.value)}
-                  />
+                  <div className="relative">
+                    <Input
+                      id={`stock-${f.key}`}
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={formData[f.key]}
+                      onChange={(e) => handleFormChange(f.key, e.target.value)}
+                      className="pr-10"
+                    />
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                      <FieldVoiceInput
+                        fieldLabel={f.label}
+                        onChange={(text) => handleFormChange(f.key, text.replace(/[^0-9.]/g, ''))}
+                      />
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
