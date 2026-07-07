@@ -129,6 +129,11 @@ const adminItems: NavItem[] = [
 ]
 
 // Color configs for each section
+// NOTE: The sidebar background is now a solid blue (#4070F4), so section
+// colors use white-tinted variants that work on top of blue. Section
+// identity is preserved via the icon's tinted background (e.g. emerald
+// section gets a soft emerald-tinted icon chip) while text and active
+// states use white for maximum readability on the blue nav.
 const sectionColors: Record<string, {
   headerText: string
   headerBg: string
@@ -140,54 +145,54 @@ const sectionColors: Record<string, {
   border: string
 }> = {
   emerald: {
-    headerText: 'text-emerald-700 dark:text-emerald-400',
-    headerBg: 'bg-emerald-50/50 dark:bg-emerald-900/20',
-    headerHover: 'hover:bg-emerald-50 dark:hover:bg-emerald-900/20',
-    iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
-    iconText: 'text-emerald-600 dark:text-emerald-400',
-    activeItem: 'bg-emerald-100 dark:bg-emerald-900/30',
-    activeItemText: 'text-emerald-700 dark:text-emerald-400',
-    border: 'border-emerald-200 dark:border-emerald-800/30',
+    headerText: 'text-white',
+    headerBg: 'bg-white/10',
+    headerHover: 'hover:bg-white/10',
+    iconBg: 'bg-emerald-400/30',
+    iconText: 'text-emerald-50',
+    activeItem: 'bg-white/20',
+    activeItemText: 'text-white',
+    border: 'border-white/20',
   },
   blue: {
-    headerText: 'text-blue-700 dark:text-blue-400',
-    headerBg: 'bg-blue-50/50 dark:bg-blue-900/20',
-    headerHover: 'hover:bg-blue-50 dark:hover:bg-blue-900/20',
-    iconBg: 'bg-blue-100 dark:bg-blue-900/40',
-    iconText: 'text-blue-600 dark:text-blue-400',
-    activeItem: 'bg-blue-100 dark:bg-blue-900/30',
-    activeItemText: 'text-blue-700 dark:text-blue-400',
-    border: 'border-blue-200 dark:border-blue-800/30',
+    headerText: 'text-white',
+    headerBg: 'bg-white/10',
+    headerHover: 'hover:bg-white/10',
+    iconBg: 'bg-blue-200/40',
+    iconText: 'text-blue-50',
+    activeItem: 'bg-white/20',
+    activeItemText: 'text-white',
+    border: 'border-white/20',
   },
   amber: {
-    headerText: 'text-amber-700 dark:text-amber-400',
-    headerBg: 'bg-amber-50/50 dark:bg-amber-900/20',
-    headerHover: 'hover:bg-amber-50 dark:hover:bg-amber-900/20',
-    iconBg: 'bg-amber-100 dark:bg-amber-900/40',
-    iconText: 'text-amber-600 dark:text-amber-400',
-    activeItem: 'bg-amber-100 dark:bg-amber-900/30',
-    activeItemText: 'text-amber-700 dark:text-amber-400',
-    border: 'border-amber-200 dark:border-amber-800/30',
+    headerText: 'text-white',
+    headerBg: 'bg-white/10',
+    headerHover: 'hover:bg-white/10',
+    iconBg: 'bg-amber-400/30',
+    iconText: 'text-amber-50',
+    activeItem: 'bg-white/20',
+    activeItemText: 'text-white',
+    border: 'border-white/20',
   },
   purple: {
-    headerText: 'text-purple-700 dark:text-purple-400',
-    headerBg: 'bg-purple-50/50 dark:bg-purple-900/20',
-    headerHover: 'hover:bg-purple-50 dark:hover:bg-purple-900/20',
-    iconBg: 'bg-purple-100 dark:bg-purple-900/40',
-    iconText: 'text-purple-600 dark:text-purple-400',
-    activeItem: 'bg-purple-100 dark:bg-purple-900/30',
-    activeItemText: 'text-purple-700 dark:text-purple-400',
-    border: 'border-purple-200 dark:border-purple-800/30',
+    headerText: 'text-white',
+    headerBg: 'bg-white/10',
+    headerHover: 'hover:bg-white/10',
+    iconBg: 'bg-purple-400/30',
+    iconText: 'text-purple-50',
+    activeItem: 'bg-white/20',
+    activeItemText: 'text-white',
+    border: 'border-white/20',
   },
   rose: {
-    headerText: 'text-rose-700 dark:text-rose-400',
-    headerBg: 'bg-rose-50/50 dark:bg-rose-900/20',
-    headerHover: 'hover:bg-rose-50 dark:hover:bg-rose-900/20',
-    iconBg: 'bg-rose-100 dark:bg-rose-900/40',
-    iconText: 'text-rose-600 dark:text-rose-400',
-    activeItem: 'bg-rose-100 dark:bg-rose-900/30',
-    activeItemText: 'text-rose-700 dark:text-rose-400',
-    border: 'border-rose-200 dark:border-rose-800/30',
+    headerText: 'text-white',
+    headerBg: 'bg-white/10',
+    headerHover: 'hover:bg-white/10',
+    iconBg: 'bg-rose-400/30',
+    iconText: 'text-rose-50',
+    activeItem: 'bg-white/20',
+    activeItemText: 'text-white',
+    border: 'border-white/20',
   },
 }
 
@@ -225,19 +230,19 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
     section.items.some((item) => item.key === activeModule)
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-white to-gray-50/80 dark:from-gray-900 dark:to-gray-950/80">
+    <div className="flex flex-col h-full bg-[#4070F4] text-white">
       {/* Logo / Brand */}
-      <div className="p-4 border-b border-border/50 flex items-center gap-3 shrink-0">
+      <div className="p-4 border-b border-white/15 flex items-center gap-3 shrink-0">
         {logoUrl ? (
           <img src={logoUrl} alt="Logo" className="w-10 h-10 rounded-xl object-cover flex-shrink-0 shadow-sm" />
         ) : (
-          <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md ring-1 ring-white/30">
             <Building2 className="h-5 w-5 text-white" />
           </div>
         )}
         <div className={cn('overflow-hidden transition-all duration-300', sidebarOpen ? 'w-40' : 'w-0')}>
-          <h2 className="font-bold text-sm text-emerald-700 dark:text-emerald-400 whitespace-nowrap truncate">{companyName || 'Veda Enterprises'}</h2>
-          <p className="text-[11px] text-muted-foreground whitespace-nowrap truncate">{companyTagline || 'Paper Block ERP'}</p>
+          <h2 className="font-bold text-sm text-white whitespace-nowrap truncate drop-shadow-sm">{companyName || 'Veda Enterprises'}</h2>
+          <p className="text-[11px] text-white/70 whitespace-nowrap truncate">{companyTagline || 'Paper Block ERP'}</p>
         </div>
       </div>
 
@@ -252,8 +257,8 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                 activeModule === item.key
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 shadow-sm'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                  ? 'bg-white/20 text-white shadow-sm'
+                  : 'text-white/80 hover:bg-white/10 hover:text-white'
               )}
             >
               {item.icon}
@@ -264,7 +269,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
           ))}
 
           {/* Divider */}
-          <div className="h-px bg-border/40 mx-2 my-1" />
+          <div className="h-px bg-white/15 mx-2 my-1" />
 
           {/* Collapsible Sections */}
           {navSections.filter(sectionVisible).map((section) => {
@@ -312,7 +317,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
                           'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium transition-all duration-200',
                           activeModule === item.key
                             ? cn(colors.activeItem, colors.activeItemText)
-                            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                            : 'text-white/75 hover:bg-white/10 hover:text-white'
                         )}
                       >
                         {item.icon}
@@ -326,12 +331,12 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
           })}
 
           {/* Divider */}
-          {filteredAdmin.length > 0 && <div className="h-px bg-border/40 mx-2 my-1" />}
+          {filteredAdmin.length > 0 && <div className="h-px bg-white/15 mx-2 my-1" />}
 
           {/* Admin items */}
           {filteredAdmin.length > 0 && sidebarOpen && (
             <div className="px-3 pb-1 pt-0.5">
-              <p className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest">Admin</p>
+              <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Admin</p>
             </div>
           )}
           {filteredAdmin.map((item) => (
@@ -341,8 +346,8 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                 activeModule === item.key
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 shadow-sm'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                  ? 'bg-white/20 text-white shadow-sm'
+                  : 'text-white/80 hover:bg-white/10 hover:text-white'
               )}
             >
               {item.icon}
@@ -386,13 +391,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          'hidden md:flex flex-col border-r border-border/50 bg-white dark:bg-gray-900 transition-all duration-300 shadow-sm',
+          'hidden md:flex flex-col border-r border-white/15 bg-[#4070F4] transition-all duration-300 shadow-md',
           sidebarOpen ? 'w-60' : 'w-16'
         )}
       >
         <SidebarContent {...sidebarProps} />
-        <div className="border-t border-border/50 p-2 flex justify-center shrink-0">
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="hover:bg-accent">
+        <div className="border-t border-white/15 p-2 flex justify-center shrink-0">
+          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-white hover:bg-white/15 hover:text-white">
             {sidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </Button>
         </div>
@@ -401,11 +406,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top header bar */}
-        <header className="flex items-center gap-2 px-4 py-2.5 border-b border-border/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10 shrink-0">
+        <header className="flex items-center gap-2 px-4 py-2.5 border-b border-white/15 bg-[#4070F4]/95 backdrop-blur-sm sticky top-0 z-10 shrink-0 text-white">
           {/* Mobile menu */}
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
+              <Button variant="ghost" size="icon" className="md:hidden text-white hover:bg-white/15 hover:text-white">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
@@ -413,19 +418,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <SidebarContent {...sidebarProps} />
             </SheetContent>
           </Sheet>
-          <h1 className="font-bold text-emerald-700 dark:text-emerald-400 flex-1 truncate text-base">{company?.name || 'Veda Enterprises'}</h1>
+          <h1 className="font-bold text-white flex-1 truncate text-base drop-shadow-sm">{company?.name || 'Veda Enterprises'}</h1>
           <div className="flex items-center gap-1.5">
-            <ThemeToggle />
+            <ThemeToggle className="text-white hover:bg-white/15 hover:text-white" />
             <div className="hidden md:flex items-center gap-2 ml-1">
-              <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold text-xs shadow-sm">
+              <div className="w-8 h-8 bg-white/25 rounded-full flex items-center justify-center text-white font-semibold text-xs shadow-sm ring-1 ring-white/30">
                 {user?.name?.charAt(0) || 'U'}
               </div>
               <div className="hidden lg:block">
-                <p className="text-sm font-medium leading-none">{user?.name}</p>
-                <p className="text-[11px] text-muted-foreground capitalize">{user?.role}</p>
+                <p className="text-sm font-medium leading-none text-white">{user?.name}</p>
+                <p className="text-[11px] text-white/70 capitalize">{user?.role}</p>
               </div>
             </div>
-            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={logout} title="Logout">
+            <Button variant="ghost" size="icon" className="text-white hover:bg-white/15 hover:text-white" onClick={logout} title="Logout">
               <LogOut className="h-4 w-4" />
             </Button>
           </div>

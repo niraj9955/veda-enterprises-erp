@@ -34,9 +34,9 @@ export function ThemeToggle({ className }: { className?: string }) {
       title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
     >
       {theme === 'dark' ? (
-        <Sun className="h-4 w-4 text-amber-400" />
+        <Sun className="h-4 w-4 text-amber-300" />
       ) : (
-        <Moon className="h-4 w-4 text-gray-600" />
+        <Moon className="h-4 w-4 text-white/90" />
       )}
     </Button>
   )
