@@ -38,6 +38,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Wrench, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload , Search} from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
+import { AiFillButton } from '@/components/ui/ai-fill-button'
+import { FieldVoiceInput } from '@/components/ui/field-voice-input'
+import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
 
 interface FactoryStuff {
   id: string
@@ -117,7 +120,22 @@ export function FactoryStuffModule() {
   const [importOpen, setImportOpen] = React.useState(false)
 
 
-  const openAddDialog = () => { setEditingItem(null); setFormData(emptyForm); setFormOpen(true) }
+  const openAddDialog = () => {
+    setEditingItem(null)
+    setFormData(emptyForm)
+    const pending = consumePendingAiResult('factoryStuff')
+    if (pending) {
+      setFormData((prev) => ({
+        ...prev,
+        date: pending.date ? String(pending.date).slice(0, 10) : prev.date,
+        itemName: pending.itemName != null ? String(pending.itemName) : prev.itemName,
+        quantity: pending.quantity != null ? String(pending.quantity) : prev.quantity,
+        amount: pending.amount != null ? String(pending.amount) : prev.amount,
+        remarks: pending.remarks != null ? String(pending.remarks) : prev.remarks,
+      }))
+    }
+    setFormOpen(true)
+  }
   const openEditDialog = (item: FactoryStuff) => {
     setEditingItem(item)
     setFormData({
@@ -233,12 +251,42 @@ export function FactoryStuffModule() {
           <DialogHeader><DialogTitle>{editingItem ? 'Edit Factory Stuff Entry' : 'Add Factory Stuff Entry'}</DialogTitle><DialogDescription>{editingItem ? 'Update the factory stuff entry.' : 'Fill in the details to create a new factory stuff entry.'}</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2"><Label htmlFor="fs-date">Date <span className="text-destructive">*</span></Label><Input id="fs-date" type="date" value={formData.date} onChange={(e) => handleFormChange('date', e.target.value)} /></div>
-            <div className="grid gap-2"><Label htmlFor="fs-item">Item Name <span className="text-destructive">*</span></Label><Input id="fs-item" placeholder="Enter item name" value={formData.itemName} onChange={(e) => handleFormChange('itemName', e.target.value)} /></div>
+            {!editingItem && (
+              <div className="flex justify-end">
+                <AiFillButton module="factoryStuff" onApply={(fields) => setFormData((prev) => ({
+                  ...prev,
+                  date: fields.date ? String(fields.date).slice(0, 10) : prev.date,
+                  itemName: fields.itemName != null ? String(fields.itemName) : prev.itemName,
+                  quantity: fields.quantity != null ? String(fields.quantity) : prev.quantity,
+                  amount: fields.amount != null ? String(fields.amount) : prev.amount,
+                  remarks: fields.remarks != null ? String(fields.remarks) : prev.remarks,
+                }))} />
+              </div>
+            )}
+            <div className="grid gap-2"><Label htmlFor="fs-item">Item Name <span className="text-destructive">*</span></Label>
+              <div className="relative">
+                <Input id="fs-item" placeholder="Enter item name" value={formData.itemName} onChange={(e) => handleFormChange('itemName', e.target.value)} className="pr-9" />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <FieldVoiceInput fieldLabel="item name" onChange={(text) => handleFormChange('itemName', text)} />
+                </div>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2"><Label htmlFor="fs-qty">Quantity</Label><Input id="fs-qty" type="number" min="0" placeholder="0" value={formData.quantity} onChange={(e) => handleFormChange('quantity', e.target.value)} /></div>
-              <div className="grid gap-2"><Label htmlFor="fs-amount">Amount (₹)</Label><div className="relative"><IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" /><Input id="fs-amount" type="number" min="0" placeholder="0" className="pl-9" value={formData.amount} onChange={(e) => handleFormChange('amount', e.target.value)} /></div></div>
+              <div className="grid gap-2"><Label htmlFor="fs-amount">Amount (₹)</Label><div className="relative"><IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" /><Input id="fs-amount" type="number" min="0" placeholder="0" className="pl-9 pr-9" value={formData.amount} onChange={(e) => handleFormChange('amount', e.target.value)} />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <FieldVoiceInput fieldLabel="amount" onChange={(text) => handleFormChange('amount', text.replace(/[^0-9.]/g, ''))} />
+                </div>
+              </div></div>
             </div>
-            <div className="grid gap-2"><Label htmlFor="fs-remarks">Remarks</Label><Textarea id="fs-remarks" placeholder="Optional remarks..." value={formData.remarks} onChange={(e) => handleFormChange('remarks', e.target.value)} className="min-h-[80px]" /></div>
+            <div className="grid gap-2"><Label htmlFor="fs-remarks">Remarks</Label>
+              <div className="relative">
+                <Textarea id="fs-remarks" placeholder="Optional remarks..." value={formData.remarks} onChange={(e) => handleFormChange('remarks', e.target.value)} className="min-h-[80px] pr-9" />
+                <div className="absolute right-1.5 top-2">
+                  <FieldVoiceInput fieldLabel="remarks" onChange={(text) => handleFormChange('remarks', text)} />
+                </div>
+              </div>
+            </div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setFormOpen(false)} disabled={formSubmitting}>Cancel</Button><Button onClick={handleSubmit} disabled={formSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white">{formSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}{editingItem ? 'Update' : 'Create'}</Button></DialogFooter>
         </DialogContent>

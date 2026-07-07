@@ -37,6 +37,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Droplets, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload , Search} from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
+import { AiFillButton } from '@/components/ui/ai-fill-button'
+import { FieldVoiceInput } from '@/components/ui/field-voice-input'
+import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
 
 interface Hardner {
   id: string
@@ -108,7 +111,19 @@ export function HardnerModule() {
   const [importOpen, setImportOpen] = React.useState(false)
 
 
-  const openAddDialog = () => { setEditingItem(null); setFormData(emptyForm); setFormOpen(true) }
+  const openAddDialog = () => {
+    setEditingItem(null)
+    setFormData(emptyForm)
+    const pending = consumePendingAiResult('hardner')
+    if (pending) {
+      setFormData((prev) => ({
+        ...prev,
+        date: pending.date ? String(pending.date).slice(0, 10) : prev.date,
+        amount: pending.amount != null ? String(pending.amount) : prev.amount,
+      }))
+    }
+    setFormOpen(true)
+  }
   const openEditDialog = (item: Hardner) => {
     setEditingItem(item)
     setFormData({ date: item.date ? item.date.split('T')[0] : '', amount: String(item.amount || '') })
@@ -214,7 +229,20 @@ export function HardnerModule() {
           <DialogHeader><DialogTitle>{editingItem ? 'Edit Hardner Entry' : 'Add Hardner Entry'}</DialogTitle><DialogDescription>{editingItem ? 'Update the hardner entry.' : 'Fill in the details to create a new hardner entry.'}</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2"><Label htmlFor="h-date">Date <span className="text-destructive">*</span></Label><Input id="h-date" type="date" value={formData.date} onChange={(e) => handleFormChange('date', e.target.value)} /></div>
-            <div className="grid gap-2"><Label htmlFor="h-amount">Amount (₹)</Label><div className="relative"><IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" /><Input id="h-amount" type="number" min="0" placeholder="0" className="pl-9" value={formData.amount} onChange={(e) => handleFormChange('amount', e.target.value)} /></div></div>
+            {!editingItem && (
+              <div className="flex justify-end">
+                <AiFillButton module="hardner" onApply={(fields) => setFormData((prev) => ({
+                  ...prev,
+                  date: fields.date ? String(fields.date).slice(0, 10) : prev.date,
+                  amount: fields.amount != null ? String(fields.amount) : prev.amount,
+                }))} />
+              </div>
+            )}
+            <div className="grid gap-2"><Label htmlFor="h-amount">Amount (₹)</Label><div className="relative"><IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" /><Input id="h-amount" type="number" min="0" placeholder="0" className="pl-9 pr-9" value={formData.amount} onChange={(e) => handleFormChange('amount', e.target.value)} />
+              <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                <FieldVoiceInput fieldLabel="amount" onChange={(text) => handleFormChange('amount', text.replace(/[^0-9.]/g, ''))} />
+              </div>
+            </div></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setFormOpen(false)} disabled={formSubmitting}>Cancel</Button><Button onClick={handleSubmit} disabled={formSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white">{formSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}{editingItem ? 'Update' : 'Create'}</Button></DialogFooter>
         </DialogContent>

@@ -79,7 +79,16 @@ export async function POST(request: Request) {
     // Groq exposes an OpenAI-compatible endpoint at https://api.groq.com/openai/v1
     // — same request/response shapes, just a different baseURL + key prefix (gsk_).
     // OpenAI SDK supports this via the baseURL option.
-    const clientOptions: ConstructorParameters<typeof OpenAI>[0] = { apiKey }
+    //
+    // PERFORMANCE: we set a short timeout so the user doesn't wait forever if
+    // the API is slow. Groq typically responds in 500-1500ms; OpenAI in 1-3s.
+    // We also use a lower max_tokens for form extraction (responses are tiny
+    // JSON objects, no need for 800 tokens).
+    const clientOptions: ConstructorParameters<typeof OpenAI>[0] = {
+      apiKey,
+      timeout: 12_000, // 12s hard cap — fail fast instead of hanging
+      maxRetries: 1,   // one retry on transient errors only
+    }
     if (provider === 'groq') {
       clientOptions.baseURL = 'https://api.groq.com/openai/v1'
     }
@@ -90,14 +99,18 @@ export async function POST(request: Request) {
     // Build a JSON schema for structured output. Each field is optional
     // (the AI omits keys it couldn't extract), so we use additionalProperties
     // false + a permissive object with all keys as optional strings/numbers.
+    //
+    // PERFORMANCE: temperature=0 for deterministic, fast reasoning. Groq's
+    // llama-3.3-70b is incredibly fast at temp=0 — often <800ms.
+    // max_tokens=500 is plenty for form fields (response is a tiny JSON).
     const response = await client.chat.completions.create({
       model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: text.trim() },
       ],
-      temperature: 0.1, // low temperature for deterministic extraction
-      max_tokens: 800,
+      temperature: 0, // deterministic — fastest + most consistent extraction
+      max_tokens: 500,
       response_format: { type: 'json_object' },
     })
 

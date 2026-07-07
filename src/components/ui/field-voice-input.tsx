@@ -55,7 +55,7 @@ interface SpeechRecognitionLike {
 export function FieldVoiceInput({
   onChange,
   onInterim,
-  language = 'hi-IN',
+  language = 'en-IN',
   className,
   disabled,
   fieldLabel = 'this field',

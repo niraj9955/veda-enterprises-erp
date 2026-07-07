@@ -52,7 +52,7 @@ export function VoiceInput({
   onResult,
   onInterim,
   disabled,
-  language = 'hi-IN',
+  language = 'en-IN',
   className,
 }: VoiceInputProps) {
   const [listening, setListening] = React.useState(false)

@@ -38,6 +38,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Mountain, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload , Search} from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
+import { AiFillButton } from '@/components/ui/ai-fill-button'
+import { FieldVoiceInput } from '@/components/ui/field-voice-input'
+import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
 
 interface DustPurchase {
   id: string
@@ -124,7 +127,26 @@ export function DustPurchaseModule() {
   const [importOpen, setImportOpen] = React.useState(false)
 
 
-  const openAddDialog = () => { setEditingItem(null); setFormData(emptyForm); setFormOpen(true) }
+  const openAddDialog = () => {
+    setEditingItem(null)
+    setFormData(emptyForm)
+    const pending = consumePendingAiResult('dustPurchase')
+    if (pending) {
+      setFormData((prev) => ({
+        ...prev,
+        date: pending.date ? String(pending.date).slice(0, 10) : prev.date,
+        vendorName: pending.vendorName != null ? String(pending.vendorName) : prev.vendorName,
+        cementName: pending.cementName != null ? String(pending.cementName) : prev.cementName,
+        quantity: pending.quantity != null ? String(pending.quantity) : prev.quantity,
+        rate: pending.rate != null ? String(pending.rate) : prev.rate,
+        paidAmount: pending.paidAmount != null ? String(pending.paidAmount) : prev.paidAmount,
+        transportationCharge: pending.transportationCharge != null ? String(pending.transportationCharge) : prev.transportationCharge,
+        gst: pending.gst != null ? String(pending.gst) : prev.gst,
+        remarks: pending.remarks != null ? String(pending.remarks) : prev.remarks,
+      }))
+    }
+    setFormOpen(true)
+  }
   const openEditDialog = (item: DustPurchase) => {
     setEditingItem(item)
     setFormData({
@@ -265,9 +287,39 @@ export function DustPurchaseModule() {
           <DialogHeader><DialogTitle>{editingItem ? 'Edit Dust Purchase' : 'Add Dust Purchase'}</DialogTitle><DialogDescription>{editingItem ? 'Update the purchase details.' : 'Fill in the details to create a new dust purchase.'}</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2"><Label htmlFor="dp-date">Date <span className="text-destructive">*</span></Label><Input id="dp-date" type="date" value={formData.date} onChange={(e) => handleFormChange('date', e.target.value)} /></div>
+            {!editingItem && (
+              <div className="flex justify-end">
+                <AiFillButton module="dustPurchase" onApply={(fields) => setFormData((prev) => ({
+                  ...prev,
+                  date: fields.date ? String(fields.date).slice(0, 10) : prev.date,
+                  vendorName: fields.vendorName != null ? String(fields.vendorName) : prev.vendorName,
+                  cementName: fields.cementName != null ? String(fields.cementName) : prev.cementName,
+                  quantity: fields.quantity != null ? String(fields.quantity) : prev.quantity,
+                  rate: fields.rate != null ? String(fields.rate) : prev.rate,
+                  paidAmount: fields.paidAmount != null ? String(fields.paidAmount) : prev.paidAmount,
+                  transportationCharge: fields.transportationCharge != null ? String(fields.transportationCharge) : prev.transportationCharge,
+                  gst: fields.gst != null ? String(fields.gst) : prev.gst,
+                  remarks: fields.remarks != null ? String(fields.remarks) : prev.remarks,
+                }))} />
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="grid gap-2"><Label htmlFor="dp-vendor">Vendor Name <span className="text-destructive">*</span></Label><Input id="dp-vendor" placeholder="Enter vendor name" value={formData.vendorName} onChange={(e) => handleFormChange('vendorName', e.target.value)} /></div>
-              <div className="grid gap-2"><Label htmlFor="dp-cement">Cement Name</Label><Input id="dp-cement" placeholder="Enter cement name" value={formData.cementName} onChange={(e) => handleFormChange('cementName', e.target.value)} /></div>
+            <div className="grid gap-2"><Label htmlFor="dp-vendor">Vendor Name <span className="text-destructive">*</span></Label>
+              <div className="relative">
+                <Input id="dp-vendor" placeholder="Enter vendor name" value={formData.vendorName} onChange={(e) => handleFormChange('vendorName', e.target.value)} className="pr-9" />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <FieldVoiceInput fieldLabel="vendor name" onChange={(text) => handleFormChange('vendorName', text)} />
+                </div>
+              </div>
+            </div>
+              <div className="grid gap-2"><Label htmlFor="dp-cement">Cement Name</Label>
+                <div className="relative">
+                  <Input id="dp-cement" placeholder="Enter cement name" value={formData.cementName} onChange={(e) => handleFormChange('cementName', e.target.value)} className="pr-9" />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                    <FieldVoiceInput fieldLabel="cement name" onChange={(text) => handleFormChange('cementName', text)} />
+                  </div>
+                </div>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2"><Label htmlFor="dp-qty">Quantity</Label><Input id="dp-qty" type="number" min="0" placeholder="0" value={formData.quantity} onChange={(e) => handleFormChange('quantity', e.target.value)} /></div>
@@ -279,7 +331,14 @@ export function DustPurchaseModule() {
               <div className="grid gap-2"><Label htmlFor="dp-transport">Transportation Charge (₹)</Label><div className="relative"><IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" /><Input id="dp-transport" type="number" min="0" placeholder="0" className="pl-9" value={formData.transportationCharge} onChange={(e) => handleFormChange('transportationCharge', e.target.value)} /></div></div>
             </div>
             <div className="grid gap-2"><Label htmlFor="dp-gst">GST (₹)</Label><div className="relative"><IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" /><Input id="dp-gst" type="number" min="0" placeholder="0" className="pl-9" value={formData.gst} onChange={(e) => handleFormChange('gst', e.target.value)} /></div></div>
-            <div className="grid gap-2"><Label htmlFor="dp-remarks">Remarks</Label><Textarea id="dp-remarks" placeholder="Optional remarks..." value={formData.remarks} onChange={(e) => handleFormChange('remarks', e.target.value)} className="min-h-[80px]" /></div>
+            <div className="grid gap-2"><Label htmlFor="dp-remarks">Remarks</Label>
+              <div className="relative">
+                <Textarea id="dp-remarks" placeholder="Optional remarks..." value={formData.remarks} onChange={(e) => handleFormChange('remarks', e.target.value)} className="min-h-[80px] pr-9" />
+                <div className="absolute right-1.5 top-2">
+                  <FieldVoiceInput fieldLabel="remarks" onChange={(text) => handleFormChange('remarks', text)} />
+                </div>
+              </div>
+            </div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setFormOpen(false)} disabled={formSubmitting}>Cancel</Button><Button onClick={handleSubmit} disabled={formSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white">{formSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}{editingItem ? 'Update' : 'Create'}</Button></DialogFooter>
         </DialogContent>
