@@ -18,7 +18,6 @@ import {
   Receipt,
   FileBarChart,
   LogOut,
-  Menu,
   ChevronLeft,
   ChevronDown,
   ChevronRight,
@@ -394,7 +393,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {sidebarVisible && (
         <aside
           className={cn(
-            'md:flex flex-col border-r border-black/30 bg-gradient-to-b from-[#2D3748] via-[#2A3340] to-[#1F2733] transition-all duration-300 shadow-2xl ring-1 ring-black/20 h-screen',
+            'hidden md:flex flex-col border-r border-black/30 bg-gradient-to-b from-[#2D3748] via-[#2A3340] to-[#1F2733] transition-all duration-300 shadow-2xl ring-1 ring-black/20 h-screen',
             sidebarOpen ? 'w-60' : 'w-16'
           )}
         >
@@ -445,12 +444,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <span className={cn('block h-0.5 bg-white rounded-full transition-all duration-300', sidebarVisible ? 'w-0 opacity-0' : 'w-4 opacity-100')} />
             </span>
           </button>
-          {/* Mobile menu */}
+          {/* Mobile menu — attractive toggle button */}
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden text-white hover:bg-white/15 hover:text-white">
-                <Menu className="h-5 w-5" />
-              </Button>
+              <button
+                className="md:hidden group relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-[#4299E1] to-[#3182CE] ring-1 ring-white/25 shadow-md hover:from-[#3182CE] hover:to-[#4299E1] transition-all duration-300 shrink-0"
+                title="Open menu"
+                aria-label="Open menu"
+              >
+                <span className="absolute inset-x-1 top-0.5 h-px bg-white/30 rounded-full pointer-events-none" />
+                <span className="relative flex flex-col gap-[5px] items-center justify-center">
+                  <span className="block h-0.5 w-4 bg-white rounded-full" />
+                  <span className="block h-0.5 w-4 bg-white rounded-full" />
+                  <span className="block h-0.5 w-4 bg-white rounded-full" />
+                </span>
+              </button>
             </SheetTrigger>
             <SheetContent side="left" className="w-60 p-0">
               <SidebarContent {...sidebarProps} />
