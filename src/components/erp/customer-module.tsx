@@ -578,16 +578,16 @@ export function CustomerModule() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
-            <Users className="size-5" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="flex size-9 sm:size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 shrink-0">
+            <Users className="size-4 sm:size-5" />
           </div>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">Customer Management</h2>
-            <p className="text-sm text-muted-foreground">
+          <div className="min-w-0">
+            <h2 className="text-lg sm:text-2xl font-bold tracking-tight truncate">Customer Management</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground truncate">
               Manage your customer database and ledgers
             </p>
           </div>
@@ -596,17 +596,17 @@ export function CustomerModule() {
           <Button
             variant="outline"
             onClick={() => setImportOpen(true)}
-            className="w-full sm:w-auto"
+            className="flex-1 sm:flex-initial px-3 sm:px-4 text-xs sm:text-sm"
           >
-            <Upload className="size-4 mr-2" />
-            Import Excel
+            <Upload className="size-3.5 sm:size-4 mr-1.5 sm:mr-2" />
+            <span className="truncate">Import Excel</span>
           </Button>
           <Button
             onClick={openAddDialog}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white flex-1 sm:flex-initial px-3 sm:px-4 text-xs sm:text-sm"
           >
-            <Plus className="size-4" />
-            Add Customer
+            <Plus className="size-3.5 sm:size-4 mr-1.5 sm:mr-2" />
+            <span className="truncate">Add Customer</span>
           </Button>
         </div>
       </div>
