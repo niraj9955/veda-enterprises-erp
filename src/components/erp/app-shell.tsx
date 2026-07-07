@@ -353,7 +353,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
               )}
             >
               {item.icon}
-              <span className="whitespace-nowrap">{item.label}</span>
+              <span className={cn('whitespace-nowrap transition-all duration-300', sidebarOpen ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden')}>{item.label}</span>
             </button>
           ))}
         </nav>
@@ -390,18 +390,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen bg-[#F1F5F9] dark:bg-gray-950 overflow-hidden">
-      {/* Desktop sidebar — hidden when sidebarVisible is false */}
-      <aside
-        className={cn(
-          'hidden md:flex flex-col border-r border-black/30 bg-gradient-to-b from-[#2D3748] via-[#2A3340] to-[#1F2733] transition-all duration-300 shadow-2xl ring-1 ring-black/20 h-screen',
-          sidebarOpen ? 'w-60' : 'w-16',
-          sidebarVisible ? 'md:flex' : 'md:hidden'
-        )}
-      >
-        <div className="flex-1 min-h-0 flex flex-col">
-          <SidebarContent {...sidebarProps} />
-        </div>
-      </aside>
+      {/* Desktop sidebar — fully hidden when sidebarVisible is false */}
+      {sidebarVisible && (
+        <aside
+          className={cn(
+            'md:flex flex-col border-r border-black/30 bg-gradient-to-b from-[#2D3748] via-[#2A3340] to-[#1F2733] transition-all duration-300 shadow-2xl ring-1 ring-black/20 h-screen',
+            sidebarOpen ? 'w-60' : 'w-16'
+          )}
+        >
+          <div className="flex-1 min-h-0 flex flex-col">
+            <SidebarContent {...sidebarProps} />
+          </div>
+        </aside>
+      )}
 
       {/* Floating "Show Sidebar" button — visible only when sidebar is hidden (edge tab) */}
       {!sidebarVisible && (
