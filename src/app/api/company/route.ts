@@ -3,6 +3,31 @@ import { connectDB, toObject } from '@/lib/db'
 import { Company } from '@/lib/models'
 import { getSession } from '@/lib/auth'
 
+// ─── Default contact info for Veda Enterprises ───────────────────────────────
+//
+// These are sensible defaults used in two scenarios:
+//   1. Brand-new install with no Company record yet — we seed these so the
+//      footer / invoices show real contact info from day one.
+//   2. Existing install where the Company record was created by an older
+//      version of the seed (with empty phone/address). On every GET we
+//      backfill any of these fields that are still empty, so existing
+//      deployments get the new contact info without needing a manual
+//      migration script.
+//
+// If an admin has already filled in their own phone/address/email through
+// Settings, those user-supplied values take precedence and we never
+// overwrite them.
+const VEDA_DEFAULTS = {
+  name: 'Veda Enterprises',
+  tagline: 'Paper Block ERP',
+  address: 'Purushottampur, Muzaffarpur',
+  city: 'Muzaffarpur',
+  state: 'Bihar',
+  pincode: '842002',
+  phone: '9572831213',
+  email: 'vedaenterprises@gmail.com',
+}
+
 export async function GET() {
   try {
     await connectDB()
@@ -10,19 +35,32 @@ export async function GET() {
 
     let company = await Company.findOne({})
     if (!company) {
-      // Seed sensible defaults so the footer / invoices show real contact
-      // info even before an admin opens Settings to customize them.
+      // Brand-new install — create with full defaults.
       company = await Company.create({
-        name: 'Veda Enterprises',
-        tagline: 'Paper Block ERP',
-        address: 'Purushottampur, Muzaffarpur',
-        city: 'Muzaffarpur',
-        state: 'Bihar',
-        pincode: '842002',
-        phone: '9572831213',
-        email: 'vedaenterprises@gmail.com',
+        ...VEDA_DEFAULTS,
         setupComplete: false,
       })
+    } else {
+      // Existing install — backfill any empty contact fields with the
+      // Veda defaults. This is what makes the footer / invoices show the
+      // right phone + address for deployments that were created before
+      // these defaults existed.
+      let needsUpdate = false
+      const patch: Record<string, string> = {}
+      for (const key of Object.keys(VEDA_DEFAULTS) as (keyof typeof VEDA_DEFAULTS)[]) {
+        const current = (company as any)[key]
+        if (!current || String(current).trim() === '') {
+          patch[key] = VEDA_DEFAULTS[key]
+          needsUpdate = true
+        }
+      }
+      if (needsUpdate) {
+        company = await Company.findByIdAndUpdate(
+          company._id,
+          { $set: patch },
+          { new: true }
+        )
+      }
     }
 
     return NextResponse.json({ company: toObject(company), session })
@@ -44,7 +82,7 @@ export async function PUT(request: Request) {
     let company = await Company.findOne({})
     if (!company) {
       company = await Company.create({
-        name: 'My Company',
+        ...VEDA_DEFAULTS,
         setupComplete: false,
       })
     }
