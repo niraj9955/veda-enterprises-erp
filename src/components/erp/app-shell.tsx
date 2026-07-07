@@ -249,7 +249,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
       </div>
 
       {/* Scrollable Navigation */}
-      <ScrollArea className="flex-1 overflow-y-auto">
+      <ScrollArea className="flex-1 min-h-0 overflow-y-auto">
         <nav className="space-y-1 px-2 py-2">
           {/* Top items: Dashboard + Customers */}
           {filteredTop.map((item) => (
@@ -393,22 +393,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Desktop sidebar — hidden when sidebarVisible is false */}
       <aside
         className={cn(
-          'hidden md:flex flex-col border-r border-black/30 bg-gradient-to-b from-[#2D3748] via-[#2A3340] to-[#1F2733] transition-all duration-300 shadow-2xl ring-1 ring-black/20',
+          'hidden md:flex flex-col border-r border-black/30 bg-gradient-to-b from-[#2D3748] via-[#2A3340] to-[#1F2733] transition-all duration-300 shadow-2xl ring-1 ring-black/20 h-screen',
           sidebarOpen ? 'w-60' : 'w-16',
           sidebarVisible ? 'md:flex' : 'md:hidden'
         )}
       >
-        <SidebarContent {...sidebarProps} />
-        <div className="border-t border-white/10 p-2 flex justify-center gap-1 shrink-0 bg-white/[0.03] backdrop-blur-sm">
+        <div className="flex-1 min-h-0 flex flex-col">
+          <SidebarContent {...sidebarProps} />
+        </div>
+        <div className="border-t border-white/15 p-2.5 flex justify-center gap-1.5 shrink-0 bg-black/20 backdrop-blur-sm mt-auto">
           {/* Collapse/Expand button (toggles sidebarOpen — keeps mini rail) */}
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-white hover:bg-white/15 hover:text-white" title={sidebarOpen ? 'Collapse' : 'Expand'}>
+          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-white hover:bg-white/15 hover:text-white shrink-0" title={sidebarOpen ? 'Collapse' : 'Expand'}>
             {sidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </Button>
-          {/* Hide button — fully hides the sidebar */}
-          <Button variant="ghost" size="icon" onClick={() => setSidebarVisible(false)} className="text-white hover:bg-rose-500/30 hover:text-white" title="Hide sidebar">
-            <ChevronLeft className="h-4 w-4" />
-            <span className="sr-only">Hide</span>
-          </Button>
+          {/* Hide button — fully hides the sidebar (shown only when expanded) */}
+          {sidebarOpen && (
+            <Button variant="ghost" size="sm" onClick={() => setSidebarVisible(false)} className="text-white/80 hover:bg-rose-500/40 hover:text-white shrink-0 gap-1.5 px-3 h-9" title="Hide sidebar">
+              <ChevronLeft className="h-4 w-4" />
+              <span className="text-xs font-medium">Hide</span>
+            </Button>
+          )}
         </div>
       </aside>
 
