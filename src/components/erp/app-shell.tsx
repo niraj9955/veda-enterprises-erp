@@ -379,7 +379,7 @@ function formatPhone(phone: string): string {
 }
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const { user, activeModule, setActiveModule, sidebarOpen, setSidebarOpen, logout, company } = useAppStore()
+  const { user, activeModule, setActiveModule, sidebarOpen, setSidebarOpen, sidebarVisible, setSidebarVisible, logout, company } = useAppStore()
 
   const sidebarProps = {
     user, activeModule, setActiveModule, sidebarOpen, logout,
@@ -390,20 +390,40 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen bg-[#F1F5F9] dark:bg-gray-950 overflow-hidden">
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar — hidden when sidebarVisible is false */}
       <aside
         className={cn(
           'hidden md:flex flex-col border-r border-black/30 bg-gradient-to-b from-[#2D3748] via-[#2A3340] to-[#1F2733] transition-all duration-300 shadow-2xl ring-1 ring-black/20',
-          sidebarOpen ? 'w-60' : 'w-16'
+          sidebarOpen ? 'w-60' : 'w-16',
+          sidebarVisible ? 'md:flex' : 'md:hidden'
         )}
       >
         <SidebarContent {...sidebarProps} />
-        <div className="border-t border-white/10 p-2 flex justify-center shrink-0 bg-white/[0.03] backdrop-blur-sm">
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-white hover:bg-white/15 hover:text-white">
+        <div className="border-t border-white/10 p-2 flex justify-center gap-1 shrink-0 bg-white/[0.03] backdrop-blur-sm">
+          {/* Collapse/Expand button (toggles sidebarOpen — keeps mini rail) */}
+          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-white hover:bg-white/15 hover:text-white" title={sidebarOpen ? 'Collapse' : 'Expand'}>
             {sidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </Button>
+          {/* Hide button — fully hides the sidebar */}
+          <Button variant="ghost" size="icon" onClick={() => setSidebarVisible(false)} className="text-white hover:bg-rose-500/30 hover:text-white" title="Hide sidebar">
+            <ChevronLeft className="h-4 w-4" />
+            <span className="sr-only">Hide</span>
           </Button>
         </div>
       </aside>
+
+      {/* Floating "Show Sidebar" button — visible only when sidebar is hidden */}
+      {!sidebarVisible && (
+        <button
+          onClick={() => setSidebarVisible(true)}
+          className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-30 items-center justify-center w-8 h-16 bg-gradient-to-r from-[#2D3748] to-[#3182CE] text-white rounded-r-xl shadow-2xl ring-1 ring-black/30 hover:w-10 hover:from-[#3182CE] hover:to-[#4299E1] transition-all duration-300 group"
+          title="Show sidebar"
+          aria-label="Show sidebar"
+        >
+          <ChevronRight className="h-5 w-5 group-hover:animate-pulse" />
+          <span className="sr-only">Show sidebar</span>
+        </button>
+      )}
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -411,6 +431,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <header className="relative flex items-center gap-2 px-4 py-2.5 border-b border-black/30 bg-gradient-to-r from-[#2D3748] via-[#2F3947] to-[#2D3748] backdrop-blur-sm sticky top-0 z-10 shrink-0 text-white shadow-lg ring-1 ring-black/20">
           {/* Subtle top highlight for 3D pop */}
           <div className="absolute inset-x-0 top-0 h-px bg-white/15 pointer-events-none" />
+          {/* Desktop "Show sidebar" button in header (only when sidebar hidden) */}
+          {!sidebarVisible && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSidebarVisible(true)}
+              className="hidden md:flex text-white hover:bg-white/15 hover:text-white"
+              title="Show sidebar"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          )}
           {/* Mobile menu */}
           <Sheet>
             <SheetTrigger asChild>

@@ -48,6 +48,9 @@ interface AppState {
   // Sidebar
   sidebarOpen: boolean
   setSidebarOpen: (open: boolean) => void
+  // True hide/show sidebar (separate from collapse/expand)
+  sidebarVisible: boolean
+  setSidebarVisible: (visible: boolean) => void
 
   // Company branding
   company: CompanyInfo | null
@@ -96,6 +99,8 @@ export const useAppStore = create<AppState>((set) => ({
   // Sidebar
   sidebarOpen: true,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  sidebarVisible: true,
+  setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
 
   // Company branding
   company: defaultCompany,
