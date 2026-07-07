@@ -129,11 +129,11 @@ const adminItems: NavItem[] = [
 ]
 
 // Color configs for each section
-// NOTE: The sidebar background is now a solid blue (#4070F4), so section
-// colors use white-tinted variants that work on top of blue. Section
+// NOTE: The sidebar background is now dark slate (#2D3748), so section
+// colors use white-tinted variants that work on top of dark slate. Section
 // identity is preserved via the icon's tinted background (e.g. emerald
 // section gets a soft emerald-tinted icon chip) while text and active
-// states use white for maximum readability on the blue nav.
+// states use white for maximum readability on the dark slate nav.
 const sectionColors: Record<string, {
   headerText: string
   headerBg: string
@@ -150,19 +150,19 @@ const sectionColors: Record<string, {
     headerHover: 'hover:bg-white/10',
     iconBg: 'bg-emerald-400/30',
     iconText: 'text-emerald-50',
-    activeItem: 'bg-white/20',
+    activeItem: 'bg-[#4299E1]',
     activeItemText: 'text-white',
-    border: 'border-white/20',
+    border: 'border-white/15',
   },
   blue: {
     headerText: 'text-white',
     headerBg: 'bg-white/10',
     headerHover: 'hover:bg-white/10',
-    iconBg: 'bg-blue-200/40',
+    iconBg: 'bg-blue-400/30',
     iconText: 'text-blue-50',
-    activeItem: 'bg-white/20',
+    activeItem: 'bg-[#4299E1]',
     activeItemText: 'text-white',
-    border: 'border-white/20',
+    border: 'border-white/15',
   },
   amber: {
     headerText: 'text-white',
@@ -170,9 +170,9 @@ const sectionColors: Record<string, {
     headerHover: 'hover:bg-white/10',
     iconBg: 'bg-amber-400/30',
     iconText: 'text-amber-50',
-    activeItem: 'bg-white/20',
+    activeItem: 'bg-[#4299E1]',
     activeItemText: 'text-white',
-    border: 'border-white/20',
+    border: 'border-white/15',
   },
   purple: {
     headerText: 'text-white',
@@ -180,9 +180,9 @@ const sectionColors: Record<string, {
     headerHover: 'hover:bg-white/10',
     iconBg: 'bg-purple-400/30',
     iconText: 'text-purple-50',
-    activeItem: 'bg-white/20',
+    activeItem: 'bg-[#4299E1]',
     activeItemText: 'text-white',
-    border: 'border-white/20',
+    border: 'border-white/15',
   },
   rose: {
     headerText: 'text-white',
@@ -190,9 +190,9 @@ const sectionColors: Record<string, {
     headerHover: 'hover:bg-white/10',
     iconBg: 'bg-rose-400/30',
     iconText: 'text-rose-50',
-    activeItem: 'bg-white/20',
+    activeItem: 'bg-[#4299E1]',
     activeItemText: 'text-white',
-    border: 'border-white/20',
+    border: 'border-white/15',
   },
 }
 
@@ -230,7 +230,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
     section.items.some((item) => item.key === activeModule)
 
   return (
-    <div className="flex flex-col h-full bg-[#4070F4] text-white">
+    <div className="flex flex-col h-full bg-[#2D3748] text-white">
       {/* Logo / Brand */}
       <div className="p-4 border-b border-white/15 flex items-center gap-3 shrink-0">
         {logoUrl ? (
@@ -257,8 +257,8 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                 activeModule === item.key
-                  ? 'bg-white/20 text-white shadow-sm'
-                  : 'text-white/80 hover:bg-white/10 hover:text-white'
+                  ? 'bg-[#4299E1] text-white shadow-sm'
+                  : 'text-slate-300 hover:bg-white/10 hover:text-white'
               )}
             >
               {item.icon}
@@ -269,7 +269,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
           ))}
 
           {/* Divider */}
-          <div className="h-px bg-white/15 mx-2 my-1" />
+          <div className="h-px bg-white/10 mx-2 my-1" />
 
           {/* Collapsible Sections */}
           {navSections.filter(sectionVisible).map((section) => {
@@ -316,8 +316,8 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
                         className={cn(
                           'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium transition-all duration-200',
                           activeModule === item.key
-                            ? cn(colors.activeItem, colors.activeItemText)
-                            : 'text-white/75 hover:bg-white/10 hover:text-white'
+                            ? cn(colors.activeItem, colors.activeItemText, 'shadow-sm')
+                            : 'text-slate-300 hover:bg-white/10 hover:text-white'
                         )}
                       >
                         {item.icon}
@@ -331,7 +331,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
           })}
 
           {/* Divider */}
-          {filteredAdmin.length > 0 && <div className="h-px bg-white/15 mx-2 my-1" />}
+          {filteredAdmin.length > 0 && <div className="h-px bg-white/10 mx-2 my-1" />}
 
           {/* Admin items */}
           {filteredAdmin.length > 0 && sidebarOpen && (
@@ -346,8 +346,8 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                 activeModule === item.key
-                  ? 'bg-white/20 text-white shadow-sm'
-                  : 'text-white/80 hover:bg-white/10 hover:text-white'
+                  ? 'bg-[#4299E1] text-white shadow-sm'
+                  : 'text-slate-300 hover:bg-white/10 hover:text-white'
               )}
             >
               {item.icon}
@@ -387,16 +387,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
+    <div className="flex h-screen bg-[#F7FAFC] dark:bg-gray-950 overflow-hidden">
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          'hidden md:flex flex-col border-r border-white/15 bg-[#4070F4] transition-all duration-300 shadow-md',
+          'hidden md:flex flex-col border-r border-black/20 bg-[#2D3748] transition-all duration-300 shadow-lg',
           sidebarOpen ? 'w-60' : 'w-16'
         )}
       >
         <SidebarContent {...sidebarProps} />
-        <div className="border-t border-white/15 p-2 flex justify-center shrink-0">
+        <div className="border-t border-white/10 p-2 flex justify-center shrink-0">
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-white hover:bg-white/15 hover:text-white">
             {sidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </Button>
@@ -406,7 +406,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top header bar */}
-        <header className="flex items-center gap-2 px-4 py-2.5 border-b border-white/15 bg-[#4070F4]/95 backdrop-blur-sm sticky top-0 z-10 shrink-0 text-white">
+        <header className="flex items-center gap-2 px-4 py-2.5 border-b border-black/20 bg-[#2D3748]/95 backdrop-blur-sm sticky top-0 z-10 shrink-0 text-white shadow-sm">
           {/* Mobile menu */}
           <Sheet>
             <SheetTrigger asChild>
@@ -443,7 +443,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Footer */}
-          <footer className="bg-gradient-to-br from-blue-900 via-blue-950 to-slate-950 text-blue-50 mt-4 shadow-lg">
+          <footer className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 text-slate-100 mt-4 shadow-lg">
             <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
               {/* Top row: brand + tagline + contact info in 3 cols */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -459,19 +459,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     )}
                     <div>
                       <h3 className="font-bold text-base text-white tracking-tight">{company?.name || 'Veda Enterprises'}</h3>
-                      <p className="text-[11px] text-blue-300">{company?.tagline || 'Paper Block ERP'}</p>
+                      <p className="text-[11px] text-slate-400">{company?.tagline || 'Paper Block ERP'}</p>
                     </div>
                   </div>
-                  <p className="text-xs text-blue-200/80 leading-relaxed pr-4">
+                  <p className="text-xs text-slate-300/80 leading-relaxed pr-4">
                     Complete enterprise resource planning system for paper block manufacturing — production, sales, payments, purchases, expenses & reports all in one place.
                   </p>
                   <div className="flex items-center gap-2 pt-1">
-                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-300">
+                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                       v1.0 · Secure
                     </span>
-                    <span className="text-blue-400/50">·</span>
-                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-300">
+                    <span className="text-slate-500">·</span>
+                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-400">
                       <Zap className="h-3 w-3" />
                       AI-assisted
                     </span>
@@ -480,16 +480,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
                 {/* Contact column */}
                 <div className="space-y-3">
-                  <h4 className="text-[11px] font-bold text-blue-300 uppercase tracking-widest">Contact</h4>
+                  <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Contact</h4>
                   <ul className="space-y-2 text-xs">
-                    <li className="flex items-start gap-2.5 text-blue-100">
+                    <li className="flex items-start gap-2.5 text-slate-200">
                       <Mail className="h-3.5 w-3.5 text-emerald-300 mt-0.5 shrink-0" />
                       <a href={`mailto:${company?.email || 'vedaenterprises@gmail.com'}`} className="hover:text-white transition-colors break-all">
                         {company?.email || 'vedaenterprises@gmail.com'}
                       </a>
                     </li>
-                    <li className="flex items-start gap-2.5 text-blue-100">
-                      <Phone className="h-3.5 w-3.5 text-emerald-300 mt-0.5 shrink-0" />
+                    <li className="flex items-start gap-2.5 text-slate-200">
+                      <Phone className="h-3.5 w-3.5 text-emerald-400 mt-0.5 shrink-0" />
                       <a href={`tel:${company?.phone || '9572831213'}`} className="hover:text-white transition-colors font-medium">
                         {company?.phone ? formatPhone(company.phone) : '+91 95728 31213'}
                       </a>
@@ -499,9 +499,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
                 {/* Location column */}
                 <div className="space-y-3">
-                  <h4 className="text-[11px] font-bold text-blue-300 uppercase tracking-widest">Location</h4>
-                  <div className="flex items-start gap-2.5 text-xs text-blue-100">
-                    <MapPin className="h-3.5 w-3.5 text-emerald-300 mt-0.5 shrink-0" />
+                  <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Location</h4>
+                  <div className="flex items-start gap-2.5 text-xs text-slate-200">
+                    <MapPin className="h-3.5 w-3.5 text-emerald-400 mt-0.5 shrink-0" />
                     <address className="not-italic leading-relaxed">
                       {company?.address ? (
                         <>
@@ -522,11 +522,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </div>
 
               {/* Bottom row: copyright bar */}
-              <div className="mt-7 pt-4 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-2 text-[11px] text-blue-300/80">
+              <div className="mt-7 pt-4 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-2 text-[11px] text-slate-400/80">
                 <p>© {new Date().getFullYear()} {(company?.name || 'Veda Enterprises')}. All rights reserved.</p>
                 <p className="flex items-center gap-2">
                   <span>Built with Next.js</span>
-                  <span className="text-blue-500/50">·</span>
+                  <span className="text-slate-600">·</span>
                   <span>Powered by AI</span>
                 </p>
               </div>
