@@ -38,6 +38,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { CreditCard, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload , Search} from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
+import { AiFillButton } from '@/components/ui/ai-fill-button'
+import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
 
 interface CustomerPayment {
   id: string
@@ -117,7 +119,23 @@ export function CustomerPaymentModule() {
   const [importOpen, setImportOpen] = React.useState(false)
 
 
-  const openAddDialog = () => { setEditingItem(null); setFormData(emptyForm); setFormOpen(true) }
+  const openAddDialog = () => {
+    setEditingItem(null)
+    const pending = consumePendingAiResult('customerPayment')
+    if (pending) {
+      setFormData({
+        date: String(pending.date || ''),
+        name: String(pending.name || ''),
+        address: String(pending.address || ''),
+        amount: pending.amount != null ? String(pending.amount) : '',
+        remarks: String(pending.remarks || ''),
+      })
+      toast({ title: 'AI auto-fill applied', description: 'Edit & verify before saving.' })
+    } else {
+      setFormData(emptyForm)
+    }
+    setFormOpen(true)
+  }
   const openEditDialog = (item: CustomerPayment) => {
     setEditingItem(item)
     setFormData({
@@ -231,6 +249,20 @@ export function CustomerPaymentModule() {
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>{editingItem ? 'Edit Customer Payment' : 'Add Customer Payment'}</DialogTitle><DialogDescription>{editingItem ? 'Update the payment details.' : 'Fill in the details to create a new payment entry.'}</DialogDescription></DialogHeader>
+          {!editingItem && (
+            <div className="flex justify-end">
+              <AiFillButton
+                module="customerPayment"
+                onApply={(fields) => setFormData((prev) => ({
+                  date: fields.date != null ? String(fields.date) : prev.date,
+                  name: fields.name != null ? String(fields.name) : prev.name,
+                  address: fields.address != null ? String(fields.address) : prev.address,
+                  amount: fields.amount != null ? String(fields.amount) : prev.amount,
+                  remarks: fields.remarks != null ? String(fields.remarks) : prev.remarks,
+                }))}
+              />
+            </div>
+          )}
           <div className="grid gap-4 py-2">
             <div className="grid gap-2"><Label htmlFor="cp-date">Date <span className="text-destructive">*</span></Label><Input id="cp-date" type="date" value={formData.date} onChange={(e) => handleFormChange('date', e.target.value)} /></div>
             <div className="grid gap-2"><Label htmlFor="cp-name">Name <span className="text-destructive">*</span></Label><Input id="cp-name" placeholder="Enter name" value={formData.name} onChange={(e) => handleFormChange('name', e.target.value)} /></div>

@@ -40,6 +40,8 @@ import { Factory, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload , Search, T
 import { Checkbox } from '@/components/ui/checkbox'
 import ExcelImport from '@/components/erp/excel-import'
 import { ScrollableTable } from '@/components/ui/scrollable-table'
+import { AiFillButton } from '@/components/ui/ai-fill-button'
+import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -251,7 +253,31 @@ export function ProductionModule() {
 
   const openAddDialog = () => {
     setEditingProduction(null)
-    setFormData(emptyForm)
+    // Check for pending AI result from chat widget — auto-fill if present
+    const pending = consumePendingAiResult('production')
+    if (pending) {
+      const str = (v: unknown) => (v == null ? '' : String(v))
+      setFormData({
+        date: str(pending.date),
+        cement: str(pending.cement),
+        zigZagGrey80: str(pending.zigZagGrey80),
+        zigZagRed80: str(pending.zigZagRed80),
+        zigZagYellow80: str(pending.zigZagYellow80),
+        zigZagGrey60: str(pending.zigZagGrey60),
+        zigZagRed60: str(pending.zigZagRed60),
+        zigZagYellow60: str(pending.zigZagYellow60),
+        curveStone: str(pending.curveStone),
+        chequreTile: str(pending.chequreTile),
+        dumbleGrey80: str(pending.dumbleGrey80),
+        dumbleRed80: str(pending.dumbleRed80),
+        dumbleYellow80: str(pending.dumbleYellow80),
+        transportationCharge: str(pending.transportationCharge),
+        remarks: str(pending.remarks),
+      })
+      toast({ title: 'AI auto-fill applied', description: 'Edit & verify before saving.' })
+    } else {
+      setFormData(emptyForm)
+    }
     setFormOpen(true)
   }
 
@@ -622,6 +648,28 @@ export function ProductionModule() {
                 : 'Fill in the details to create a new production entry.'}
             </DialogDescription>
           </DialogHeader>
+          {!editingProduction && (
+            <div className="flex justify-end">
+              <AiFillButton
+                module="production"
+                onApply={(fields) => setFormData((prev) => {
+                  const next = { ...prev }
+                  const keys: (keyof ProductionFormData)[] = [
+                    'date', 'cement', 'zigZagGrey80', 'zigZagRed80', 'zigZagYellow80',
+                    'zigZagGrey60', 'zigZagRed60', 'zigZagYellow60', 'curveStone',
+                    'chequreTile', 'dumbleGrey80', 'dumbleRed80', 'dumbleYellow80',
+                    'transportationCharge', 'remarks',
+                  ]
+                  for (const k of keys) {
+                    if (fields[k as string] != null) {
+                      ;(next as Record<string, string>)[k as string] = String(fields[k as string])
+                    }
+                  }
+                  return next
+                })}
+              />
+            </div>
+          )}
           <div className="grid gap-4 py-2">
             <div className="grid gap-2">
               <Label htmlFor="prod-date">

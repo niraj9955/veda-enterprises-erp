@@ -49,6 +49,8 @@ import {
 } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 import { CustomerHistoryPage } from '@/components/erp/customer-history-page'
+import { AiFillButton } from '@/components/ui/ai-fill-button'
+import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -175,7 +177,20 @@ export function CustomerModule() {
   // ── Form handlers ───────────────────────────────────────────────────────
   const openAddDialog = () => {
     setEditingCustomer(null)
-    setFormData(emptyForm)
+    const pending = consumePendingAiResult('customer')
+    if (pending) {
+      const cl = pending.creditLimit
+      setFormData({
+        name: String(pending.name || ''),
+        mobile: String(pending.mobile || pending.contactNumber || ''),
+        gstNumber: String(pending.gstNumber || ''),
+        address: String(pending.address || ''),
+        creditLimit: cl != null && cl !== '' ? String(cl) : '',
+      })
+      toast({ title: 'AI auto-fill applied', description: 'Edit & verify before saving.' })
+    } else {
+      setFormData(emptyForm)
+    }
     setFormOpen(true)
   }
 
@@ -308,6 +323,20 @@ export function CustomerModule() {
               : 'Fill in the details to create a new customer.'}
           </DialogDescription>
         </DialogHeader>
+        {!editingCustomer && (
+          <div className="flex justify-end">
+            <AiFillButton
+              module="customer"
+              onApply={(fields) => setFormData((prev) => ({
+                name: fields.name != null ? String(fields.name) : prev.name,
+                mobile: fields.mobile != null ? String(fields.mobile) : (fields.contactNumber != null ? String(fields.contactNumber) : prev.mobile),
+                gstNumber: fields.gstNumber != null ? String(fields.gstNumber) : prev.gstNumber,
+                address: fields.address != null ? String(fields.address) : prev.address,
+                creditLimit: fields.creditLimit != null && fields.creditLimit !== '' ? String(fields.creditLimit) : prev.creditLimit,
+              }))}
+            />
+          </div>
+        )}
 
         <div className="grid gap-4 py-2">
           {/* Customer Name */}

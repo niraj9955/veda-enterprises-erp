@@ -1131,3 +1131,39 @@ Stage Summary:
   • /home/z/my-project/src/app/api/daily-sell/route.ts (bulk-delete POST + DELETE ?all=true)
   • /home/z/my-project/src/lib/api.ts (bulkDeleteDailySells + deleteAllDailySells methods)
   • /home/z/my-project/src/components/erp/daily-sell-module.tsx (full UI rewrite)
+
+---
+Task ID: 14
+Agent: main
+Task: Add AI Chatbot & Voice/Text Form Auto-Fill to Veda ERP
+
+Work Log:
+- Created /home/z/my-project/src/lib/ai-schemas.ts — defines 11 module schemas (dailySell, production, customerPayment, customer, labourPayment, tractorPayment, dustPurchase, cementPurchase, hardner, electricity, factoryStuff). Each field has key/label/type/aliases/required/unit. Includes coerceFieldValue() and buildSystemPrompt() helpers.
+- Added AiConfigSchema to /home/z/my-project/src/lib/models.ts (openaiApiKey, enabled, model). Exported as AiConfig.
+- Created /home/z/my-project/src/app/api/ai/config/route.ts — GET returns masked config (any logged-in user), PUT updates (admin-only). Key masked as sk-...abcd.
+- Created /home/z/my-project/src/app/api/ai/parse/route.ts — POST {module, text} → OpenAI ChatCompletion with response_format json_object → coerces fields → returns {fields, raw}. Auth-gated.
+- Added aiParse / getAiConfig / updateAiConfig methods to /home/z/my-project/src/lib/api.ts.
+- Created /home/z/my-project/src/components/ui/voice-input.tsx — Web Speech API (webkitSpeechRecognition, hi-IN default). Returns null on unsupported browsers.
+- Created /home/z/my-project/src/hooks/use-ai-config.ts — shared hook with module-level cache to dedupe fetches.
+- Created /home/z/my-project/src/components/ui/ai-fill-dialog.tsx — modal with textarea + VoiceInput, Parse button, field preview, Apply to Form button.
+- Created /home/z/my-project/src/components/ui/ai-fill-button.tsx — reusable emerald-outline button; renders null if AI disabled.
+- Created /home/z/my-project/src/components/ui/ai-chat-widget.tsx — floating bottom-right chat button + WhatsApp-style panel. Exports setPendingAiResult / consumePendingAiResult for cross-component communication.
+- Added <AiChatWidget /> to /home/z/my-project/src/components/erp/app-shell.tsx.
+- Added "AI Assistant" tab to Admin Panel /home/z/my-project/src/components/erp/admin-panel-module.tsx with new AiConfigSection component (API key input + show/hide, model select, enable toggle, save button, instructions card).
+- Integrated <AiFillButton> + pending-AI-result consumption into 4 form dialogs:
+  • /home/z/my-project/src/components/erp/daily-sell-module.tsx (module="dailySell")
+  • /home/z/my-project/src/components/erp/production-module.tsx (module="production")
+  • /home/z/my-project/src/components/erp/customer-payment-module.tsx (module="customerPayment")
+  • /home/z/my-project/src/components/erp/customer-module.tsx (module="customer")
+  Each openAddDialog now reads from consumePendingAiResult(module) so the floating chat widget can hand off parsed fields.
+- Fixed duplicate `Eye` import in admin-panel-module.tsx.
+- TypeScript check: only 2 newly-introduced errors (creditLimit type in customer-module) → fixed with String() coercion. No remaining AI-related errors.
+- Full `next build`: ✓ Compiled successfully in 11.6s.
+
+Stage Summary:
+- AI Assistant feature is fully wired: admin configures OpenAI API key in Admin Panel → "AI Assistant" tab. Once enabled + key set, all logged-in users see:
+  1. A floating green chat button (bottom-right) on every page — speak or type in Hindi/English/Hinglish, AI detects module + parses fields, preview card → click "Open Form & Fill" → navigates to module → opens Add dialog with fields auto-filled.
+  2. A green "AI Fill" button inside each Add dialog (Daily Sell, Production, Customer Payment, Customer) — opens a modal where user types/speaks → preview → Apply to Form.
+- Voice input uses Web Speech API (hi-IN) on Chrome/Edge; gracefully hidden on other browsers.
+- OpenAI key never exposed in API responses (masked). Only admins can change it.
+- All 11 production modules have schemas defined; only 4 high-traffic forms are wired up. The remaining 7 (labour, tractor, dust, cement, hardner, electricity, factory-stuff) can be wired in the same pattern by adding <AiFillButton module="..."> to their dialog and consumePendingAiResult() to openAddDialog.

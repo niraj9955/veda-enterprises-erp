@@ -70,7 +70,6 @@ import {
   X,
   Check,
   Sparkles,
-  Eye,
   EyeOff,
 } from 'lucide-react'
 
@@ -1064,6 +1063,235 @@ export default function AdminPanelModule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  )
+}
+
+// ── AI Config Section ───────────────────────────────────────────────────────
+
+function AiConfigSection() {
+  const { user } = useAppStore()
+  const isAdmin = user?.role === 'admin'
+
+  const [apiKey, setApiKey] = React.useState('')
+  const [model, setModel] = React.useState('gpt-4o-mini')
+  const [enabled, setEnabled] = React.useState(false)
+  const [showKey, setShowKey] = React.useState(false)
+  const [loading, setLoading] = React.useState(true)
+  const [saving, setSaving] = React.useState(false)
+  const [hasExistingKey, setHasExistingKey] = React.useState(false)
+
+  React.useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const cfg = await api.getAiConfig()
+        if (cancelled) return
+        setModel(cfg.model || 'gpt-4o-mini')
+        setEnabled(!!cfg.enabled)
+        setHasExistingKey(!!cfg.hasKey)
+        // Don't populate apiKey — backend returns masked version only
+      } catch {
+        // ignore
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleSave = async () => {
+    if (!isAdmin) {
+      toast({ title: 'Permission denied', description: 'Only admins can configure AI.', variant: 'destructive' })
+      return
+    }
+    setSaving(true)
+    try {
+      const payload: { model: string; enabled: boolean; openaiApiKey?: string } = {
+        model,
+        enabled,
+      }
+      if (apiKey.trim()) {
+        payload.openaiApiKey = apiKey.trim()
+      }
+      await api.updateAiConfig(payload)
+      toast({ title: 'AI settings saved', description: 'Configuration updated successfully.' })
+      setApiKey('')
+      setHasExistingKey(true)
+    } catch (e) {
+      toast({ title: 'Failed to save', description: (e as Error).message, variant: 'destructive' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (!isAdmin) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-emerald-600" />
+            AI Assistant
+          </CardTitle>
+          <CardDescription>AI-powered voice & text entry helper</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium">Admin access required</p>
+              <p className="text-muted-foreground mt-1">Only admin users can configure AI Assistant settings.</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-emerald-600" />
+            AI Assistant Configuration
+          </CardTitle>
+          <CardDescription>
+            Configure OpenAI API key to enable AI-powered voice and text entry for all ERP forms.
+            Users can speak or type in Hindi/English/Hinglish and forms auto-fill.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* Enable / Disable */}
+          <div className="flex items-center justify-between p-3 border rounded-lg">
+            <div className="flex items-center gap-3">
+              {enabled ? (
+                <Power className="h-5 w-5 text-emerald-600" />
+              ) : (
+                <PowerOff className="h-5 w-5 text-muted-foreground" />
+              )}
+              <div>
+                <Label className="font-medium">AI Assistant Status</Label>
+                <p className="text-xs text-muted-foreground">Enable or disable AI features across the app</p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant={enabled ? 'default' : 'outline'}
+              onClick={() => setEnabled(!enabled)}
+              className={enabled ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+            >
+              {enabled ? 'Enabled' : 'Disabled'}
+            </Button>
+          </div>
+
+          {/* API Key */}
+          <div className="grid gap-2">
+            <Label htmlFor="ai-api-key">OpenAI API Key</Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  id="ai-api-key"
+                  type={showKey ? 'text' : 'password'}
+                  placeholder={hasExistingKey ? '•••••••• (saved, leave blank to keep)' : 'sk-...'}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className="pr-10 font-mono"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                  onClick={() => setShowKey(!showKey)}
+                >
+                  {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            {hasExistingKey && (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <Check className="h-3 w-3" />
+                API key is saved. Enter a new key above to replace it.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Get your API key from{' '}
+              <a
+                href="https://platform.openai.com/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-600 hover:underline"
+              >
+                platform.openai.com/api-keys
+              </a>
+              . The key is stored securely in the database and never exposed to non-admin users.
+            </p>
+          </div>
+
+          {/* Model selection */}
+          <div className="grid gap-2">
+            <Label htmlFor="ai-model">Model</Label>
+            <Select value={model} onValueChange={setModel}>
+              <SelectTrigger id="ai-model">
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gpt-4o-mini">gpt-4o-mini (recommended — fast & cheap)</SelectItem>
+                <SelectItem value="gpt-4o">gpt-4o (more accurate)</SelectItem>
+                <SelectItem value="gpt-4-turbo">gpt-4-turbo (legacy)</SelectItem>
+                <SelectItem value="gpt-3.5-turbo">gpt-3.5-turbo (cheapest)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              gpt-4o-mini is recommended — it's fast, accurate enough for form extraction, and very affordable.
+            </p>
+          </div>
+
+          <Button
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-emerald-600 hover:bg-emerald-700"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="mr-2 h-4 w-4" />
+                Save Configuration
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">How it works</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground space-y-2">
+          <p>1. <strong>Admin configures</strong> the OpenAI API key here (one-time setup).</p>
+          <p>2. <strong>Users</strong> see a green "AI" button next to every form (Daily Sell, Production, Customer Payment, etc.).</p>
+          <p>3. They click it, <strong>speak or type</strong> in Hindi/English/Hinglish — e.g. "aaj 500 bricks banaye, 2 labour the, 1500 rupee diye".</p>
+          <p>4. AI extracts the relevant fields and shows a <strong>preview</strong>. User clicks "Apply to Form" and all fields are auto-filled.</p>
+          <p>5. A floating chat button (bottom-right) is also available on every page for hands-free form filling.</p>
+          <p className="pt-2 text-xs">Voice input works in Chrome and Edge browsers. Hindi (hi-IN) is the default language.</p>
+        </CardContent>
+      </Card>
     </div>
   )
 }

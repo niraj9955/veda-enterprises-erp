@@ -40,6 +40,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { ShoppingCart, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload, Search, Trash } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
+import { AiFillButton } from '@/components/ui/ai-fill-button'
+import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -232,7 +234,22 @@ export function DailySellModule() {
 
   const openAddDialog = () => {
     setEditingItem(null)
-    setFormData(emptyForm)
+    // Check for pending AI result from chat widget — auto-fill if present
+    const pending = consumePendingAiResult('dailySell')
+    if (pending) {
+      setFormData({
+        date: String(pending.date || ''),
+        customerName: String(pending.customerName || ''),
+        address: String(pending.address || ''),
+        contactNumber: String(pending.contactNumber || ''),
+        product: String(pending.product || ''),
+        amount: pending.amount != null ? String(pending.amount) : '',
+        remarks: String(pending.remarks || ''),
+      })
+      toast({ title: 'AI auto-fill applied', description: 'Edit & verify before saving.' })
+    } else {
+      setFormData(emptyForm)
+    }
     setFormOpen(true)
   }
 
@@ -575,6 +592,22 @@ export function DailySellModule() {
               {editingItem ? 'Update the daily sell entry details.' : 'Fill in the details to create a new daily sell entry.'}
             </DialogDescription>
           </DialogHeader>
+          {!editingItem && (
+            <div className="flex justify-end">
+              <AiFillButton
+                module="dailySell"
+                onApply={(fields) => setFormData((prev) => ({
+                  date: fields.date != null ? String(fields.date) : prev.date,
+                  customerName: fields.customerName != null ? String(fields.customerName) : prev.customerName,
+                  address: fields.address != null ? String(fields.address) : prev.address,
+                  contactNumber: fields.contactNumber != null ? String(fields.contactNumber) : prev.contactNumber,
+                  product: fields.product != null ? String(fields.product) : prev.product,
+                  amount: fields.amount != null ? String(fields.amount) : prev.amount,
+                  remarks: fields.remarks != null ? String(fields.remarks) : prev.remarks,
+                }))}
+              />
+            </div>
+          )}
           <div className="grid gap-4 py-2">
             <div className="grid gap-2">
               <Label htmlFor="ds-date">Date <span className="text-destructive">*</span></Label>
