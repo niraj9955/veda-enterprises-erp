@@ -1422,3 +1422,26 @@ Stage Summary:
 - All 5 Management section modules (Orders, Dispatch, Payments, Expenses, Reports) are now mobile-responsive: dialogs fit small screens, buttons stack vertically, wide tables hide low-priority columns on mobile, Reports tables finally scroll horizontally instead of breaking the page.
 - Any Payment created / updated / deleted in Management → Payments now mirrors automatically into the Customer Payment module. The mirror is tagged "[synced from Payments]" in remarks so users can tell which side it came from. Old Payment records will get their mirror auto-created the next time they're edited.
 - No data migration needed — the new `customerPaymentId` field defaults to null on existing records and self-heals on first update.
+
+---
+Task ID: mobile-responsive-finance-purchase
+Agent: Main Agent
+Task: Make Finance and Purchase sections mobile responsive
+
+Work Log:
+- Reviewed all 8 modules in Finance (Customer Payment, Labour Payment, Tractor Payment) and Purchases & Expenses (Dust Purchase, Cement Purchase, Hardner, Electricity, Factory Stuff) sections
+- Identified that all modules used horizontal-scroll tables which provide poor UX on mobile
+- Applied a dual-render pattern to each module:
+  - Desktop (sm+): existing sticky-header Table inside a Card with `hidden sm:block`
+  - Mobile (<sm): a new card-list view with `sm:hidden space-y-3` showing each record as a stacked card
+- Mobile cards prioritize key fields (name/date/amount or vendor/total) at the top, then secondary fields below in 2-column grid for multi-field modules (Tractor, Dust, Cement)
+- Edit/Delete actions rendered as full-width-ish outline buttons at bottom of each card for easy tap targets
+- Adapted loading skeletons and empty state messages for the mobile layout
+- Verified all 8 modified files compile clean (npx tsc --noEmit shows zero errors in these files) and Next.js production build passes successfully
+- Committed and pushed to GitHub (commit 9bcb3f1)
+
+Stage Summary:
+- 8 files updated: customer-payment-module.tsx, labour-payment-module.tsx, tractor-payment-module.tsx, dust-purchase-module.tsx, cement-purchase-module.tsx, hardner-module.tsx, electricity-module.tsx, factory-stuff-module.tsx
+- Pattern: `<Card className="hidden sm:block">...table...</Card>` + `<div className="sm:hidden space-y-3">...cards...</div>`
+- Desktop layout preserved unchanged; mobile UX completely redesigned from cramped horizontal-scroll table to readable vertical card list
+- All 8 modules consistent in design language (header card with name/date/amount, optional 2-col grid for secondary fields, footer with Edit/Delete buttons)
