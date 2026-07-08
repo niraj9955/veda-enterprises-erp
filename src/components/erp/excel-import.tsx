@@ -110,6 +110,7 @@ const moduleTemplates: Record<string, {
       { key: 'address', label: 'Address', required: false, aliases: ['address', 'addr', 'location'] },
       { key: 'contactNumber', label: 'Contact Number', required: false, aliases: ['contact', 'mobile', 'phone', 'contact number', 'contact_no'] },
       { key: 'product', label: 'Product', required: false, aliases: ['product', 'item', 'material', 'goods'] },
+      { key: 'quantity', label: 'Quantity', required: false, aliases: ['quantity', 'qty', 'quantity sold', 'units', 'count'] },
       { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'sell amount', 'राशि'] },
       { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
     ],

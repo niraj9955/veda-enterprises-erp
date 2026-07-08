@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       })
     }
 
-    if (!body.date || !body.customerName || !body.amount) {
+    if (!body.date || !body.customerName || body.amount == null) {
       return NextResponse.json({ error: 'Date, customer name and amount are required' }, { status: 400 })
     }
     const record = await DailySell.create({
@@ -47,6 +47,7 @@ export async function POST(request: Request) {
       address: body.address || '',
       contactNumber: body.contactNumber || '',
       product: body.product || '',
+      quantity: Number(body.quantity) || 0,
       amount: Number(body.amount),
       remarks: body.remarks || '',
     })

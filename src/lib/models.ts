@@ -97,6 +97,7 @@ const DailySellSchema = new mongoose.Schema({
   address: { type: String, default: '' },
   contactNumber: { type: String, default: '' },
   product: { type: String, default: '' },
+  quantity: { type: Number, default: 0 },
   amount: { type: Number, required: true },
   remarks: { type: String, default: '' },
 }, { timestamps: true });

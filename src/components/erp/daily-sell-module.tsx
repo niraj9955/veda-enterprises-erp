@@ -44,6 +44,35 @@ import { AiFillButton } from '@/components/ui/ai-fill-button'
 import { FieldVoiceInput } from '@/components/ui/field-voice-input'
 import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
 import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+
+// ── Product list (single source of truth for the dropdown) ───────────────────
+// The same 12 items that appear as columns in the Production module —
+// selecting from this list ensures the Stock Overview's
+//   Total Production − Sell Item = Available Item
+// formula matches exactly, with no fuzzy-text guesswork.
+const PRODUCT_ITEMS: { key: string; label: string }[] = [
+  { key: 'Cement', label: 'Cement' },
+  { key: 'Zig Zag Grey 80mm', label: 'Zig Zag Grey 80mm' },
+  { key: 'Zig Zag Red 80mm', label: 'Zig Zag Red 80mm' },
+  { key: 'Zig Zag Yellow 80mm', label: 'Zig Zag Yellow 80mm' },
+  { key: 'Zig Zag Grey 60mm', label: 'Zig Zag Grey 60mm' },
+  { key: 'Zig Zag Red 60mm', label: 'Zig Zag Red 60mm' },
+  { key: 'Zig Zag Yellow 60mm', label: 'Zig Zag Yellow 60mm' },
+  { key: 'Chequre Tile', label: 'Chequre Tile' },
+  { key: 'Curve Stone', label: 'Curve Stone' },
+  { key: 'Dumble Grey 80mm', label: 'Dumble Grey 80mm' },
+  { key: 'Dumble Red 80mm', label: 'Dumble Red 80mm' },
+  { key: 'Dumble Yellow 80mm', label: 'Dumble Yellow 80mm' },
+]
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -54,6 +83,7 @@ interface DailySell {
   address: string
   contactNumber: string
   product: string
+  quantity: number
   amount: number
   remarks: string
   createdAt: string
@@ -66,6 +96,7 @@ interface DailySellFormData {
   address: string
   contactNumber: string
   product: string
+  quantity: string
   amount: string
   remarks: string
 }
@@ -93,6 +124,7 @@ const emptyForm: DailySellFormData = {
   address: '',
   contactNumber: '',
   product: '',
+  quantity: '',
   amount: '',
   remarks: '',
 }
@@ -245,6 +277,7 @@ export function DailySellModule() {
         address: String(pending.address || ''),
         contactNumber: String(pending.contactNumber || ''),
         product: String(pending.product || ''),
+        quantity: pending.quantity != null ? String(pending.quantity) : '',
         amount: pending.amount != null ? String(pending.amount) : '',
         remarks: String(pending.remarks || ''),
       })
@@ -263,6 +296,7 @@ export function DailySellModule() {
       address: item.address || '',
       contactNumber: item.contactNumber || '',
       product: item.product || '',
+      quantity: String(item.quantity ?? ''),
       amount: String(item.amount || ''),
       remarks: item.remarks || '',
     })
@@ -275,7 +309,7 @@ export function DailySellModule() {
 
   const handleSubmit = async () => {
     // Unified empty-form check — show ONE popup instead of cascading errors
-    if (isFormEmpty([formData.date, formData.customerName, formData.address, formData.contactNumber, formData.product, formData.amount, formData.remarks])) {
+    if (isFormEmpty([formData.date, formData.customerName, formData.address, formData.contactNumber, formData.product, formData.quantity, formData.amount, formData.remarks])) {
       toast(showPleaseFillDataToast())
       return
     }
@@ -296,6 +330,7 @@ export function DailySellModule() {
         address: formData.address.trim(),
         contactNumber: formData.contactNumber.trim(),
         product: formData.product.trim(),
+        quantity: Number(formData.quantity) || 0,
         amount: Number(formData.amount) || 0,
         remarks: formData.remarks.trim(),
       }
@@ -354,6 +389,7 @@ export function DailySellModule() {
         <TableCell><Skeleton className="h-4 w-24" /></TableCell>
         <TableCell><Skeleton className="h-4 w-28" /></TableCell>
         <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
         <TableCell><Skeleton className="h-4 w-20" /></TableCell>
         <TableCell><Skeleton className="h-8 w-20" /></TableCell>
       </TableRow>
@@ -528,6 +564,7 @@ export function DailySellModule() {
                   <TableHead>Address</TableHead>
                   <TableHead>Contact Number</TableHead>
                   <TableHead>Product</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Quantity</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Amount (₹)</TableHead>
                   <TableHead>Remarks</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -538,7 +575,7 @@ export function DailySellModule() {
                   renderSkeletons()
                 ) : filteredDailySells.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
                       No daily sell entries yet. Click &quot;Add Daily Sell&quot; to get started.
                     </TableCell>
                   </TableRow>
@@ -563,6 +600,9 @@ export function DailySellModule() {
                       <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.address || '—'}</TableCell>
                       <TableCell className="whitespace-nowrap">{item.contactNumber || '—'}</TableCell>
                       <TableCell className="max-w-[150px] truncate">{item.product || '—'}</TableCell>
+                      <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">
+                        {item.quantity != null ? item.quantity.toLocaleString('en-IN') : '—'}
+                      </TableCell>
                       <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">{formatCurrency(item.amount)}</TableCell>
                       <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.remarks || '—'}</TableCell>
                       <TableCell className="text-right">
@@ -609,6 +649,7 @@ export function DailySellModule() {
                   address: fields.address != null ? String(fields.address) : prev.address,
                   contactNumber: fields.contactNumber != null ? String(fields.contactNumber) : prev.contactNumber,
                   product: fields.product != null ? String(fields.product) : prev.product,
+                  quantity: fields.quantity != null ? String(fields.quantity) : prev.quantity,
                   amount: fields.amount != null ? String(fields.amount) : prev.amount,
                   remarks: fields.remarks != null ? String(fields.remarks) : prev.remarks,
                 }))}
@@ -648,13 +689,52 @@ export function DailySellModule() {
               </div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="ds-product">Product</Label>
+              <Label htmlFor="ds-product">Product <span className="text-destructive">*</span></Label>
+              <Select
+                value={formData.product}
+                onValueChange={(val) => handleFormChange('product', val)}
+              >
+                <SelectTrigger id="ds-product" className="w-full">
+                  <SelectValue placeholder="Select product item" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Product Items</SelectLabel>
+                    {PRODUCT_ITEMS.map((item) => (
+                      <SelectItem key={item.key} value={item.key}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Select the item you sold. This is used by Stock Overview to compute
+                <span className="font-medium"> Available = Total Production − Sell Item</span>.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ds-quantity">Quantity</Label>
               <div className="relative">
-                <Input id="ds-product" placeholder="Enter product name" value={formData.product} onChange={(e) => handleFormChange('product', e.target.value)} className="pr-9" />
+                <Input
+                  id="ds-quantity"
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  value={formData.quantity}
+                  onChange={(e) => handleFormChange('quantity', e.target.value)}
+                  className="pr-9"
+                />
                 <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
-                  <FieldVoiceInput fieldLabel="product" onChange={(text) => handleFormChange('product', text)} />
+                  <FieldVoiceInput
+                    fieldLabel="quantity"
+                    onChange={(text) => handleFormChange('quantity', text.replace(/[^0-9.]/g, ''))}
+                  />
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Number of units sold. Used by Stock Overview as the “Sell Item” value.
+              </p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ds-amount">Amount (₹)</Label>
@@ -665,6 +745,9 @@ export function DailySellModule() {
                   <FieldVoiceInput fieldLabel="amount" onChange={(text) => handleFormChange('amount', text.replace(/[^0-9.]/g, ''))} />
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Total sale amount in rupees (quantity × rate, or whatever the customer paid).
+              </p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ds-remarks">Remarks</Label>

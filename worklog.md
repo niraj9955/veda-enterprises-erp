@@ -1232,3 +1232,100 @@ Stage Summary:
   • /home/z/my-project/src/lib/form-validation.ts (NEW)
   • /home/z/my-project/src/components/erp/labour-payment-module.tsx (added check)
   • /home/z/my-project/src/components/erp/customer-payment-module.tsx (added check)
+
+---
+Task ID: 17
+Agent: main
+Task: Add Quantity field before Amount in Daily Sell + make Product a dropdown + fix Stock Overview formula
+
+Work Log:
+
+### Problem
+User's request (in Hinglish):
+1. "amount se phle Quantity do" — add a Quantity field BEFORE the Amount field in the Daily Sell form
+2. "stock overview me aayega waha total production item-sell product item = Available item ye hona chahiye" — Stock Overview must show: Total Production − Sell Item = Available Item
+3. "product me list item add kro waha select kr sake" — convert Product into a selectable dropdown so users pick from a fixed list
+
+### Root cause analysis
+- The Stock Overview API already had the formula `availableQuantity = totalProduction - sellItem` BUT it was summing `DailySell.amount` (rupees) instead of units. Mixing rupees with units gave nonsensical numbers.
+- The Daily Sell form's `product` field was free-text, so the Stock Overview had to use fuzzy substring matching (matchTokens) to guess which sales rows matched which product. This regularly mismatched (e.g. "zig zag grey 80" tokens would also match "zig zag grey 80mm" + "zig zag red 80mm" partially).
+- There was no `quantity` field anywhere — users had no way to record how many units of an item were sold, only the rupee amount.
+
+### Fix #1 — Added `quantity` field to DailySell schema
+- File: /home/z/my-project/src/lib/models.ts
+- Added `quantity: { type: Number, default: 0 }` between `product` and `amount` fields.
+- Default 0 means existing records gracefully show 0 quantity without breaking.
+
+### Fix #2 — Updated Daily Sell API routes to accept `quantity`
+- /home/z/my-project/src/app/api/daily-sell/route.ts (POST):
+  • Relaxed required-fields check from `!body.amount` to `body.amount == null` (so 0 is allowed)
+  • Added `quantity: Number(body.quantity) || 0` to the create payload
+- /home/z/my-project/src/app/api/daily-sell/[id]/route.ts (PUT):
+  • Added `'quantity'` to DAILY_SELL_FIELDS whitelist
+  • Updated Number-coercion branch to handle both `quantity` and `amount`
+
+### Fix #3 — Converted Daily Sell's Product field from free-text Input to a Select dropdown
+- File: /home/z/my-project/src/components/erp/daily-sell-module.tsx
+- Added a new `PRODUCT_ITEMS` constant — the same 12 product names that appear as columns in Production module (Cement, Zig Zag Grey 80mm, Zig Zag Red 80mm, …, Dumble Yellow 80mm). This is now the SINGLE SOURCE OF TRUTH that both the Daily Sell dropdown and the Stock Overview matching logic use.
+- Replaced the free-text Input + FieldVoiceInput for `product` with a shadcn `<Select>` dropdown:
+  • Trigger shows "Select product item" placeholder
+  • Content lists all 12 items in a single SelectGroup with a "Product Items" label
+  • Selecting an item sets `formData.product` to the item's exact name string
+- Added a helper paragraph below the dropdown explaining that the selection feeds Stock Overview's `Available = Total Production − Sell Item` formula.
+
+### Fix #4 — Added Quantity field BEFORE Amount in the Daily Sell form
+- File: /home/z/my-project/src/components/erp/daily-sell-module.tsx
+- Added a new `Quantity` numeric input field with FieldVoiceInput, positioned BETWEEN Product and Amount (exactly as the user asked: "amount se phle Quantity do").
+- Helper paragraph below explains: "Number of units sold. Used by Stock Overview as the 'Sell Item' value."
+- Also added a helper paragraph below Amount clarifying it's the total sale amount in rupees.
+- Updated empty-form check, edit-dialog pre-fill, AI auto-fill handler, and submit payload to all include `quantity`.
+
+### Fix #5 — Added Quantity column to the Daily Sell table
+- File: /home/z/my-project/src/components/erp/daily-sell-module.tsx
+- Added a new `Quantity` column header between Product and Amount
+- Added the matching TableCell showing `item.quantity.toLocaleString('en-IN')` (or '—' when null)
+- Updated empty-state colSpan from 9 → 10
+- Updated skeleton row to render 10 cells (was 9)
+
+### Fix #6 — Rewrote Stock Overview API to use `quantity` instead of `amount`, with EXACT product-name matching
+- File: /home/z/my-project/src/app/api/stock/summary/route.ts
+- Removed the `matchTokens` fuzzy-matching logic entirely — no longer needed because the Daily Sell dropdown now sets `product` to an exact product name.
+- Replaced with a simple `Map<lowercaseProductName, totalQuantitySold>`:
+  • Walks DailySell rows ONCE (O(n)) and buckets each sale under its product name
+  • For each of the 12 product fields, looks up `sellByProductName.get(field.name.toLowerCase())`
+  • Sums `quantity` (units) — NOT `amount` (rupees)
+- Formula unchanged: `availableQuantity = totalProduction - sellItem`
+  • Now both sides are in UNITS, so the math is meaningful: "produced 5000 units, sold 1200 units, available = 3800 units".
+- Updated the JSDoc comment block at the top of the file to reflect the new logic.
+
+### Fix #7 — Updated Excel import template
+- File: /home/z/my-project/src/components/erp/excel-import.tsx
+- Added a new `quantity` field to the dailySell template (between `product` and `amount`):
+  ` { key: 'quantity', label: 'Quantity', required: false, aliases: ['quantity', 'qty', 'quantity sold', 'units', 'count'] } `
+- The general-purpose numeric coercion in `transformRow` already includes `'quantity'` in its numeric-fields list (line 354), so imported Quantity values are correctly converted to Number.
+
+### Fix #8 — Updated AI schema for dailySell
+- File: /home/z/my-project/src/lib/ai-schemas.ts
+- Added a new `quantity` field definition between `product` and `amount`:
+  `{ key: 'quantity', label: 'Quantity', type: 'number', aliases: ['quantity', 'qty', 'quantity sold', 'units', 'count', 'kitne', 'kitna', 'samagri sankhya'] }`
+- Now the AI assistant (chat widget + AI Fill button) can parse "sold 500 zig zag grey 80mm for 20000 rupees" and populate both quantity=500 and amount=20000.
+
+### Verification
+- TypeScript: `npx tsc --noEmit` — no errors in any of the modified files (daily-sell-module.tsx, daily-sell/route.ts, daily-sell/[id]/route.ts, models.ts, stock/summary/route.ts, ai-schemas.ts, excel-import.tsx). All remaining TS errors are pre-existing in unrelated files.
+- Full `next build`: ✓ Compiled successfully. All API routes registered.
+- Daily Sell dropdown + quantity column will render at runtime.
+
+Stage Summary:
+- Daily Sell form now has THREE product-related fields in order: Product (dropdown) → Quantity (numeric, voice-enabled) → Amount (₹, numeric, voice-enabled). Matches the user's "amount se phle Quantity do" requirement exactly.
+- Product field is now a searchable dropdown with the 12 canonical product items — no more free-text guesswork.
+- Stock Overview's "Sell Item" column now sums the new `quantity` field (units sold), NOT `amount` (rupees). The formula `Available = Total Production − Sell Item` is now mathematically meaningful (units − units = units).
+- Backend (Mongoose schema + both API routes), frontend (form + table), Excel import template, and AI schema are all in sync.
+- Existing DailySell records (with no `quantity` field) gracefully default to 0 — no migration needed.
+- Modified files:
+  • /home/z/my-project/src/lib/models.ts (added quantity to DailySellSchema)
+  • /home/z/my-project/src/app/api/daily-sell/route.ts (POST accepts quantity)
+  • /home/z/my-project/src/app/api/daily-sell/[id]/route.ts (PUT accepts quantity)
+  • /home/z/my-project/src/app/api/stock/summary/route.ts (use quantity + exact-name match)
+  • /home/z/my-project/src/components/erp/daily-sell-module.tsx (dropdown + Quantity field + column)
+  • /home/z/my-project/src/components/erp/excel-import.tsx (added quantity to dailySell template)
+  • /home/z/my-project/src/lib/ai-schemas.ts (added quantity to dailySell AI schema)

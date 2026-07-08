@@ -1,0 +1,779 @@
+     1→'use client'
+     2→
+     3→import * as React from 'react'
+     4→import { api } from '@/lib/api'
+     5→import { toast } from '@/hooks/use-toast'
+     6→import { Button } from '@/components/ui/button'
+     7→import { Input } from '@/components/ui/input'
+     8→import { Label } from '@/components/ui/label'
+     9→import { Textarea } from '@/components/ui/textarea'
+    10→import { Badge } from '@/components/ui/badge'
+    11→import { Skeleton } from '@/components/ui/skeleton'
+    12→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    13→import { Checkbox } from '@/components/ui/checkbox'
+    14→import {
+    15→  Table,
+    16→  TableBody,
+    17→  TableCell,
+    18→  TableHead,
+    19→  TableHeader,
+    20→  TableRow,
+    21→} from '@/components/ui/table'
+    22→import { ScrollableTable } from '@/components/ui/scrollable-table'
+    23→import {
+    24→  Dialog,
+    25→  DialogContent,
+    26→  DialogDescription,
+    27→  DialogFooter,
+    28→  DialogHeader,
+    29→  DialogTitle,
+    30→} from '@/components/ui/dialog'
+    31→import {
+    32→  AlertDialog,
+    33→  AlertDialogAction,
+    34→  AlertDialogCancel,
+    35→  AlertDialogContent,
+    36→  AlertDialogDescription,
+    37→  AlertDialogFooter,
+    38→  AlertDialogHeader,
+    39→  AlertDialogTitle,
+    40→} from '@/components/ui/alert-dialog'
+    41→import { ShoppingCart, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload, Search, Trash } from 'lucide-react'
+    42→import ExcelImport from '@/components/erp/excel-import'
+    43→import { AiFillButton } from '@/components/ui/ai-fill-button'
+    44→import { FieldVoiceInput } from '@/components/ui/field-voice-input'
+    45→import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
+    46→import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
+    47→
+    48→// ── Types ───────────────────────────────────────────────────────────────────
+    49→
+    50→interface DailySell {
+    51→  id: string
+    52→  date: string
+    53→  customerName: string
+    54→  address: string
+    55→  contactNumber: string
+    56→  product: string
+    57→  amount: number
+    58→  remarks: string
+    59→  createdAt: string
+    60→  updatedAt: string
+    61→}
+    62→
+    63→interface DailySellFormData {
+    64→  date: string
+    65→  customerName: string
+    66→  address: string
+    67→  contactNumber: string
+    68→  product: string
+    69→  amount: string
+    70→  remarks: string
+    71→}
+    72→
+    73→// ── Helpers ─────────────────────────────────────────────────────────────────
+    74→
+    75→const formatCurrency = (amount: number): string =>
+    76→  new Intl.NumberFormat('en-IN', {
+    77→    style: 'currency',
+    78→    currency: 'INR',
+    79→    minimumFractionDigits: 0,
+    80→    maximumFractionDigits: 2,
+    81→  }).format(amount)
+    82→
+    83→const formatDate = (dateStr: string): string =>
+    84→  new Date(dateStr + 'T00:00:00').toLocaleDateString('en-IN', {
+    85→    day: '2-digit',
+    86→    month: 'short',
+    87→    year: 'numeric',
+    88→  })
+    89→
+    90→const emptyForm: DailySellFormData = {
+    91→  date: '',
+    92→  customerName: '',
+    93→  address: '',
+    94→  contactNumber: '',
+    95→  product: '',
+    96→  amount: '',
+    97→  remarks: '',
+    98→}
+    99→
+   100→// ── Component ───────────────────────────────────────────────────────────────
+   101→
+   102→export function DailySellModule() {
+   103→  const [dailySells, setDailySells] = React.useState<DailySell[]>([])
+   104→  const [search, setSearch] = React.useState('')
+   105→  const [debouncedSearch, setDebouncedSearch] = React.useState('')
+   106→  const [loading, setLoading] = React.useState(true)
+   107→  const [formOpen, setFormOpen] = React.useState(false)
+   108→  const [editingItem, setEditingItem] = React.useState<DailySell | null>(null)
+   109→  const [formData, setFormData] = React.useState<DailySellFormData>(emptyForm)
+   110→  const [formSubmitting, setFormSubmitting] = React.useState(false)
+   111→  const [deleteTarget, setDeleteTarget] = React.useState<DailySell | null>(null)
+   112→  const [deleting, setDeleting] = React.useState(false)
+   113→
+   114→  // Multi-select state — mirrors the Production module pattern so the user
+   115→  // gets identical UX: tick individual rows or use the header checkbox to
+   116→  // select all currently-filtered rows, then click "Delete Selected".
+   117→  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+   118→  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false)
+   119→  const [bulkDeleting, setBulkDeleting] = React.useState(false)
+   120→
+   121→  // Delete All state — simple Yes/No confirmation dialog.
+   122→  const [deleteAllOpen, setDeleteAllOpen] = React.useState(false)
+   123→  const [deletingAll, setDeletingAll] = React.useState(false)
+   124→
+   125→  // Excel import
+   126→  const [importOpen, setImportOpen] = React.useState(false)
+   127→
+   128→  const fetchData = React.useCallback(async () => {
+   129→    setLoading(true)
+   130→    try {
+   131→      const res = await api.getDailySells()
+   132→      const data = (res.dailySells as DailySell[]).sort(
+   133→        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+   134→      )
+   135→      setDailySells(data)
+   136→    } catch (err) {
+   137→      toast({
+   138→        title: 'Error',
+   139→        description: err instanceof Error ? err.message : 'Failed to fetch daily sell data',
+   140→        variant: 'destructive',
+   141→      })
+   142→    } finally {
+   143→      setLoading(false)
+   144→    }
+   145→  }, [])
+   146→
+   147→  // Debounced search
+   148→  React.useEffect(() => {
+   149→    const t = setTimeout(() => setDebouncedSearch(search), 250)
+   150→    return () => clearTimeout(t)
+   151→  }, [search])
+   152→
+   153→  // Client-side filter
+   154→  const filteredDailySells = React.useMemo(() => {
+   155→    if (!debouncedSearch.trim()) return dailySells
+   156→    const q = debouncedSearch.toLowerCase()
+   157→    return dailySells.filter((item: any) =>
+   158→      ['date', 'customerName', 'address', 'contactNumber', 'product', 'remarks'].some((f) =>
+   159→        String((item as any)[f] ?? '').toLowerCase().includes(q)
+   160→      )
+   161→    )
+   162→  }, [dailySells, debouncedSearch])
+   163→
+   164→  React.useEffect(() => {
+   165→    fetchData()
+   166→  }, [fetchData])
+   167→
+   168→  // ── Selection handlers ─────────────────────────────────────────────
+   169→  const toggleSelect = (id: string) => {
+   170→    setSelectedIds((prev) => {
+   171→      const next = new Set(prev)
+   172→      if (next.has(id)) next.delete(id)
+   173→      else next.add(id)
+   174→      return next
+   175→    })
+   176→  }
+   177→
+   178→  const toggleSelectAll = () => {
+   179→    setSelectedIds((prev) => {
+   180→      if (prev.size === filteredDailySells.length && filteredDailySells.length > 0) {
+   181→        return new Set()
+   182→      }
+   183→      return new Set(filteredDailySells.map((s) => s.id))
+   184→    })
+   185→  }
+   186→
+   187→  const clearSelection = () => setSelectedIds(new Set())
+   188→
+   189→  // ── Bulk delete selected ───────────────────────────────────────────
+   190→  const handleBulkDelete = async () => {
+   191→    const ids = Array.from(selectedIds)
+   192→    if (ids.length === 0) return
+   193→    setBulkDeleting(true)
+   194→    try {
+   195→      const res = await api.bulkDeleteDailySells(ids)
+   196→      toast({
+   197→        title: 'Success',
+   198→        description: `${res.deletedCount} of ${ids.length} daily sell entr${res.deletedCount === 1 ? 'y' : 'ies'} deleted`,
+   199→      })
+   200→      setBulkDeleteOpen(false)
+   201→      clearSelection()
+   202→      fetchData()
+   203→    } catch (err) {
+   204→      toast({
+   205→        title: 'Error',
+   206→        description: err instanceof Error ? err.message : 'Failed to delete selected daily sell entries',
+   207→        variant: 'destructive',
+   208→      })
+   209→    } finally {
+   210→      setBulkDeleting(false)
+   211→    }
+   212→  }
+   213→
+   214→  // ── Delete ALL ─────────────────────────────────────────────────────
+   215→  const handleDeleteAll = async () => {
+   216→    setDeletingAll(true)
+   217→    try {
+   218→      const res = await api.deleteAllDailySells()
+   219→      toast({
+   220→        title: 'Success',
+   221→        description: `${res.deletedCount} daily sell entr${res.deletedCount === 1 ? 'y' : 'ies'} deleted`,
+   222→      })
+   223→      setDeleteAllOpen(false)
+   224→      clearSelection()
+   225→      fetchData()
+   226→    } catch (err) {
+   227→      toast({
+   228→        title: 'Error',
+   229→        description: err instanceof Error ? err.message : 'Failed to delete all daily sell entries',
+   230→        variant: 'destructive',
+   231→      })
+   232→    } finally {
+   233→      setDeletingAll(false)
+   234→    }
+   235→  }
+   236→
+   237→  const openAddDialog = () => {
+   238→    setEditingItem(null)
+   239→    // Check for pending AI result from chat widget — auto-fill if present
+   240→    const pending = consumePendingAiResult('dailySell')
+   241→    if (pending) {
+   242→      setFormData({
+   243→        date: String(pending.date || ''),
+   244→        customerName: String(pending.customerName || ''),
+   245→        address: String(pending.address || ''),
+   246→        contactNumber: String(pending.contactNumber || ''),
+   247→        product: String(pending.product || ''),
+   248→        amount: pending.amount != null ? String(pending.amount) : '',
+   249→        remarks: String(pending.remarks || ''),
+   250→      })
+   251→      toast({ title: 'AI auto-fill applied', description: 'Edit & verify before saving.' })
+   252→    } else {
+   253→      setFormData(emptyForm)
+   254→    }
+   255→    setFormOpen(true)
+   256→  }
+   257→
+   258→  const openEditDialog = (item: DailySell) => {
+   259→    setEditingItem(item)
+   260→    setFormData({
+   261→      date: item.date ? item.date.split('T')[0] : '',
+   262→      customerName: item.customerName || '',
+   263→      address: item.address || '',
+   264→      contactNumber: item.contactNumber || '',
+   265→      product: item.product || '',
+   266→      amount: String(item.amount || ''),
+   267→      remarks: item.remarks || '',
+   268→    })
+   269→    setFormOpen(true)
+   270→  }
+   271→
+   272→  const handleFormChange = (field: keyof DailySellFormData, value: string) => {
+   273→    setFormData((prev) => ({ ...prev, [field]: value }))
+   274→  }
+   275→
+   276→  const handleSubmit = async () => {
+   277→    // Unified empty-form check — show ONE popup instead of cascading errors
+   278→    if (isFormEmpty([formData.date, formData.customerName, formData.address, formData.contactNumber, formData.product, formData.amount, formData.remarks])) {
+   279→      toast(showPleaseFillDataToast())
+   280→      return
+   281→    }
+   282→    if (!formData.date) {
+   283→      toast({ title: 'Validation Error', description: 'Date is required', variant: 'destructive' })
+   284→      return
+   285→    }
+   286→    if (!formData.customerName.trim()) {
+   287→      toast({ title: 'Validation Error', description: 'Customer name is required', variant: 'destructive' })
+   288→      return
+   289→    }
+   290→
+   291→    setFormSubmitting(true)
+   292→    try {
+   293→      const payload = {
+   294→        date: formData.date,
+   295→        customerName: formData.customerName.trim(),
+   296→        address: formData.address.trim(),
+   297→        contactNumber: formData.contactNumber.trim(),
+   298→        product: formData.product.trim(),
+   299→        amount: Number(formData.amount) || 0,
+   300→        remarks: formData.remarks.trim(),
+   301→      }
+   302→
+   303→      if (editingItem) {
+   304→        await api.updateDailySell(editingItem.id, payload)
+   305→        toast({ title: 'Success', description: 'Daily sell entry updated successfully' })
+   306→      } else {
+   307→        await api.createDailySell(payload)
+   308→        toast({ title: 'Success', description: 'Daily sell entry created successfully' })
+   309→      }
+   310→
+   311→      setFormOpen(false)
+   312→      setFormData(emptyForm)
+   313→      setEditingItem(null)
+   314→      fetchData()
+   315→    } catch (err) {
+   316→      toast({
+   317→        title: 'Error',
+   318→        description: err instanceof Error ? err.message : 'Failed to save daily sell entry',
+   319→        variant: 'destructive',
+   320→      })
+   321→    } finally {
+   322→      setFormSubmitting(false)
+   323→    }
+   324→  }
+   325→
+   326→  const handleDelete = async () => {
+   327→    if (!deleteTarget) return
+   328→    setDeleting(true)
+   329→    try {
+   330→      await api.deleteDailySell(deleteTarget.id)
+   331→      toast({ title: 'Success', description: 'Daily sell entry deleted successfully' })
+   332→      setDeleteTarget(null)
+   333→      fetchData()
+   334→    } catch (err) {
+   335→      toast({
+   336→        title: 'Error',
+   337→        description: err instanceof Error ? err.message : 'Failed to delete daily sell entry',
+   338→        variant: 'destructive',
+   339→      })
+   340→    } finally {
+   341→      setDeleting(false)
+   342→    }
+   343→  }
+   344→
+   345→  const totalAmount = dailySells.reduce((sum, s) => sum + (s.amount || 0), 0)
+   346→
+   347→  const renderSkeletons = () =>
+   348→    Array.from({ length: 5 }).map((_, i) => (
+   349→      <TableRow key={i}>
+   350→        <TableCell><Skeleton className="h-4 w-6" /></TableCell>
+   351→        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+   352→        <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+   353→        <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+   354→        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+   355→        <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+   356→        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+   357→        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+   358→        <TableCell><Skeleton className="h-8 w-20" /></TableCell>
+   359→      </TableRow>
+   360→    ))
+   361→
+   362→  return (
+   363→    <div className="space-y-6 relative">
+   364→      {/* Full-screen loading overlay shown during any delete operation.
+   365→          Mirrors the Production module pattern so the user always sees
+   366→          that something is happening. */}
+   367→      {(deleting || deletingAll || bulkDeleting) && (
+   368→        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+   369→          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl p-8 flex flex-col items-center gap-4 min-w-[280px]">
+   370→            <Loader2 className="size-12 animate-spin text-emerald-600" />
+   371→            <div className="text-center">
+   372→              <p className="text-lg font-semibold">
+   373→                {bulkDeleting
+   374→                  ? `Deleting ${selectedIds.size} entries...`
+   375→                  : deletingAll
+   376→                  ? 'Deleting all entries...'
+   377→                  : 'Deleting entry...'}
+   378→              </p>
+   379→              <p className="text-sm text-muted-foreground mt-1">
+   380→                Please wait while records are removed.
+   381→              </p>
+   382→            </div>
+   383→          </div>
+   384→        </div>
+   385→      )}
+   386→
+   387→      {/* Header */}
+   388→      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   389→        <div className="flex items-center gap-3">
+   390→          <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+   391→            <ShoppingCart className="size-5" />
+   392→          </div>
+   393→          <div>
+   394→            <h2 className="text-2xl font-bold tracking-tight">Daily Sell</h2>
+   395→            <p className="text-sm text-muted-foreground">
+   396→              Track daily sales transactions
+   397→            </p>
+   398→          </div>
+   399→        </div>
+   400→        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+   401→          <Button
+   402→            variant="outline"
+   403→            onClick={() => setImportOpen(true)}
+   404→            className="w-full sm:w-auto"
+   405→          >
+   406→            <Upload className="size-4 mr-2" />
+   407→            Import Excel
+   408→          </Button>
+   409→          {/* Bulk-delete button — only visible when at least one row is
+   410→              selected. Clicking it opens the confirmation dialog below. */}
+   411→          {selectedIds.size > 0 && (
+   412→            <Button
+   413→              variant="outline"
+   414→              onClick={() => setBulkDeleteOpen(true)}
+   415→              disabled={bulkDeleting || loading}
+   416→              className="w-full sm:w-auto text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+   417→            >
+   418→              <Trash2 className="size-4 mr-2" />
+   419→              Delete Selected
+   420→              <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">
+   421→                {selectedIds.size}
+   422→              </Badge>
+   423→            </Button>
+   424→          )}
+   425→          {/* Clear-selection button — small, ghost-styled, only visible when rows are selected */}
+   426→          {selectedIds.size > 0 && (
+   427→            <Button
+   428→              variant="ghost"
+   429→              onClick={clearSelection}
+   430→              disabled={bulkDeleting}
+   431→              className="w-full sm:w-auto"
+   432→            >
+   433→              Clear Selection
+   434→            </Button>
+   435→          )}
+   436→          <Button
+   437→            variant="outline"
+   438→            onClick={() => setDeleteAllOpen(true)}
+   439→            disabled={dailySells.length === 0 || loading}
+   440→            className="w-full sm:w-auto text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+   441→          >
+   442→            <Trash className="size-4 mr-2" />
+   443→            Delete All
+   444→          </Button>
+   445→          <Button
+   446→            onClick={openAddDialog}
+   447→            className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
+   448→          >
+   449→            <Plus className="size-4" />
+   450→            Add Daily Sell
+   451→          </Button>
+   452→        </div>
+   453→      </div>
+   454→
+   455→      {/* Summary */}
+   456→      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   457→        <Card className="border-l-4 border-l-emerald-500">
+   458→          <CardContent className="p-4">
+   459→            <p className="text-xs text-muted-foreground">Total Sales</p>
+   460→            {loading ? (
+   461→              <Skeleton className="h-6 w-32 mt-1" />
+   462→            ) : (
+   463→              <p className="text-xl font-bold text-emerald-700">{formatCurrency(totalAmount)}</p>
+   464→            )}
+   465→          </CardContent>
+   466→        </Card>
+   467→        <Card className="border-l-4 border-l-amber-500">
+   468→          <CardContent className="p-4">
+   469→            <p className="text-xs text-muted-foreground">Total Records</p>
+   470→            {loading ? (
+   471→              <Skeleton className="h-6 w-16 mt-1" />
+   472→            ) : (
+   473→              <p className="text-xl font-bold text-amber-700">{dailySells.length}</p>
+   474→            )}
+   475→          </CardContent>
+   476→        </Card>
+   477→      </div>
+   478→
+   479→      {/* Search */}
+   480→      <Card>
+   481→        <CardContent className="pt-6">
+   482→          <div className="relative">
+   483→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   484→            <Input
+   485→              placeholder="Search across all fields (date, name, remarks, etc.)..."
+   486→              value={search}
+   487→              onChange={(e) => setSearch(e.target.value)}
+   488→              className="pl-9"
+   489→            />
+   490→          </div>
+   491→        </CardContent>
+   492→      </Card>
+   493→
+   494→      {/* Table */}
+   495→      <Card>
+   496→        <CardHeader>
+   497→          <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
+   498→            <span>Daily Sell Records</span>
+   499→            <div className="flex items-center gap-2 flex-wrap">
+   500→              {selectedIds.size > 0 && (
+   501→                <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/30">
+   502→                  {selectedIds.size} selected
+   503→                </Badge>
+   504→              )}
+   505→              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+   506→                {filteredDailySells.length} of {dailySells.length} record{dailySells.length !== 1 ? 's' : ''}
+   507→              </Badge>
+   508→            </div>
+   509→          </CardTitle>
+   510→        </CardHeader>
+   511→        <CardContent>
+   512→          <ScrollableTable maxHeight="max-h-[60vh]">
+   513→            <Table>
+   514→              <TableHeader>
+   515→                <TableRow>
+   516→                  <TableHead className="w-10 sticky left-0 bg-background z-20">
+   517→                    <Checkbox
+   518→                      checked={
+   519→                        filteredDailySells.length > 0 &&
+   520→                        selectedIds.size === filteredDailySells.length
+   521→                      }
+   522→                      onCheckedChange={toggleSelectAll}
+   523→                      aria-label="Select all rows"
+   524→                    />
+   525→                  </TableHead>
+   526→                  <TableHead className="sticky left-10 bg-background z-20">Date</TableHead>
+   527→                  <TableHead>Customer Name</TableHead>
+   528→                  <TableHead>Address</TableHead>
+   529→                  <TableHead>Contact Number</TableHead>
+   530→                  <TableHead>Product</TableHead>
+   531→                  <TableHead className="text-right whitespace-nowrap">Amount (₹)</TableHead>
+   532→                  <TableHead>Remarks</TableHead>
+   533→                  <TableHead className="text-right">Actions</TableHead>
+   534→                </TableRow>
+   535→              </TableHeader>
+   536→              <TableBody>
+   537→                {loading ? (
+   538→                  renderSkeletons()
+   539→                ) : filteredDailySells.length === 0 ? (
+   540→                  <TableRow>
+   541→                    <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
+   542→                      No daily sell entries yet. Click &quot;Add Daily Sell&quot; to get started.
+   543→                    </TableCell>
+   544→                  </TableRow>
+   545→                ) : (
+   546→                  filteredDailySells.map((item) => (
+   547→                    <TableRow
+   548→                      key={item.id}
+   549→                      data-state={selectedIds.has(item.id) ? 'selected' : undefined}
+   550→                      className={selectedIds.has(item.id) ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}
+   551→                    >
+   552→                      <TableCell className="w-10 sticky left-0 bg-background z-10">
+   553→                        <Checkbox
+   554→                          checked={selectedIds.has(item.id)}
+   555→                          onCheckedChange={() => toggleSelect(item.id)}
+   556→                          aria-label={`Select row for ${item.customerName}`}
+   557→                        />
+   558→                      </TableCell>
+   559→                      <TableCell className="font-medium whitespace-nowrap sticky left-10 bg-background z-10">
+   560→                        {formatDate(item.date)}
+   561→                      </TableCell>
+   562→                      <TableCell className="font-medium whitespace-nowrap">{item.customerName}</TableCell>
+   563→                      <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.address || '—'}</TableCell>
+   564→                      <TableCell className="whitespace-nowrap">{item.contactNumber || '—'}</TableCell>
+   565→                      <TableCell className="max-w-[150px] truncate">{item.product || '—'}</TableCell>
+   566→                      <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">{formatCurrency(item.amount)}</TableCell>
+   567→                      <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.remarks || '—'}</TableCell>
+   568→                      <TableCell className="text-right">
+   569→                        <div className="flex items-center justify-end gap-1">
+   570→                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} title="Edit">
+   571→                            <Pencil className="size-4" />
+   572→                          </Button>
+   573→                          <Button
+   574→                            variant="ghost"
+   575→                            size="icon"
+   576→                            onClick={() => setDeleteTarget(item)}
+   577→                            title="Delete"
+   578→                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+   579→                          >
+   580→                            <Trash2 className="size-4" />
+   581→                          </Button>
+   582→                        </div>
+   583→                      </TableCell>
+   584→                    </TableRow>
+   585→                  ))
+   586→                )}
+   587→              </TableBody>
+   588→            </Table>
+   589→          </ScrollableTable>
+   590→        </CardContent>
+   591→      </Card>
+   592→
+   593→      {/* Add/Edit Dialog */}
+   594→      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+   595→        <DialogContent className="sm:max-w-md">
+   596→          <DialogHeader>
+   597→            <DialogTitle>{editingItem ? 'Edit Daily Sell' : 'Add Daily Sell'}</DialogTitle>
+   598→            <DialogDescription>
+   599→              {editingItem ? 'Update the daily sell entry details.' : 'Fill in the details to create a new daily sell entry.'}
+   600→            </DialogDescription>
+   601→          </DialogHeader>
+   602→          {!editingItem && (
+   603→            <div className="flex justify-end">
+   604→              <AiFillButton
+   605→                module="dailySell"
+   606→                onApply={(fields) => setFormData((prev) => ({
+   607→                  date: fields.date != null ? String(fields.date) : prev.date,
+   608→                  customerName: fields.customerName != null ? String(fields.customerName) : prev.customerName,
+   609→                  address: fields.address != null ? String(fields.address) : prev.address,
+   610→                  contactNumber: fields.contactNumber != null ? String(fields.contactNumber) : prev.contactNumber,
+   611→                  product: fields.product != null ? String(fields.product) : prev.product,
+   612→                  amount: fields.amount != null ? String(fields.amount) : prev.amount,
+   613→                  remarks: fields.remarks != null ? String(fields.remarks) : prev.remarks,
+   614→                }))}
+   615→              />
+   616→            </div>
+   617→          )}
+   618→          <div className="grid gap-4 py-2">
+   619→            <div className="grid gap-2">
+   620→              <Label htmlFor="ds-date">Date <span className="text-destructive">*</span></Label>
+   621→              <Input id="ds-date" type="date" value={formData.date} onChange={(e) => handleFormChange('date', e.target.value)} />
+   622→            </div>
+   623→            <div className="grid gap-2">
+   624→              <Label htmlFor="ds-customer">Customer Name <span className="text-destructive">*</span></Label>
+   625→              <div className="relative">
+   626→                <Input id="ds-customer" placeholder="Enter customer name" value={formData.customerName} onChange={(e) => handleFormChange('customerName', e.target.value)} className="pr-9" />
+   627→                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+   628→                  <FieldVoiceInput fieldLabel="customer name" onChange={(text) => handleFormChange('customerName', text)} />
+   629→                </div>
+   630→              </div>
+   631→            </div>
+   632→            <div className="grid gap-2">
+   633→              <Label htmlFor="ds-address">Address</Label>
+   634→              <div className="relative">
+   635→                <Input id="ds-address" placeholder="Enter address" value={formData.address} onChange={(e) => handleFormChange('address', e.target.value)} className="pr-9" />
+   636→                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+   637→                  <FieldVoiceInput fieldLabel="address" onChange={(text) => handleFormChange('address', text)} />
+   638→                </div>
+   639→              </div>
+   640→            </div>
+   641→            <div className="grid gap-2">
+   642→              <Label htmlFor="ds-contact">Contact Number</Label>
+   643→              <div className="relative">
+   644→                <Input id="ds-contact" placeholder="Enter contact number" value={formData.contactNumber} onChange={(e) => handleFormChange('contactNumber', e.target.value)} className="pr-9" />
+   645→                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+   646→                  <FieldVoiceInput fieldLabel="contact number" onChange={(text) => handleFormChange('contactNumber', text.replace(/[^0-9+\-\s]/g, '').trim())} />
+   647→                </div>
+   648→              </div>
+   649→            </div>
+   650→            <div className="grid gap-2">
+   651→              <Label htmlFor="ds-product">Product</Label>
+   652→              <div className="relative">
+   653→                <Input id="ds-product" placeholder="Enter product name" value={formData.product} onChange={(e) => handleFormChange('product', e.target.value)} className="pr-9" />
+   654→                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+   655→                  <FieldVoiceInput fieldLabel="product" onChange={(text) => handleFormChange('product', text)} />
+   656→                </div>
+   657→              </div>
+   658→            </div>
+   659→            <div className="grid gap-2">
+   660→              <Label htmlFor="ds-amount">Amount (₹)</Label>
+   661→              <div className="relative">
+   662→                <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   663→                <Input id="ds-amount" type="number" min="0" placeholder="0" className="pl-9 pr-9" value={formData.amount} onChange={(e) => handleFormChange('amount', e.target.value)} />
+   664→                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+   665→                  <FieldVoiceInput fieldLabel="amount" onChange={(text) => handleFormChange('amount', text.replace(/[^0-9.]/g, ''))} />
+   666→                </div>
+   667→              </div>
+   668→            </div>
+   669→            <div className="grid gap-2">
+   670→              <Label htmlFor="ds-remarks">Remarks</Label>
+   671→              <div className="relative">
+   672→                <Textarea id="ds-remarks" placeholder="Optional remarks..." value={formData.remarks} onChange={(e) => handleFormChange('remarks', e.target.value)} className="min-h-[80px] pr-9" />
+   673→                <div className="absolute right-1.5 top-2">
+   674→                  <FieldVoiceInput fieldLabel="remarks" onChange={(text) => handleFormChange('remarks', text)} />
+   675→                </div>
+   676→              </div>
+   677→            </div>
+   678→          </div>
+   679→          <DialogFooter>
+   680→            <Button variant="outline" onClick={() => setFormOpen(false)} disabled={formSubmitting}>Cancel</Button>
+   681→            <Button onClick={handleSubmit} disabled={formSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+   682→              {formSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+   683→              {editingItem ? 'Update Entry' : 'Create Entry'}
+   684→            </Button>
+   685→          </DialogFooter>
+   686→        </DialogContent>
+   687→      </Dialog>
+   688→
+   689→      {/* Delete single confirmation */}
+   690→      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+   691→        <AlertDialogContent>
+   692→          <AlertDialogHeader>
+   693→            <AlertDialogTitle>Delete Daily Sell Entry</AlertDialogTitle>
+   694→            <AlertDialogDescription>
+   695→              Are you sure you want to delete this daily sell entry? This action cannot be undone.
+   696→            </AlertDialogDescription>
+   697→          </AlertDialogHeader>
+   698→          <AlertDialogFooter>
+   699→            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+   700→            <AlertDialogAction onClick={handleDelete} disabled={deleting} className="bg-destructive text-white hover:bg-destructive/90">
+   701→              {deleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+   702→              Delete
+   703→            </AlertDialogAction>
+   704→          </AlertDialogFooter>
+   705→        </AlertDialogContent>
+   706→      </AlertDialog>
+   707→
+   708→      {/* Delete All confirmation — simple Yes / No dialog (mirrors Production) */}
+   709→      <AlertDialog open={deleteAllOpen} onOpenChange={(open) => {
+   710→        if (!open && !deletingAll) setDeleteAllOpen(false)
+   711→      }}>
+   712→        <AlertDialogContent className="max-w-md">
+   713→          <AlertDialogHeader>
+   714→            <AlertDialogTitle className="text-destructive">Delete ALL Daily Sell Entries?</AlertDialogTitle>
+   715→            <AlertDialogDescription className="space-y-2 text-sm">
+   716→              <span className="block">
+   717→                You are about to permanently delete{' '}
+   718→                <strong className="text-destructive">all daily sell entries</strong>.
+   719→                This action <strong>cannot be undone</strong>.
+   720→              </span>
+   721→              <span className="block text-muted-foreground">
+   722→                All {dailySells.length} record{dailySells.length !== 1 ? 's' : ''} will be removed.
+   723→                Customer, Production, Order, Payment, and Dispatch records are NOT affected.
+   724→              </span>
+   725→            </AlertDialogDescription>
+   726→          </AlertDialogHeader>
+   727→          <AlertDialogFooter>
+   728→            <AlertDialogCancel disabled={deletingAll} className="border-border">
+   729→              No, Cancel
+   730→            </AlertDialogCancel>
+   731→            <AlertDialogAction
+   732→              onClick={handleDeleteAll}
+   733→              disabled={deletingAll}
+   734→              className="bg-destructive text-white hover:bg-destructive/90"
+   735→            >
+   736→              {deletingAll && <Loader2 className="mr-2 size-4 animate-spin" />}
+   737→              Yes, Delete All
+   738→            </AlertDialogAction>
+   739→          </AlertDialogFooter>
+   740→        </AlertDialogContent>
+   741→      </AlertDialog>
+   742→
+   743→      {/* Bulk Delete Selected confirmation */}
+   744→      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => {
+   745→        if (!open && !bulkDeleting) setBulkDeleteOpen(false)
+   746→      }}>
+   747→        <AlertDialogContent>
+   748→          <AlertDialogHeader>
+   749→            <AlertDialogTitle className="text-destructive">
+   750→              Delete {selectedIds.size} Selected Daily Sell {selectedIds.size === 1 ? 'Entry' : 'Entries'}?
+   751→            </AlertDialogTitle>
+   752→            <AlertDialogDescription>
+   753→              You are about to permanently delete{' '}
+   754→              <strong className="text-destructive">{selectedIds.size}</strong>{' '}
+   755→              daily sell {selectedIds.size === 1 ? 'entry' : 'entries'}.
+   756→              This action <strong>cannot be undone</strong>.
+   757→            </AlertDialogDescription>
+   758→          </AlertDialogHeader>
+   759→          <AlertDialogFooter>
+   760→            <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+   761→            <AlertDialogAction
+   762→              onClick={handleBulkDelete}
+   763→              disabled={bulkDeleting}
+   764→              className="bg-destructive text-white hover:bg-destructive/90"
+   765→            >
+   766→              {bulkDeleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+   767→              Delete Selected
+   768→            </AlertDialogAction>
+   769→          </AlertDialogFooter>
+   770→        </AlertDialogContent>
+   771→      </AlertDialog>
+   772→
+   773→      <ExcelImport module="dailySell" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchData} />
+   774→    </div>
+   775→  )
+   776→}
+   777→
+   778→export default DailySellModule
+   779→

@@ -56,6 +56,7 @@ export const AI_MODULE_SCHEMAS: AiModuleSchema[] = [
       { key: 'address', label: 'Address', type: 'string', aliases: ['address', 'pata', 'address', ' jagah', 'location'] },
       { key: 'contactNumber', label: 'Contact Number', type: 'phone', aliases: ['contact', 'mobile', 'phone', 'number', 'phone number', 'sampark'] },
       { key: 'product', label: 'Product', type: 'string', aliases: ['product', 'item', 'samagri', 'maal', 'cheez', 'brick', 'block', 'tile', 'cement'] },
+      { key: 'quantity', label: 'Quantity', type: 'number', aliases: ['quantity', 'qty', 'quantity sold', 'units', 'count', 'kitne', 'kitna', 'samagri sankhya'] },
       { key: 'amount', label: 'Amount (₹)', type: 'number', unit: '₹', aliases: ['amount', 'paisa', 'kimat', 'dam', 'rate', 'price', 'total', 'bill'], required: true },
       { key: 'remarks', label: 'Remarks', type: 'string', aliases: ['remarks', 'note', 'tippani', 'comment'] },
     ],

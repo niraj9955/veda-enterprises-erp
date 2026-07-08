@@ -13,6 +13,7 @@ const DAILY_SELL_FIELDS = [
   'address',
   'contactNumber',
   'product',
+  'quantity',
   'amount',
   'remarks',
 ] as const
@@ -49,7 +50,7 @@ export async function PUT(
     const updateData: Record<string, unknown> = {}
     for (const field of DAILY_SELL_FIELDS) {
       if (body[field] !== undefined) {
-        if (field === 'amount') {
+        if (field === 'amount' || field === 'quantity') {
           updateData[field] = Number(body[field])
         } else {
           updateData[field] = String(body[field])
