@@ -307,8 +307,8 @@ export function FieldVoiceInput({
 
       {/* Floating interim-text badge while listening */}
       {listening && interimText && (
-        <div className="absolute bottom-full right-0 mb-1 z-20 max-w-[200px] px-2 py-1 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[11px] shadow-lg whitespace-normal break-words pointer-events-none">
-          {interimText}
+        <div className="absolute bottom-full right-0 mb-1 z-30 w-[180px] max-w-[calc(100vw-2rem)] px-2 py-1 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[11px] shadow-lg break-words pointer-events-none overflow-hidden">
+          <span className="block line-clamp-3">{interimText}</span>
           <span className="ml-1 inline-block w-1 h-1 rounded-full bg-current animate-pulse align-middle" />
         </div>
       )}
