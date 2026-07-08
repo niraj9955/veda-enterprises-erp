@@ -1167,3 +1167,68 @@ Stage Summary:
 - Voice input uses Web Speech API (hi-IN) on Chrome/Edge; gracefully hidden on other browsers.
 - OpenAI key never exposed in API responses (masked). Only admins can change it.
 - All 11 production modules have schemas defined; only 4 high-traffic forms are wired up. The remaining 7 (labour, tractor, dust, cement, hardner, electricity, factory-stuff) can be wired in the same pattern by adding <AiFillButton module="..."> to their dialog and consumePendingAiResult() to openAddDialog.
+
+---
+Task ID: 15
+Agent: main
+Task: Apply #007BFF color to sidebar/navbar (replacing previous #4299E1/#3182CE blue)
+
+Work Log:
+- Read /home/z/my-project/src/components/erp/app-shell.tsx to understand the sidebar + top header structure
+- Found 3 places using the old blue (#4299E1 / #3182CE):
+  1. `sectionColors` map: each section's `activeItem` background (used for active sub-item pill)
+  2. Top items (Dashboard, Customers, Billing) active state gradient
+  3. Admin items (Admin Panel, Users, Settings) active state gradient
+  4. Floating "Show Sidebar" edge tab gradient + hover
+  5. Desktop sidebar toggle button in header (both visible/hidden variants)
+  6. Mobile menu toggle button in header
+  7. User avatar circle in header
+- Replaced all occurrences with `#007BFF` (primary) and `#0066D6` (gradient pair). Edge tab hover uses `#3395FF` for a lighter hover state.
+- Verified with `npx tsc --noEmit` — no new errors in modified files.
+- Verified with `npx next build` — ✓ Compiled successfully.
+- Dev server running on http://localhost:3000.
+
+Stage Summary:
+- Sidebar + top navbar now consistently use #007BFF (Tailwind `bg-[#007BFF]`) as the brand blue.
+- Active nav items, section header active pills, sidebar toggle, mobile menu button, edge tab, and user avatar all use #007BFF.
+- Dark slate sidebar background (#2D3748 → #1F2733) is preserved — only the accent blue changed.
+- Modified file: /home/z/my-project/src/components/erp/app-shell.tsx
+
+---
+Task ID: 16
+Agent: main
+Task: Fix mic reliability + add "Please fill the Data" popup for all manual entry forms
+
+Work Log:
+- Investigated mic issue: root cause = browsers only allow ONE active SpeechRecognition session at a time. With 4-6 FieldVoiceInput instances per form + the AI chat widget's VoiceInput, clicking any one mic could be silently killed by Chrome if another was somehow still active (or in shutdown grace period).
+- Created /home/z/my-project/src/components/ui/voice-active-controller.ts — a shared singleton `ActiveVoiceController` with `takeOver(id, stopFn)`, `release(id)`, `stopAll()` methods. Only ONE mic can be active at any time across the whole app.
+- Refactored /home/z/my-project/src/components/ui/field-voice-input.tsx to use the shared controller via `activeVoiceControllerLike`. Each instance gets a stable unique id. On `toggle` (start), it calls `takeOver` — if another mic is active, it gets force-stopped first. On stop/unmount, calls `release`.
+- Refactored /home/z/my-project/src/components/ui/voice-input.tsx (used by AiFillDialog + AiChatWidget) to use the same shared controller. So per-field mic, AI fill dialog mic, and AI chat widget mic ALL coordinate through one singleton.
+- Exported `stopAllFieldVoiceInputs()` and `stopAllVoiceInputs()` helpers for use on dialog close / route change (future-proofing).
+- Created /home/z/my-project/src/lib/form-validation.ts with:
+  • `isFormEmpty(values, options)` — returns true if EVERY value is blank/whitespace/null/undefined
+  • `showPleaseFillDataToast()` — returns the unified toast payload `{ title: 'Please fill the Data', description: 'Enter at least one field before saving.', variant: 'destructive' }`
+- Added the unified "Please fill the Data" check at the TOP of handleSubmit in:
+  • labour-payment-module.tsx
+  • customer-payment-module.tsx
+  (Remaining modules — production, customer, daily-sell, hardner, electricity, factory-stuff, dust-purchase, cement-purchase, tractor-payment, stock, expense, dispatch, order, bill, payment, user-management — still need the same pattern applied. Stopping here because the user's follow-up message asked for sidebar color change, which has been completed.)
+
+Stage Summary:
+- Mic reliability fix is global: ANY mic click in the app now first stops any other active mic, so users can confidently click mic after mic without Chrome silently killing one of them.
+- Two modules (labour-payment, customer-payment) now show ONE unified "Please fill the Data" toast when the user clicks Create on an empty form, instead of cascading per-field errors.
+- The remaining 14 modules' handleSubmit still need the same 5-line patch applied. Pattern is:
+  1. Add import: `import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'`
+  2. At top of handleSubmit, before any other check, add:
+     ```ts
+     if (isFormEmpty([formData.field1, formData.field2, ...])) {
+       toast(showPleaseFillDataToast())
+       return
+     }
+     ```
+- Modified files:
+  • /home/z/my-project/src/components/ui/voice-active-controller.ts (NEW)
+  • /home/z/my-project/src/components/ui/field-voice-input.tsx (refactored)
+  • /home/z/my-project/src/components/ui/voice-input.tsx (refactored)
+  • /home/z/my-project/src/lib/form-validation.ts (NEW)
+  • /home/z/my-project/src/components/erp/labour-payment-module.tsx (added check)
+  • /home/z/my-project/src/components/erp/customer-payment-module.tsx (added check)

@@ -149,7 +149,7 @@ const sectionColors: Record<string, {
     headerHover: 'hover:bg-white/10',
     iconBg: 'bg-emerald-400/30',
     iconText: 'text-emerald-50',
-    activeItem: 'bg-[#4299E1]',
+    activeItem: 'bg-[#007BFF]',
     activeItemText: 'text-white',
     border: 'border-white/15',
   },
@@ -159,7 +159,7 @@ const sectionColors: Record<string, {
     headerHover: 'hover:bg-white/10',
     iconBg: 'bg-blue-400/30',
     iconText: 'text-blue-50',
-    activeItem: 'bg-[#4299E1]',
+    activeItem: 'bg-[#007BFF]',
     activeItemText: 'text-white',
     border: 'border-white/15',
   },
@@ -169,7 +169,7 @@ const sectionColors: Record<string, {
     headerHover: 'hover:bg-white/10',
     iconBg: 'bg-amber-400/30',
     iconText: 'text-amber-50',
-    activeItem: 'bg-[#4299E1]',
+    activeItem: 'bg-[#007BFF]',
     activeItemText: 'text-white',
     border: 'border-white/15',
   },
@@ -179,7 +179,7 @@ const sectionColors: Record<string, {
     headerHover: 'hover:bg-white/10',
     iconBg: 'bg-purple-400/30',
     iconText: 'text-purple-50',
-    activeItem: 'bg-[#4299E1]',
+    activeItem: 'bg-[#007BFF]',
     activeItemText: 'text-white',
     border: 'border-white/15',
   },
@@ -189,7 +189,7 @@ const sectionColors: Record<string, {
     headerHover: 'hover:bg-white/10',
     iconBg: 'bg-rose-400/30',
     iconText: 'text-rose-50',
-    activeItem: 'bg-[#4299E1]',
+    activeItem: 'bg-[#007BFF]',
     activeItemText: 'text-white',
     border: 'border-white/15',
   },
@@ -258,7 +258,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                 activeModule === item.key
-                  ? 'bg-gradient-to-r from-[#4299E1] to-[#3182CE] text-white shadow-md ring-1 ring-white/20'
+                  ? 'bg-gradient-to-r from-[#007BFF] to-[#0066D6] text-white shadow-md ring-1 ring-white/20'
                   : 'text-slate-300 hover:bg-white/10 hover:text-white'
               )}
             >
@@ -347,7 +347,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                 activeModule === item.key
-                  ? 'bg-gradient-to-r from-[#4299E1] to-[#3182CE] text-white shadow-md ring-1 ring-white/20'
+                  ? 'bg-gradient-to-r from-[#007BFF] to-[#0066D6] text-white shadow-md ring-1 ring-white/20'
                   : 'text-slate-300 hover:bg-white/10 hover:text-white'
               )}
             >
@@ -407,7 +407,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {!sidebarVisible && (
         <button
           onClick={() => setSidebarVisible(true)}
-          className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-30 items-center justify-center w-7 h-20 bg-gradient-to-r from-[#2D3748] to-[#3182CE] text-white rounded-r-xl shadow-2xl ring-1 ring-black/30 hover:w-9 hover:from-[#3182CE] hover:to-[#4299E1] transition-all duration-300 group"
+          className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-30 items-center justify-center w-7 h-20 bg-gradient-to-r from-[#2D3748] to-[#007BFF] text-white rounded-r-xl shadow-2xl ring-1 ring-black/30 hover:w-9 hover:from-[#007BFF] hover:to-[#3395FF] transition-all duration-300 group"
           title="Show sidebar"
           aria-label="Show sidebar"
         >
@@ -429,8 +429,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               'group relative hidden md:flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300 shrink-0',
               'bg-gradient-to-br shadow-md ring-1',
               sidebarVisible
-                ? 'from-[#4299E1] to-[#3182CE] ring-white/25 hover:from-[#3182CE] hover:to-[#4299E1] shadow-blue-900/30'
-                : 'from-[#4299E1] to-[#3182CE] ring-white/25 hover:from-[#3182CE] hover:to-[#4299E1] shadow-blue-900/30'
+                ? 'from-[#007BFF] to-[#0066D6] ring-white/25 hover:from-[#0066D6] hover:to-[#007BFF] shadow-blue-900/30'
+                : 'from-[#007BFF] to-[#0066D6] ring-white/25 hover:from-[#0066D6] hover:to-[#007BFF] shadow-blue-900/30'
             )}
             title={sidebarVisible ? 'Hide menu' : 'Show menu'}
             aria-label={sidebarVisible ? 'Hide menu' : 'Show menu'}
@@ -448,7 +448,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <Sheet>
             <SheetTrigger asChild>
               <button
-                className="md:hidden group relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-[#4299E1] to-[#3182CE] ring-1 ring-white/25 shadow-md hover:from-[#3182CE] hover:to-[#4299E1] transition-all duration-300 shrink-0"
+                className="md:hidden group relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-[#007BFF] to-[#0066D6] ring-1 ring-white/25 shadow-md hover:from-[#0066D6] hover:to-[#007BFF] transition-all duration-300 shrink-0"
                 title="Open menu"
                 aria-label="Open menu"
               >
@@ -468,7 +468,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-1.5">
             <ThemeToggle className="text-white hover:bg-white/15 hover:text-white" />
             <div className="hidden md:flex items-center gap-2 ml-1">
-              <div className="w-8 h-8 bg-gradient-to-br from-[#4299E1] to-[#3182CE] rounded-full flex items-center justify-center text-white font-semibold text-xs shadow-md ring-1 ring-white/30">
+              <div className="w-8 h-8 bg-gradient-to-br from-[#007BFF] to-[#0066D6] rounded-full flex items-center justify-center text-white font-semibold text-xs shadow-md ring-1 ring-white/30">
                 {user?.name?.charAt(0) || 'U'}
               </div>
               <div className="hidden lg:block">
