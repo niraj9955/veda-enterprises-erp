@@ -250,6 +250,12 @@ const PaymentSchema = new mongoose.Schema({
   // have billId = null.
   billId: { type: mongoose.Schema.Types.ObjectId, ref: 'Bill', default: null },
   billNumber: { type: String, default: '' },
+  // AUTO-SYNC linkage: every Payment in the Management → Payments module is
+  // mirrored into the Customer Payment module so the user sees ONE unified
+  // list of customer payments regardless of which side they entered it on.
+  // This field holds the _id of the mirrored CustomerPayment record (or null
+  // if no mirror has been created yet). Updated by /api/payments POST/PUT/DELETE.
+  customerPaymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'CustomerPayment', default: null },
 }, { timestamps: true });
 PaymentSchema.index({ customerId: 1 });
 PaymentSchema.index({ billId: 1 });

@@ -184,7 +184,7 @@ function TableSkeleton({ cols = 5 }: { cols?: number }) {
         <Skeleton className="h-9 w-32" />
         <Skeleton className="h-9 w-28" />
       </div>
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-x-auto max-h-[70vh] overflow-y-auto">
         <div className="p-4 space-y-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-10 w-full" />
@@ -283,7 +283,7 @@ function SalesReport() {
         <SummaryCard title="Avg. per Dispatch" value={data.length ? formatCurrency(totalSales / data.length) : '₹0'} icon={TrendingUp} />
       </div>
 
-      <div className="flex gap-2 print:hidden">
+      <div className="flex flex-wrap gap-2 print:hidden">
         <Button
           onClick={handleExportCSV}
           className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -303,7 +303,7 @@ function SalesReport() {
         </Button>
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-x-auto max-h-[70vh] overflow-y-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-emerald-50/50 dark:bg-emerald-900/10">
@@ -412,7 +412,7 @@ function ProductionReport() {
         <SummaryCard title="Brick Types" value={String(Object.keys(byBrickType).length)} icon={Package} />
       </div>
 
-      <div className="flex gap-2 print:hidden">
+      <div className="flex flex-wrap gap-2 print:hidden">
         <Button
           onClick={handleExportCSV}
           className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -432,7 +432,7 @@ function ProductionReport() {
         </Button>
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-x-auto max-h-[70vh] overflow-y-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-emerald-50/50 dark:bg-emerald-900/10">
@@ -613,7 +613,7 @@ function CustomerLedgerReport() {
         />
       </div>
 
-      <div className="flex gap-2 print:hidden">
+      <div className="flex flex-wrap gap-2 print:hidden">
         <Button
           onClick={handleExportCSV}
           className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -633,7 +633,7 @@ function CustomerLedgerReport() {
         </Button>
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-x-auto max-h-[70vh] overflow-y-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-emerald-50/50 dark:bg-emerald-900/10">
@@ -754,7 +754,7 @@ function StockReport() {
         />
       </div>
 
-      <div className="flex gap-2 print:hidden">
+      <div className="flex flex-wrap gap-2 print:hidden">
         <Button
           onClick={handleExportCSV}
           className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -774,7 +774,7 @@ function StockReport() {
         </Button>
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-x-auto max-h-[70vh] overflow-y-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-emerald-50/50 dark:bg-emerald-900/10">
@@ -898,7 +898,7 @@ function ProfitLossReport() {
         />
       </div>
 
-      <div className="flex gap-2 print:hidden">
+      <div className="flex flex-wrap gap-2 print:hidden">
         <Button
           onClick={handleExportCSV}
           className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -919,7 +919,7 @@ function ProfitLossReport() {
       </div>
 
       {/* Summary Table */}
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-x-auto max-h-[70vh] overflow-y-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-emerald-50/50 dark:bg-emerald-900/10">
@@ -967,7 +967,7 @@ function ProfitLossReport() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Expense Breakdown by Category</CardTitle>
           </CardHeader>
           <CardContent className="px-4">
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto max-h-[70vh] overflow-y-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1058,7 +1058,7 @@ function OutstandingReport() {
         />
       </div>
 
-      <div className="flex gap-2 print:hidden">
+      <div className="flex flex-wrap gap-2 print:hidden">
         <Button
           onClick={handleExportCSV}
           className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -1078,7 +1078,7 @@ function OutstandingReport() {
         </Button>
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-x-auto max-h-[70vh] overflow-y-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-emerald-50/50 dark:bg-emerald-900/10">

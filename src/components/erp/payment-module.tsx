@@ -529,7 +529,7 @@ export function PaymentModule() {
   // ── Render: Payment dialog ──────────────────────────────────────────────
   const renderPaymentDialog = () => (
     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {editingPayment ? 'Edit Payment' : 'Receive Payment'}
@@ -730,7 +730,7 @@ export function PaymentModule() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-col gap-2 sm:flex-row sm:w-auto">
           <Button
             variant="outline"
             onClick={() => setImportOpen(true)}
@@ -834,8 +834,8 @@ export function PaymentModule() {
                   <TableHead>Payment Type</TableHead>
                   <TableHead className="text-right">Amount (₹)</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead>Source</TableHead>
-                  <TableHead>Remarks</TableHead>
+                  <TableHead className="hidden sm:table-cell">Source</TableHead>
+                  <TableHead className="hidden md:table-cell">Remarks</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -861,7 +861,7 @@ export function PaymentModule() {
                       <TableCell className="whitespace-nowrap">
                         {formatDate(payment.date)}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
+                      <TableCell className="hidden sm:table-cell whitespace-nowrap">
                         {payment.billId ? (
                           <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800">
                             Bill {payment.billNumber || ''}
@@ -872,7 +872,7 @@ export function PaymentModule() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-muted-foreground">
+                      <TableCell className="hidden md:table-cell max-w-[200px] truncate text-muted-foreground">
                         {payment.remarks || '—'}
                       </TableCell>
                       <TableCell className="text-right">

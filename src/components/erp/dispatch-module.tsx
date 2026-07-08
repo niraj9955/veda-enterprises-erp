@@ -367,7 +367,7 @@ export function DispatchModule() {
   // ── Render: Create dispatch dialog ────────────────────────────────────
   const renderCreateDialog = () => (
     <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Truck className="size-5 text-emerald-600" />
@@ -529,7 +529,7 @@ export function DispatchModule() {
 
     return (
       <Dialog open={!!challanDispatch} onOpenChange={(open) => !open && setChallanDispatch(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto print:max-w-none print:max-h-none print:p-0 print:shadow-none print:border-none">
+        <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto print:max-w-none print:max-h-none print:p-0 print:shadow-none print:border-none">
           {/* Screen-only close button header */}
           <DialogHeader className="print:hidden">
             <DialogTitle className="flex items-center gap-2">
@@ -658,7 +658,7 @@ export function DispatchModule() {
             </div>
 
             {/* Signature area */}
-            <div className="grid grid-cols-2 gap-8 mt-12 print:text-black">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mt-12 print:grid-cols-2 print:text-black">
               <div className="text-center">
                 <div className="border-t border-gray-400 pt-2 text-sm text-muted-foreground print:text-gray-500">
                   Driver Signature
@@ -741,7 +741,7 @@ export function DispatchModule() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-col gap-2 sm:flex-row sm:w-auto">
           <Button
             variant="outline"
             onClick={() => setImportOpen(true)}

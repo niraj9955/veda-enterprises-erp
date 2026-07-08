@@ -440,7 +440,7 @@ export function OrderModule() {
   // ── Render: Create Order dialog ─────────────────────────────────────────
   const renderCreateDialog = () => (
     <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[95vw] sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Order</DialogTitle>
           <DialogDescription>
@@ -565,7 +565,7 @@ export function OrderModule() {
           </div>
 
           {/* Quantity & Rate — kept for backward compat / quick single-item orders */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="order-qty">
                 Quantity <span className="text-muted-foreground text-xs font-normal">(if no items)</span>
@@ -664,7 +664,7 @@ export function OrderModule() {
   // ── Render: Edit Status dialog ──────────────────────────────────────────
   const renderEditStatusDialog = () => (
     <Dialog open={editStatusOpen} onOpenChange={setEditStatusOpen}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-w-[95vw] sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Update Order Status</DialogTitle>
           <DialogDescription>
@@ -757,7 +757,7 @@ export function OrderModule() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-col gap-2 sm:flex-row sm:w-auto">
           <Button
             variant="outline"
             onClick={() => setImportOpen(true)}
@@ -794,7 +794,7 @@ export function OrderModule() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+          <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
             <span>Orders</span>
             <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
               {filteredOrders.length} of {orders.length} record{orders.length !== 1 ? 's' : ''}
@@ -808,11 +808,11 @@ export function OrderModule() {
                 <TableRow>
                   <TableHead>Order No.</TableHead>
                   <TableHead>Customer</TableHead>
-                  <TableHead>Brick Type</TableHead>
+                  <TableHead className="hidden sm:table-cell">Brick Type</TableHead>
                   <TableHead className="text-right">Quantity</TableHead>
-                  <TableHead className="text-right">Rate (₹)</TableHead>
+                  <TableHead className="hidden sm:table-cell text-right">Rate (₹)</TableHead>
                   <TableHead className="text-right">Amount (₹)</TableHead>
-                  <TableHead>Delivery Date</TableHead>
+                  <TableHead className="hidden md:table-cell">Delivery Date</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -833,7 +833,7 @@ export function OrderModule() {
                         {order.orderNumber}
                       </TableCell>
                       <TableCell>{order.customer?.name || '—'}</TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <Badge variant="outline">{order.brickType}</Badge>
                         {order.items && order.items.length > 0 && (
                           <Badge variant="secondary" className="ml-1 text-[10px]">
@@ -844,13 +844,13 @@ export function OrderModule() {
                       <TableCell className="text-right">
                         {new Intl.NumberFormat('en-IN').format(order.quantity)}
                       </TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
+                      <TableCell className="hidden sm:table-cell text-right whitespace-nowrap">
                         {formatCurrency(order.rate)}
                       </TableCell>
                       <TableCell className="text-right font-medium whitespace-nowrap">
                         {formatCurrency(order.amount)}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
+                      <TableCell className="hidden md:table-cell whitespace-nowrap">
                         {formatDate(order.deliveryDate)}
                       </TableCell>
                       <TableCell>{renderStatusBadge(order.status)}</TableCell>

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { connectDB, toObject, extractCustomer } from '@/lib/db'
 import { Payment } from '@/lib/models'
 import { resyncBillPaidAmount } from '../route'
+import { syncUpdateCustomerPayment, syncDeleteCustomerPayment } from '@/lib/payment-customer-sync'
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -92,6 +93,22 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       try { await resyncBillPaidAmount(newBillId) } catch (e) { console.error('reverse-sync new bill failed:', e) }
     }
 
+    // ── Mirror update into CustomerPayment module ──────────────────────
+    // Best-effort: any failure is logged but does not fail the Payment update.
+    try {
+      await syncUpdateCustomerPayment({
+        paymentId: id,
+        customerId: String(updateData.customerId || existing.customerId),
+        amount: Number(updateData.amount ?? existing.amount) || 0,
+        date: String(updateData.date || existing.date),
+        paymentType: String(updateData.paymentType || existing.paymentType || ''),
+        remarks: String((updateData.remarks ?? existing.remarks) || ''),
+        billNumber: String((updateData.billNumber ?? existing.billNumber) || ''),
+      })
+    } catch (syncErr) {
+      console.error('Payment → CustomerPayment mirror on update failed:', syncErr)
+    }
+
     const obj = toObject(payment)
     const { customer, customerId } = extractCustomer(payment)
     obj.customer = customer
@@ -110,6 +127,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 //   • If this Payment was linked to a Bill (billId), re-sync the Bill so its
 //     paidAmount drops by this Payment's amount. The Bill's status is
 //     recomputed (paid → partial → draft) automatically.
+//   • The mirrored CustomerPayment record (if any) is also deleted so the
+//     Customer Payment module stays in sync.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -122,6 +141,15 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
     }
     const linkedBillId = existing.billId ? String(existing.billId) : null
+
+    // ── Mirror delete into CustomerPayment module ──────────────────────
+    // Must run BEFORE the Payment itself is deleted, because the sync helper
+    // reads `existing.customerPaymentId` to know which mirror to remove.
+    try {
+      await syncDeleteCustomerPayment(id)
+    } catch (syncErr) {
+      console.error('Payment → CustomerPayment mirror on delete failed:', syncErr)
+    }
 
     await Payment.findByIdAndDelete(id)
 

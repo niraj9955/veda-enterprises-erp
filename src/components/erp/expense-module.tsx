@@ -315,7 +315,7 @@ export default function ExpenseModule() {
           <h2 className="text-2xl font-bold tracking-tight">Expense Management</h2>
           <p className="text-muted-foreground text-sm">Track and manage all your business expenses</p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-col gap-2 sm:flex-row sm:w-auto">
           <Button
             variant="outline"
             onClick={() => setImportOpen(true)}
@@ -495,7 +495,7 @@ export default function ExpenseModule() {
 
       {/* ── Add / Edit Dialog ───────────────────────────────────────────── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="max-w-[95vw] sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingExpense ? 'Edit Expense' : 'Add Expense'}</DialogTitle>
             <DialogDescription>

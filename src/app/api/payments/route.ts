@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject, extractCustomer } from '@/lib/db'
 import { Payment, Bill } from '@/lib/models'
+import {
+  syncCreateCustomerPayment,
+  syncUpdateCustomerPayment,
+  syncDeleteCustomerPayment,
+} from '@/lib/payment-customer-sync'
 
 // Force dynamic — never cache list responses
 export const dynamic = 'force-dynamic'
@@ -84,6 +89,22 @@ export async function POST(request: Request) {
         // Sync failure must NOT fail the payment creation.
         console.error('Payment → Bill reverse-sync failed on create:', syncErr)
       }
+    }
+
+    // ── Mirror into CustomerPayment module ────────────────────────────────
+    // Best-effort: any failure is logged but does not fail the Payment create.
+    try {
+      await syncCreateCustomerPayment({
+        paymentId: payment._id,
+        customerId: body.customerId,
+        amount: Number(body.amount) || 0,
+        date: body.date,
+        paymentType: body.paymentType,
+        remarks: body.remarks || '',
+        billNumber,
+      })
+    } catch (syncErr) {
+      console.error('Payment → CustomerPayment mirror on create failed:', syncErr)
     }
 
     const populated = await Payment.findById(payment._id).populate('customerId')

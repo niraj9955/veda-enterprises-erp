@@ -1329,3 +1329,96 @@ Stage Summary:
   • /home/z/my-project/src/components/erp/daily-sell-module.tsx (dropdown + Quantity field + column)
   • /home/z/my-project/src/components/erp/excel-import.tsx (added quantity to dailySell template)
   • /home/z/my-project/src/lib/ai-schemas.ts (added quantity to dailySell AI schema)
+
+---
+Task ID: 18
+Agent: main
+Task: (1) Make all Management section modules mobile-responsive. (2) Sync Payment updates from Management → Payments into Customer Payment module.
+
+Work Log:
+
+### Request 1 — Mobile responsiveness for Management section (Orders, Dispatch, Payments, Expenses, Reports)
+
+Ran a thorough code audit (via subagent) of all 5 modules. Identified these common problems:
+1. Dialogs missing `max-w-[95vw]` mobile fallback → overflow on small phones
+2. Payment + Expense dialogs missing `max-h-[90vh] overflow-y-auto` → Save button unreachable
+3. Header button rows using `flex gap-2` without `flex-wrap` → buttons cut off
+4. Reports module had 7 tables WITHOUT `overflow-x-auto` → page-breaks on mobile
+5. Wide tables (Orders 9 cols, Payments 7 cols) showed all columns on mobile → unreadable
+6. Order's `grid-cols-2` for Qty/Rate and Dispatch's `grid-cols-2` for signatures cramped on mobile
+
+#### Fixes applied per module
+
+**order-module.tsx:**
+- DialogContent on Create Order dialog: added `max-w-[95vw]` before `sm:max-w-3xl`
+- DialogContent on Edit Status dialog: added `max-w-[95vw]` before `sm:max-w-md`
+- Header button row: `flex gap-2 w-full sm:w-auto` → `flex flex-col gap-2 sm:flex-row sm:w-auto` (stacks vertically on phones)
+- Quantity + Rate grid: `grid-cols-2` → `grid-cols-1 sm:grid-cols-2`
+- CardTitle: added `gap-2 flex-wrap` so the record-count badge wraps cleanly
+- Table: hid Brick Type + Rate columns on mobile (`hidden sm:table-cell`), hid Delivery Date on small screens (`hidden md:table-cell`) — keeps Order No., Customer, Qty, Amount, Status, Actions visible
+
+**dispatch-module.tsx:**
+- Create Dispatch dialog: added `max-w-[95vw]` before `sm:max-w-lg`
+- Challan (print preview) dialog: added `max-w-[95vw]` before `sm:max-w-2xl`
+- Signature area: `grid-cols-2` → `grid-cols-1 sm:grid-cols-2 print:grid-cols-2` (stacks on phones, side-by-side when printing)
+- Header button row: `flex gap-2 w-full sm:w-auto` → `flex flex-col gap-2 sm:flex-row sm:w-auto`
+
+**payment-module.tsx:**
+- Payment dialog: `sm:max-w-lg` → `max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto` (added width guard AND vertical scroll so Save button is reachable)
+- Header button row: stacked vertically on mobile
+- Table: hid Source column on mobile (`hidden sm:table-cell`), hid Remarks on small screens (`hidden md:table-cell`) — keeps Customer, Type, Amount, Date, Actions visible
+
+**expense-module.tsx:**
+- Add/Edit Expense dialog: `sm:max-w-[480px]` → `max-w-[95vw] sm:max-w-[480px] max-h-[90vh] overflow-y-auto`
+- Header button row: stacked vertically on mobile
+- (Module was already the best of the 5 for mobile — summary grid, filter row, and Description column hiding were already in place)
+
+**report-module.tsx:**
+- ALL 7 table wrappers (`<div className="rounded-md border">`) now have `overflow-x-auto max-h-[70vh] overflow-y-auto` — fixes the page-break-on-mobile bug
+- ALL 6 export-button rows (`<div className="flex gap-2 print:hidden">`) now have `flex-wrap` so the Excel + PDF buttons wrap onto a second line on tiny phones instead of overflowing
+- Skeleton-placeholder card (line 187) also got the same overflow classes — harmless and consistent
+
+### Request 2 — Cross-module sync: Management → Payments updates Customer Payment module
+
+#### Problem diagnosis
+The ERP has TWO payment collections:
+- `Payment` (Management → Payments module) — linked to a Customer via `customerId`, linked to optional Bill via `billId`, has `paymentType`
+- `CustomerPayment` (Customer section → Customer Payment module) — flat record `{ date, name, address, amount, remarks }`
+
+When a user added a payment in Management → Payments, the Customer Payment module showed nothing. User explicitly asked: "Management ke kisi v section me koi update ho to dusre module me update hona chahiye" — any change in Management should reflect in the other module.
+
+Of the 5 Management sections, only Payments is money-from-customer (Orders = qty+rate, Dispatch = transport, Expenses = business spend, Reports = read-only). So the only meaningful sync is Payment → CustomerPayment.
+
+#### Solution
+- Added a new `customerPaymentId` field to the `PaymentSchema` in /home/z/my-project/src/lib/models.ts. It's an ObjectId ref to `CustomerPayment`, default null. Holds the _id of the mirrored record so future updates / deletes can find it quickly without name-matching.
+- Created a new helper module: /home/z/my-project/src/lib/payment-customer-sync.ts with THREE exports:
+  • `syncCreateCustomerPayment()` — resolves the customer's name + address from `customerId`, creates a matching `CustomerPayment` record, then writes its _id back onto the Payment via `customerPaymentId`. The remarks field is built as `"{paymentType} • Bill {billNumber} • {originalRemarks} • [synced from Payments]"` so the user can see at a glance where the entry came from.
+  • `syncUpdateCustomerPayment()` — reads the existing Payment's `customerPaymentId`, re-resolves the (possibly changed) customer's name + address, and updates the linked CustomerPayment in place. If no mirror exists yet (handles Payments created before this feature shipped), it auto-creates one.
+  • `syncDeleteCustomerPayment()` — reads the existing Payment's `customerPaymentId` BEFORE the Payment is deleted, then deletes the linked CustomerPayment.
+  All three helpers are best-effort: any failure is logged but NEVER fails the parent Payment operation.
+- Wired into the Payments API:
+  • POST /api/payments — calls `syncCreateCustomerPayment` after the Payment is created
+  • PUT /api/payments/[id] — calls `syncUpdateCustomerPayment` after the Payment is updated
+  • DELETE /api/payments/[id] — calls `syncDeleteCustomerPayment` BEFORE deleting the Payment (so the helper can still read `customerPaymentId`)
+
+#### Backward compatibility
+Existing Payment records (created before this feature) have `customerPaymentId = null`. The first time any such Payment is updated, `syncUpdateCustomerPayment` will detect the missing mirror and create one on-the-fly. So no migration script is needed.
+
+### Verification
+- TypeScript: `npx tsc --noEmit` — fixed 2 new errors I introduced (`??` + `||` operator mixing in the PUT route). All remaining TS errors are pre-existing in unrelated files (customer-history-modal.tsx, report-module.tsx — not modified by this task).
+- Full `next build`: ✓ Compiled successfully. All API routes registered.
+- Modified files:
+  • /home/z/my-project/src/lib/models.ts (added customerPaymentId field to PaymentSchema)
+  • /home/z/my-project/src/lib/payment-customer-sync.ts (NEW — sync helper module)
+  • /home/z/my-project/src/app/api/payments/route.ts (POST syncs to CustomerPayment)
+  • /home/z/my-project/src/app/api/payments/[id]/route.ts (PUT + DELETE sync to CustomerPayment)
+  • /home/z/my-project/src/components/erp/order-module.tsx (mobile responsive)
+  • /home/z/my-project/src/components/erp/dispatch-module.tsx (mobile responsive)
+  • /home/z/my-project/src/components/erp/payment-module.tsx (mobile responsive)
+  • /home/z/my-project/src/components/erp/expense-module.tsx (mobile responsive)
+  • /home/z/my-project/src/components/erp/report-module.tsx (7 tables + 6 export rows made mobile-friendly)
+
+Stage Summary:
+- All 5 Management section modules (Orders, Dispatch, Payments, Expenses, Reports) are now mobile-responsive: dialogs fit small screens, buttons stack vertically, wide tables hide low-priority columns on mobile, Reports tables finally scroll horizontally instead of breaking the page.
+- Any Payment created / updated / deleted in Management → Payments now mirrors automatically into the Customer Payment module. The mirror is tagged "[synced from Payments]" in remarks so users can tell which side it came from. Old Payment records will get their mirror auto-created the next time they're edited.
+- No data migration needed — the new `customerPaymentId` field defaults to null on existing records and self-heals on first update.
