@@ -68,6 +68,9 @@ interface StockSummaryItem {
   key: string
   name: string
   totalProduction: number
+  sellItem: number
+  availableQuantity: number
+  previousYearStock: number
   latestDate: string
   latestQuantity: number
   productionDays: number
@@ -341,8 +344,9 @@ export function StockModule() {
         <TableCell><Skeleton className="h-4 w-6" /></TableCell>
         <TableCell><Skeleton className="h-4 w-40" /></TableCell>
         <TableCell className="text-right"><Skeleton className="h-4 w-24" /></TableCell>
-        <TableCell className="text-right"><Skeleton className="h-4 w-40" /></TableCell>
-        <TableCell className="text-right"><Skeleton className="h-4 w-16" /></TableCell>
+        <TableCell className="text-right"><Skeleton className="h-4 w-24" /></TableCell>
+        <TableCell className="text-right"><Skeleton className="h-4 w-24" /></TableCell>
+        <TableCell className="text-right"><Skeleton className="h-4 w-24" /></TableCell>
       </TableRow>
     ))
 
@@ -357,7 +361,7 @@ export function StockModule() {
           <div>
             <h2 className="text-2xl font-bold tracking-tight">Stock Overview</h2>
             <p className="text-sm text-muted-foreground">
-              Aggregated production summary across all dates
+              Available = Total Production − Sell Item • Previous Year Stock = production before this year
             </p>
           </div>
         </div>
@@ -399,7 +403,7 @@ export function StockModule() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
-            <span>Stock Summary</span>
+            <span>Stock Summary — Available Quantity, Sell, Production & Previous Year</span>
             <div className="flex items-center gap-2 flex-wrap">
               {selectedIds.size > 0 && (
                 <Button
@@ -450,9 +454,10 @@ export function StockModule() {
                     />
                   </TableHead>
                   <TableHead className="sticky left-10 bg-background z-20">Item Name</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Available Quantity</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Sell Item</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Total Production</TableHead>
-                  <TableHead className="text-right whitespace-nowrap">Latest Production</TableHead>
-                  <TableHead className="text-right whitespace-nowrap">Production Days</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Previous Year Stock</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -460,12 +465,23 @@ export function StockModule() {
                   renderSkeletons()
                 ) : filteredSummary.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                       No stock data yet. Production entries will auto-populate the summary.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredSummary.map((item) => (
+                  filteredSummary.map((item) => {
+                    // Color-code Available Quantity so low/negative stock
+                    // stands out at a glance. Red = negative (over-sold),
+                    // amber = zero, emerald = healthy positive stock.
+                    const avail = item.availableQuantity
+                    const availClass =
+                      avail < 0
+                        ? 'text-red-600 dark:text-red-400 font-semibold'
+                        : avail === 0
+                        ? 'text-amber-600 dark:text-amber-400 font-semibold'
+                        : 'text-emerald-700 dark:text-emerald-400 font-semibold'
+                    return (
                     <TableRow
                       key={item.id}
                       data-state={selectedIds.has(item.id) ? 'selected' : undefined}
@@ -481,28 +497,21 @@ export function StockModule() {
                       <TableCell className="font-medium whitespace-nowrap sticky left-10 bg-background z-10 sticky">
                         {item.name}
                       </TableCell>
+                      <TableCell className={`text-right font-mono whitespace-nowrap tabular-nums ${availClass}`}>
+                        {enIN.format(item.availableQuantity)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono whitespace-nowrap tabular-nums text-rose-600 dark:text-rose-400">
+                        {enIN.format(item.sellItem)}
+                      </TableCell>
                       <TableCell className="text-right font-mono whitespace-nowrap tabular-nums">
                         {enIN.format(item.totalProduction)}
                       </TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
-                        <div className="flex flex-col items-end leading-tight">
-                          <span className="font-mono tabular-nums">
-                            {enIN.format(item.latestQuantity)}
-                          </span>
-                          {item.latestDate ? (
-                            <span className="text-xs text-muted-foreground">
-                              on {formatDate(item.latestDate)}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground italic">never</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-mono whitespace-nowrap tabular-nums">
-                        {item.productionDays}
+                      <TableCell className="text-right font-mono whitespace-nowrap tabular-nums text-muted-foreground">
+                        {enIN.format(item.previousYearStock)}
                       </TableCell>
                     </TableRow>
-                  ))
+                    )
+                  })
                 )}
               </TableBody>
             </Table>
