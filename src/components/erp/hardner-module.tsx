@@ -208,7 +208,8 @@ export function HardnerModule() {
         </CardContent>
       </Card>
 
-      <Card>
+      {/* Desktop: Table view */}
+      <Card className="hidden sm:block">
         <CardHeader><CardTitle className="flex items-center justify-between"><span>Hardner Records</span><Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">{filteredItems.length} of {items.length} record{items.length !== 1 ? 's' : ''}</Badge></CardTitle></CardHeader>
         <CardContent>
           <div className="max-h-[60vh] overflow-auto rounded-md border">
@@ -229,6 +230,30 @@ export function HardnerModule() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Mobile: Card list view */}
+      <div className="sm:hidden space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-base font-semibold">Records</h3>
+          <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">{filteredItems.length} of {items.length}</Badge>
+        </div>
+        {loading ? Array.from({ length: 4 }).map((_, i) => <Card key={i}><CardContent className="p-4 space-y-2"><Skeleton className="h-4 w-2/3" /><Skeleton className="h-4 w-1/2" /></CardContent></Card>)
+        : filteredItems.length === 0 ? <Card><CardContent className="p-8 text-center text-muted-foreground">No hardner entries yet. Tap &quot;Add Entry&quot; to get started.</CardContent></Card>
+        : filteredItems.map((item) => (
+          <Card key={item.id}>
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium">{formatDate(item.date)}</p>
+                <p className="font-bold text-emerald-700 whitespace-nowrap">{formatCurrency(item.amount)}</p>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" size="sm" onClick={() => openEditDialog(item)} className="h-8"><Pencil className="size-3.5 mr-1" />Edit</Button>
+                <Button variant="outline" size="sm" onClick={() => setDeleteTarget(item)} className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"><Trash2 className="size-3.5 mr-1" />Delete</Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="sm:max-w-sm">

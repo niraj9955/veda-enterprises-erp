@@ -258,7 +258,8 @@ export function DustPurchaseModule() {
         </CardContent>
       </Card>
 
-      <Card>
+      {/* Desktop: Table view */}
+      <Card className="hidden sm:block">
         <CardHeader><CardTitle className="flex items-center justify-between"><span>Dust Purchase Records</span><Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">{filteredItems.length} of {items.length} record{items.length !== 1 ? 's' : ''}</Badge></CardTitle></CardHeader>
         <CardContent>
           <div className="max-h-[60vh] overflow-auto rounded-md border">
@@ -287,6 +288,42 @@ export function DustPurchaseModule() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Mobile: Card list view */}
+      <div className="sm:hidden space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-base font-semibold">Records</h3>
+          <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">{filteredItems.length} of {items.length}</Badge>
+        </div>
+        {loading ? Array.from({ length: 4 }).map((_, i) => <Card key={i}><CardContent className="p-4 space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-2/3" /></CardContent></Card>)
+        : filteredItems.length === 0 ? <Card><CardContent className="p-8 text-center text-muted-foreground">No dust purchases yet. Tap &quot;Add Purchase&quot; to get started.</CardContent></Card>
+        : filteredItems.map((item) => (
+          <Card key={item.id}>
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold truncate">{item.vendorName}</p>
+                  <p className="text-xs text-muted-foreground">{formatDate(item.date)}</p>
+                </div>
+                <p className="font-bold text-emerald-700 whitespace-nowrap">{formatCurrency(item.totalAmount)}</p>
+              </div>
+              {item.cementName && <p className="text-sm text-muted-foreground truncate"><span className="font-medium text-foreground">Cement:</span> {item.cementName}</p>}
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div><p className="text-xs text-muted-foreground">Quantity</p><p className="font-medium">{item.quantity}</p></div>
+                <div><p className="text-xs text-muted-foreground">Rate</p><p className="font-medium">{formatCurrency(item.rate)}</p></div>
+                <div><p className="text-xs text-muted-foreground">Paid</p><p className="font-medium text-emerald-700">{formatCurrency(item.paidAmount)}</p></div>
+                <div><p className="text-xs text-muted-foreground">Transport</p><p className="font-medium">{formatCurrency(item.transportationCharge)}</p></div>
+                <div className="col-span-2"><p className="text-xs text-muted-foreground">GST</p><p className="font-medium">{formatCurrency(item.gst)}</p></div>
+              </div>
+              {item.remarks && <p className="text-sm text-muted-foreground truncate"><span className="font-medium text-foreground">Remarks:</span> {item.remarks}</p>}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" size="sm" onClick={() => openEditDialog(item)} className="h-8"><Pencil className="size-3.5 mr-1" />Edit</Button>
+                <Button variant="outline" size="sm" onClick={() => setDeleteTarget(item)} className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"><Trash2 className="size-3.5 mr-1" />Delete</Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
