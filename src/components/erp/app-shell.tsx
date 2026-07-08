@@ -145,53 +145,53 @@ const sectionColors: Record<string, {
 }> = {
   emerald: {
     headerText: 'text-white',
-    headerBg: 'bg-white/10',
+    headerBg: 'bg-white/15',
     headerHover: 'hover:bg-white/10',
-    iconBg: 'bg-emerald-400/30',
-    iconText: 'text-emerald-50',
-    activeItem: 'bg-[#007BFF]',
+    iconBg: 'bg-white/30',
+    iconText: 'text-white',
+    activeItem: 'bg-[#00408C]',
     activeItemText: 'text-white',
-    border: 'border-white/15',
+    border: 'border-white/25',
   },
   blue: {
     headerText: 'text-white',
-    headerBg: 'bg-white/10',
+    headerBg: 'bg-white/15',
     headerHover: 'hover:bg-white/10',
-    iconBg: 'bg-blue-400/30',
-    iconText: 'text-blue-50',
-    activeItem: 'bg-[#007BFF]',
+    iconBg: 'bg-white/30',
+    iconText: 'text-white',
+    activeItem: 'bg-[#00408C]',
     activeItemText: 'text-white',
-    border: 'border-white/15',
+    border: 'border-white/25',
   },
   amber: {
     headerText: 'text-white',
-    headerBg: 'bg-white/10',
+    headerBg: 'bg-white/15',
     headerHover: 'hover:bg-white/10',
-    iconBg: 'bg-amber-400/30',
-    iconText: 'text-amber-50',
-    activeItem: 'bg-[#007BFF]',
+    iconBg: 'bg-white/30',
+    iconText: 'text-white',
+    activeItem: 'bg-[#00408C]',
     activeItemText: 'text-white',
-    border: 'border-white/15',
+    border: 'border-white/25',
   },
   purple: {
     headerText: 'text-white',
-    headerBg: 'bg-white/10',
+    headerBg: 'bg-white/15',
     headerHover: 'hover:bg-white/10',
-    iconBg: 'bg-purple-400/30',
-    iconText: 'text-purple-50',
-    activeItem: 'bg-[#007BFF]',
+    iconBg: 'bg-white/30',
+    iconText: 'text-white',
+    activeItem: 'bg-[#00408C]',
     activeItemText: 'text-white',
-    border: 'border-white/15',
+    border: 'border-white/25',
   },
   rose: {
     headerText: 'text-white',
-    headerBg: 'bg-white/10',
+    headerBg: 'bg-white/15',
     headerHover: 'hover:bg-white/10',
-    iconBg: 'bg-rose-400/30',
-    iconText: 'text-rose-50',
-    activeItem: 'bg-[#007BFF]',
+    iconBg: 'bg-white/30',
+    iconText: 'text-white',
+    activeItem: 'bg-[#00408C]',
     activeItemText: 'text-white',
-    border: 'border-white/15',
+    border: 'border-white/25',
   },
 }
 
@@ -229,15 +229,15 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
     section.items.some((item) => item.key === activeModule)
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-[#2D3748] via-[#2A3340] to-[#1F2733] text-white relative">
+    <div className="flex flex-col h-full bg-gradient-to-b from-[#007BFF] via-[#0066D6] to-[#0052B4] text-white relative">
       {/* Subtle inner top highlight for 3D depth */}
-      <div className="absolute inset-x-0 top-0 h-px bg-white/20 pointer-events-none" />
+      <div className="absolute inset-x-0 top-0 h-px bg-white/30 pointer-events-none" />
       {/* Logo / Brand */}
-      <div className="p-4 border-b border-white/10 flex items-center gap-3 shrink-0 bg-white/[0.03] backdrop-blur-sm shadow-inner">
+      <div className="p-4 border-b border-white/20 flex items-center gap-3 shrink-0 bg-white/[0.08] backdrop-blur-sm shadow-inner">
         {logoUrl ? (
           <img src={logoUrl} alt="Logo" className="w-10 h-10 rounded-xl object-cover flex-shrink-0 shadow-sm" />
         ) : (
-          <div className="w-10 h-10 bg-gradient-to-br from-white/30 to-white/5 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg ring-1 ring-white/20">
+          <div className="w-10 h-10 bg-gradient-to-br from-white/40 to-white/10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg ring-1 ring-white/30">
             <Building2 className="h-5 w-5 text-white" />
           </div>
         )}
@@ -258,8 +258,8 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                 activeModule === item.key
-                  ? 'bg-gradient-to-r from-[#007BFF] to-[#0066D6] text-white shadow-md ring-1 ring-white/20'
-                  : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                  ? 'bg-[#00408C] text-white shadow-md ring-1 ring-white/30'
+                  : 'text-white/90 hover:bg-white/15 hover:text-white'
               )}
             >
               {item.icon}
@@ -270,7 +270,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
           ))}
 
           {/* Divider */}
-          <div className="h-px bg-gradient-to-r from-transparent via-white/15 to-transparent mx-2 my-1" />
+          <div className="h-px bg-gradient-to-r from-transparent via-white/25 to-transparent mx-2 my-1" />
 
           {/* Collapsible Sections */}
           {navSections.filter(sectionVisible).map((section) => {
@@ -290,7 +290,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
                 >
                   <div className={cn(
                     'flex items-center justify-center w-7 h-7 rounded-md transition-all shrink-0 shadow-sm',
-                    isActive || isExpanded ? cn(colors.iconBg, colors.iconText, 'ring-1 ring-white/10') : 'bg-white/5 text-slate-300 group-hover:bg-white/10'
+                    isActive || isExpanded ? cn(colors.iconBg, colors.iconText, 'ring-1 ring-white/20') : 'bg-white/10 text-white/80 group-hover:bg-white/20'
                   )}>
                     {section.icon}
                   </div>
@@ -317,8 +317,8 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
                         className={cn(
                           'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium transition-all duration-200',
                           activeModule === item.key
-                            ? cn(colors.activeItem, colors.activeItemText, 'shadow-md ring-1 ring-white/15')
-                            : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                            ? cn(colors.activeItem, colors.activeItemText, 'shadow-md ring-1 ring-white/30')
+                            : 'text-white/90 hover:bg-white/15 hover:text-white'
                         )}
                       >
                         {item.icon}
@@ -347,8 +347,8 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                 activeModule === item.key
-                  ? 'bg-gradient-to-r from-[#007BFF] to-[#0066D6] text-white shadow-md ring-1 ring-white/20'
-                  : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                  ? 'bg-[#00408C] text-white shadow-md ring-1 ring-white/30'
+                  : 'text-white/90 hover:bg-white/15 hover:text-white'
               )}
             >
               {item.icon}
@@ -393,7 +393,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {sidebarVisible && (
         <aside
           className={cn(
-            'hidden md:flex flex-col border-r border-black/30 bg-gradient-to-b from-[#2D3748] via-[#2A3340] to-[#1F2733] transition-all duration-300 shadow-2xl ring-1 ring-black/20 h-screen',
+            'hidden md:flex flex-col border-r border-black/30 bg-gradient-to-b from-[#007BFF] via-[#0066D6] to-[#0052B4] transition-all duration-300 shadow-2xl ring-1 ring-black/20 h-screen',
             sidebarOpen ? 'w-60' : 'w-16'
           )}
         >
@@ -407,7 +407,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {!sidebarVisible && (
         <button
           onClick={() => setSidebarVisible(true)}
-          className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-30 items-center justify-center w-7 h-20 bg-gradient-to-r from-[#2D3748] to-[#007BFF] text-white rounded-r-xl shadow-2xl ring-1 ring-black/30 hover:w-9 hover:from-[#007BFF] hover:to-[#3395FF] transition-all duration-300 group"
+          className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-30 items-center justify-center w-7 h-20 bg-gradient-to-r from-[#0052B4] to-[#007BFF] text-white rounded-r-xl shadow-2xl ring-1 ring-black/30 hover:w-9 hover:from-[#007BFF] hover:to-[#3395FF] transition-all duration-300 group"
           title="Show sidebar"
           aria-label="Show sidebar"
         >
@@ -419,9 +419,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top header bar */}
-        <header className="relative flex items-center gap-2 px-4 py-2.5 border-b border-black/30 bg-gradient-to-r from-[#2D3748] via-[#2F3947] to-[#2D3748] backdrop-blur-sm sticky top-0 z-10 shrink-0 text-white shadow-lg ring-1 ring-black/20">
+        <header className="relative flex items-center gap-2 px-4 py-2.5 border-b border-black/30 bg-gradient-to-r from-[#007BFF] via-[#0066D6] to-[#007BFF] backdrop-blur-sm sticky top-0 z-10 shrink-0 text-white shadow-lg ring-1 ring-black/20">
           {/* Subtle top highlight for 3D pop */}
-          <div className="absolute inset-x-0 top-0 h-px bg-white/15 pointer-events-none" />
+          <div className="absolute inset-x-0 top-0 h-px bg-white/30 pointer-events-none" />
           {/* Attractive sidebar toggle button (desktop) — always visible in header */}
           <button
             onClick={() => setSidebarVisible(!sidebarVisible)}
