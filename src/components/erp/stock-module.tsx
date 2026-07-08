@@ -18,7 +18,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ScrollableTable } from '@/components/ui/scrollable-table'
 import {
   Dialog,
   DialogContent,
@@ -439,11 +438,16 @@ export function StockModule() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ScrollableTable maxHeight="max-h-[60vh]">
+          {/* Stock summary table — fits inside the card (no horizontal
+              overflow). Vertical scroll only when there are many rows.
+              We deliberately do NOT use ScrollableTable here because its
+              `min-w-max` + sticky-left columns force the table wider than
+              the card, which the user reported as "kata hua" (cut off). */}
+          <div className="rounded-md border overflow-y-auto max-h-[60vh]">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10 sticky left-0 bg-background z-20">
+                  <TableHead className="w-10">
                     <Checkbox
                       checked={
                         filteredSummary.length > 0 &&
@@ -453,11 +457,11 @@ export function StockModule() {
                       aria-label="Select all rows"
                     />
                   </TableHead>
-                  <TableHead className="sticky left-10 bg-background z-20">Item Name</TableHead>
-                  <TableHead className="text-right whitespace-nowrap">Available Quantity</TableHead>
+                  <TableHead className="min-w-[140px]">Item Name</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Available Qty</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Sell Item</TableHead>
-                  <TableHead className="text-right whitespace-nowrap">Total Production</TableHead>
-                  <TableHead className="text-right whitespace-nowrap">Previous Year Stock</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Total Prod.</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Prev. Year</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -487,26 +491,26 @@ export function StockModule() {
                       data-state={selectedIds.has(item.id) ? 'selected' : undefined}
                       className={selectedIds.has(item.id) ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}
                     >
-                      <TableCell className="w-10 sticky left-0 bg-background z-10 sticky">
+                      <TableCell className="w-10">
                         <Checkbox
                           checked={selectedIds.has(item.id)}
                           onCheckedChange={() => toggleSelect(item.id)}
                           aria-label={`Select ${item.name}`}
                         />
                       </TableCell>
-                      <TableCell className="font-medium whitespace-nowrap sticky left-10 bg-background z-10 sticky">
+                      <TableCell className="font-medium">
                         {item.name}
                       </TableCell>
-                      <TableCell className={`text-right font-mono whitespace-nowrap tabular-nums ${availClass}`}>
+                      <TableCell className={`text-right font-mono tabular-nums ${availClass}`}>
                         {enIN.format(item.availableQuantity)}
                       </TableCell>
-                      <TableCell className="text-right font-mono whitespace-nowrap tabular-nums text-rose-600 dark:text-rose-400">
+                      <TableCell className="text-right font-mono tabular-nums text-rose-600 dark:text-rose-400">
                         {enIN.format(item.sellItem)}
                       </TableCell>
-                      <TableCell className="text-right font-mono whitespace-nowrap tabular-nums">
+                      <TableCell className="text-right font-mono tabular-nums">
                         {enIN.format(item.totalProduction)}
                       </TableCell>
-                      <TableCell className="text-right font-mono whitespace-nowrap tabular-nums text-muted-foreground">
+                      <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
                         {enIN.format(item.previousYearStock)}
                       </TableCell>
                     </TableRow>
@@ -515,7 +519,7 @@ export function StockModule() {
                 )}
               </TableBody>
             </Table>
-          </ScrollableTable>
+          </div>
         </CardContent>
       </Card>
 
