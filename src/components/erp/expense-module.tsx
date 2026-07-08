@@ -56,6 +56,7 @@ import {
   Search,
 } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
+import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -237,6 +238,11 @@ export default function ExpenseModule() {
   }
 
   const handleSave = async () => {
+    // Unified empty-form check — show ONE popup instead of cascading errors
+    if (isFormEmpty([form.category, form.amount, form.date, form.description])) {
+      toast(showPleaseFillDataToast())
+      return
+    }
     // Validation
     if (!form.category) {
       toast({ title: 'Validation Error', description: 'Please select a category', variant: 'destructive' })

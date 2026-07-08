@@ -43,6 +43,7 @@ import { ScrollableTable } from '@/components/ui/scrollable-table'
 import { AiFillButton } from '@/components/ui/ai-fill-button'
 import { FieldVoiceInput } from '@/components/ui/field-voice-input'
 import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
+import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -309,6 +310,18 @@ export function ProductionModule() {
   }
 
   const handleSubmit = async () => {
+    // Unified empty-form check — show ONE popup instead of cascading errors
+    if (isFormEmpty([
+      formData.date, formData.cement,
+      formData.zigZagGrey80, formData.zigZagRed80, formData.zigZagYellow80,
+      formData.zigZagGrey60, formData.zigZagRed60, formData.zigZagYellow60,
+      formData.curveStone, formData.chequreTile,
+      formData.dumbleGrey80, formData.dumbleRed80, formData.dumbleYellow80,
+      formData.transportationCharge, formData.remarks,
+    ])) {
+      toast(showPleaseFillDataToast())
+      return
+    }
     if (!formData.date) {
       toast({ title: 'Validation Error', description: 'Date is required', variant: 'destructive' })
       return

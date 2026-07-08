@@ -40,6 +40,7 @@ import {
 import { Package, Plus, Trash2, Pencil, Loader2, Upload, Search } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 import { FieldVoiceInput } from '@/components/ui/field-voice-input'
+import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -276,6 +277,17 @@ export function StockModule() {
   }
 
   const handleSubmit = async () => {
+    // Unified empty-form check — show ONE popup instead of cascading errors
+    if (isFormEmpty([
+      formData.date, formData.cement,
+      formData.zigZagGrey80, formData.zigZagRed80, formData.zigZagYellow80,
+      formData.zigZagGrey60, formData.zigZagRed60, formData.zigZagYellow60,
+      formData.chequreTile, formData.curveStone,
+      formData.dumbleGrey80, formData.dumbleRed80, formData.dumbleYellow80,
+    ])) {
+      toast(showPleaseFillDataToast())
+      return
+    }
     if (!formData.date) {
       toast({ title: 'Validation Error', description: 'Date is required', variant: 'destructive' })
       return

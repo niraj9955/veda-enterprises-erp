@@ -59,6 +59,7 @@ import {
 } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 import CustomerSearchInput from '@/components/erp/customer-search-input'
+import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -403,6 +404,11 @@ export function PaymentModule() {
   }
 
   const handleSubmit = async () => {
+    // Unified empty-form check — show ONE popup instead of cascading errors
+    if (isFormEmpty([formData.customerId, formData.paymentType, formData.amount, formData.date, formData.remarks, formData.billId])) {
+      toast(showPleaseFillDataToast())
+      return
+    }
     // Validation
     if (!formData.customerId) {
       toast({ title: 'Validation Error', description: 'Please select a customer', variant: 'destructive' })

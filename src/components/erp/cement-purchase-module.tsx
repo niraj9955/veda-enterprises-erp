@@ -41,6 +41,7 @@ import ExcelImport from '@/components/erp/excel-import'
 import { AiFillButton } from '@/components/ui/ai-fill-button'
 import { FieldVoiceInput } from '@/components/ui/field-voice-input'
 import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
+import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
 
 interface CementPurchase {
   id: string
@@ -173,6 +174,11 @@ export function CementPurchaseModule() {
   const totalAmount = qty * rate
 
   const handleSubmit = async () => {
+    // Unified empty-form check — show ONE popup instead of cascading errors
+    if (isFormEmpty([formData.date, formData.vendorName, formData.itemName, formData.quantity, formData.rate, formData.paidAmount, formData.transportationCharge, formData.gst, formData.remarks])) {
+      toast(showPleaseFillDataToast())
+      return
+    }
     if (!formData.date) { toast({ title: 'Validation Error', description: 'Date is required', variant: 'destructive' }); return }
     if (!formData.vendorName.trim()) { toast({ title: 'Validation Error', description: 'Vendor name is required', variant: 'destructive' }); return }
     setFormSubmitting(true)

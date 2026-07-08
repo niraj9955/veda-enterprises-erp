@@ -52,6 +52,7 @@ import {
   Power,
   PowerOff,
 } from 'lucide-react'
+import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -169,6 +170,12 @@ export function UserManagementModule() {
   }
 
   const handleSubmit = async () => {
+    // Unified empty-form check — show ONE popup instead of cascading errors.
+    // Only applies when CREATING (password is intentionally blank when editing).
+    if (!editingUser && isFormEmpty([formData.name, formData.email, formData.password])) {
+      toast(showPleaseFillDataToast())
+      return
+    }
     if (!formData.name.trim()) {
       toast({ title: 'Validation Error', description: 'Name is required', variant: 'destructive' })
       return

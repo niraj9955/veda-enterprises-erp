@@ -16,6 +16,7 @@ import {
   ArrowLeft, Loader2, Package, Truck, FileSpreadsheet, ShoppingCart,
   ClipboardList, IndianRupee,
 } from 'lucide-react'
+import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface BillItem {
@@ -674,6 +675,11 @@ function BillCreatePage({
   // ─── Submit ──────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // Unified empty-form check — show ONE popup instead of cascading errors
+    if (isFormEmpty([billType, date, dueDate, customerId, toName, toAddress, toGst, toPhone, items.map(i => i.description).join(''), items.map(i => String(i.quantity)).join(''), items.map(i => String(i.rate)).join(''), notes, terms, paymentMode])) {
+      toast(showPleaseFillDataToast())
+      return
+    }
     if (!toName.trim()) {
       toast({ title: 'Error', description: 'Party name is required', variant: 'destructive' })
       return

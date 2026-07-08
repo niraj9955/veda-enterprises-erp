@@ -53,6 +53,7 @@ import { CustomerHistoryPage } from '@/components/erp/customer-history-page'
 import { AiFillButton } from '@/components/ui/ai-fill-button'
 import { FieldVoiceInput } from '@/components/ui/field-voice-input'
 import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
+import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -213,6 +214,11 @@ export function CustomerModule() {
   }
 
   const handleSubmit = async () => {
+    // Unified empty-form check — show ONE popup instead of cascading errors
+    if (isFormEmpty([formData.name, formData.mobile, formData.gstNumber, formData.address, formData.creditLimit])) {
+      toast(showPleaseFillDataToast())
+      return
+    }
     if (!formData.name.trim()) {
       toast({ title: 'Validation Error', description: 'Customer name is required', variant: 'destructive' })
       return
