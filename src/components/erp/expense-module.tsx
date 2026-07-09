@@ -315,16 +315,29 @@ export default function ExpenseModule() {
           <h2 className="text-2xl font-bold tracking-tight">Expense Management</h2>
           <p className="text-muted-foreground text-sm">Track and manage all your business expenses</p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:w-auto">
+        <div className="flex flex-col gap-2 w-full sm:hidden">
           <Button
             variant="outline"
             onClick={() => setImportOpen(true)}
-            className="w-full sm:w-auto"
+            className="w-full"
           >
             <Upload className="mr-2 h-4 w-4" />
             Import Excel
           </Button>
-          <Button onClick={openAddDialog} className="w-full sm:w-auto">
+          <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700 text-white w-full">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Expense
+          </Button>
+        </div>
+        <div className="hidden sm:flex sm:flex-row gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Import Excel
+          </Button>
+          <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700 text-white">
             <Plus className="mr-2 h-4 w-4" />
             Add Expense
           </Button>
