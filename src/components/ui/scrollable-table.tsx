@@ -36,7 +36,7 @@ export function ScrollableTable({
     <div
       className={`scrollable-table-wrapper rounded-md border overflow-auto ${maxHeight} ${className}`}
     >
-      <div className="min-w-max">{children}</div>
+      <div className="w-full min-w-max">{children}</div>
     </div>
   )
 }

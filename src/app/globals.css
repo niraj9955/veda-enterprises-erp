@@ -159,6 +159,10 @@
 .scrollable-table-wrapper [data-slot="table"] {
   /* The table itself should not be a scroll context either. */
   overflow: visible !important;
+  /* Force the table to fill its container's width so columns distribute
+     across the full available space (prevents a trailing empty strip on
+     the right when content is narrower than the container). */
+  width: 100% !important;
 }
 
 .scrollable-table-wrapper [data-slot="table-header"] th {
