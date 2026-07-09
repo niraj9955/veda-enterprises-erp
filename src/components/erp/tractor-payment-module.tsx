@@ -223,12 +223,13 @@ export function TractorPaymentModule() {
             <p className="text-sm text-muted-foreground">Track tractor vendor payments and dues</p>
           </div>
         </div>
+        <div className="flex flex-col gap-2 w-full sm:hidden">
+          <Button variant="outline" onClick={() => setImportOpen(true)} className="w-full"><Upload className="size-4 mr-2" />Import Excel</Button>
+          <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700 text-white w-full"><Plus className="size-4" />Add Payment</Button>
+        </div>
         <div className="hidden sm:flex gap-2">
           <Button variant="outline" onClick={() => setImportOpen(true)}><Upload className="size-4 mr-2" />Import Excel</Button>
           <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700 text-white"><Plus className="size-4" />Add Payment</Button>
-        </div>
-        <div className="flex sm:hidden gap-2 w-full">
-          <Button variant="outline" onClick={() => setImportOpen(true)} className="flex-1"><Upload className="size-4 mr-2" />Import</Button>
         </div>
       </div>
 
@@ -367,21 +368,6 @@ export function TractorPaymentModule() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Tractor Payment</AlertDialogTitle><AlertDialogDescription>Are you sure you want to delete this payment entry? This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} disabled={deleting} className="bg-destructive text-white hover:bg-destructive/90">{deleting && <Loader2 className="mr-2 size-4 animate-spin" />}Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
-
-      {/* Mobile: Floating Add Payment button at bottom */}
-      <div className="sm:hidden">
-        <div className="fixed bottom-4 right-4 z-50">
-          <Button
-            onClick={openAddDialog}
-            className="h-14 w-14 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/40 p-0"
-            aria-label="Add Payment"
-          >
-            <Plus className="size-6" />
-          </Button>
-        </div>
-        {/* Spacer so last card isn't hidden behind FAB */}
-        <div className="h-20" />
-      </div>
 
       <ExcelImport module="tractorPayment" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchData} />
     </div>
