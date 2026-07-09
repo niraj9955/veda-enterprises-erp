@@ -147,13 +147,13 @@
 .scrollable-table-wrapper [data-slot="table-container"] {
   overflow: visible !important;
   position: static !important;
-  width: max-content !important;
+  /* Use `width: 100%` + `min-width: max-content` so the table fills the
+     wrapper when content is narrow (no right-side gap), but can still
+     extend horizontally beyond the wrapper when content is wide —
+     allowing the outer ScrollableTable to handle horizontal scroll. */
+  width: 100% !important;
+  min-width: max-content !important;
   max-width: none !important;
-  /* `width: max-content` makes the inner wrapper size to the table's
-     natural width instead of constraining it to the parent's width.
-     Combined with `overflow: visible`, the table can extend horizontally
-     without being clipped — and the outer ScrollableTable div handles
-     the actual horizontal scroll. */
 }
 
 .scrollable-table-wrapper [data-slot="table"] {
