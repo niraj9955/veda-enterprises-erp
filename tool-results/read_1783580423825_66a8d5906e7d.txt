@@ -1,0 +1,841 @@
+     1→'use client'
+     2→
+     3→import * as React from 'react'
+     4→import { api } from '@/lib/api'
+     5→import { toast } from '@/hooks/use-toast'
+     6→import { Button } from '@/components/ui/button'
+     7→import { Input } from '@/components/ui/input'
+     8→import { Label } from '@/components/ui/label'
+     9→import { Textarea } from '@/components/ui/textarea'
+    10→import { Badge } from '@/components/ui/badge'
+    11→import { Skeleton } from '@/components/ui/skeleton'
+    12→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    13→import {
+    14→  Table,
+    15→  TableBody,
+    16→  TableCell,
+    17→  TableHead,
+    18→  TableHeader,
+    19→  TableRow,
+    20→} from '@/components/ui/table'
+    21→import { ScrollableTable } from '@/components/ui/scrollable-table'
+    22→import {
+    23→  Dialog,
+    24→  DialogContent,
+    25→  DialogDescription,
+    26→  DialogFooter,
+    27→  DialogHeader,
+    28→  DialogTitle,
+    29→} from '@/components/ui/dialog'
+    30→import {
+    31→  AlertDialog,
+    32→  AlertDialogAction,
+    33→  AlertDialogCancel,
+    34→  AlertDialogContent,
+    35→  AlertDialogDescription,
+    36→  AlertDialogFooter,
+    37→  AlertDialogHeader,
+    38→  AlertDialogTitle,
+    39→} from '@/components/ui/alert-dialog'
+    40→import {
+    41→  Users,
+    42→  Plus,
+    43→  Search,
+    44→  Pencil,
+    45→  Trash2,
+    46→  BookOpen,
+    47→  Loader2,
+    48→  IndianRupee,
+    49→  Upload,
+    50→} from 'lucide-react'
+    51→import ExcelImport from '@/components/erp/excel-import'
+    52→import { CustomerHistoryPage } from '@/components/erp/customer-history-page'
+    53→import { AiFillButton } from '@/components/ui/ai-fill-button'
+    54→import { FieldVoiceInput } from '@/components/ui/field-voice-input'
+    55→import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
+    56→import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
+    57→
+    58→// ── Types ───────────────────────────────────────────────────────────────────
+    59→
+    60→interface Customer {
+    61→  id: string
+    62→  name: string
+    63→  mobile: string
+    64→  gstNumber: string
+    65→  address: string
+    66→  creditLimit: number
+    67→  createdAt: string
+    68→  updatedAt: string
+    69→}
+    70→
+    71→interface Payment {
+    72→  id: string
+    73→  customerId: string
+    74→  paymentType: string
+    75→  amount: number
+    76→  date: string
+    77→  remarks: string
+    78→  customer: { name: string }
+    79→}
+    80→
+    81→interface CustomerFormData {
+    82→  name: string
+    83→  mobile: string
+    84→  gstNumber: string
+    85→  address: string
+    86→  creditLimit: number | string
+    87→}
+    88→
+    89→// ── Helpers ─────────────────────────────────────────────────────────────────
+    90→
+    91→const formatCurrency = (amount: number): string =>
+    92→  new Intl.NumberFormat('en-IN', {
+    93→    style: 'currency',
+    94→    currency: 'INR',
+    95→    minimumFractionDigits: 0,
+    96→    maximumFractionDigits: 2,
+    97→  }).format(amount)
+    98→
+    99→const formatDate = (dateStr: string): string =>
+   100→  new Date(dateStr).toLocaleDateString('en-IN', {
+   101→    day: '2-digit',
+   102→    month: 'short',
+   103→    year: 'numeric',
+   104→  })
+   105→
+   106→const emptyForm: CustomerFormData = {
+   107→  name: '',
+   108→  mobile: '',
+   109→  gstNumber: '',
+   110→  address: '',
+   111→  creditLimit: '',
+   112→}
+   113→
+   114→// ── Component ───────────────────────────────────────────────────────────────
+   115→
+   116→export function CustomerModule() {
+   117→  // State
+   118→  const [customers, setCustomers] = React.useState<Customer[]>([])
+   119→  const [totalCount, setTotalCount] = React.useState(0)
+   120→  const [loading, setLoading] = React.useState(true)
+   121→  const [search, setSearch] = React.useState('')
+   122→  const [debouncedSearch, setDebouncedSearch] = React.useState('')
+   123→
+   124→  // Dialog states
+   125→  const [formOpen, setFormOpen] = React.useState(false)
+   126→  const [editingCustomer, setEditingCustomer] = React.useState<Customer | null>(null)
+   127→  const [formData, setFormData] = React.useState<CustomerFormData>(emptyForm)
+   128→  const [formSubmitting, setFormSubmitting] = React.useState(false)
+   129→
+   130→  // Excel import
+   131→  const [importOpen, setImportOpen] = React.useState(false)
+   132→
+   133→  // Delete confirmation
+   134→  const [deleteTarget, setDeleteTarget] = React.useState<Customer | null>(null)
+   135→  const [deleting, setDeleting] = React.useState(false)
+   136→
+   137→  // Ledger
+   138→  const [ledgerCustomer, setLedgerCustomer] = React.useState<Customer | null>(null)
+   139→  const [ledgerPayments, setLedgerPayments] = React.useState<Payment[]>([])
+   140→  const [ledgerLoading, setLedgerLoading] = React.useState(false)
+   141→
+   142→  // Full customer history PAGE (full-screen, not modal)
+   143→  const [historyCustomerId, setHistoryCustomerId] = React.useState<string | null>(null)
+   144→
+   145→  // ── Debounced search ────────────────────────────────────────────────────
+   146→  React.useEffect(() => {
+   147→    const timer = setTimeout(() => {
+   148→      setDebouncedSearch(search)
+   149→    }, 300)
+   150→    return () => clearTimeout(timer)
+   151→  }, [search])
+   152→
+   153→  // ── Fetch customers ─────────────────────────────────────────────────────
+   154→  const fetchCustomers = React.useCallback(async () => {
+   155→    setLoading(true)
+   156→    try {
+   157→      const res = await api.getCustomers(debouncedSearch || undefined)
+   158→      setCustomers(res.customers as Customer[])
+   159→      // Track total count separately so the badge can show "X of Y" when
+   160→      // pagination is in effect (the API now returns `total` alongside
+   161→      // the page slice). If `total` is missing (older deployments), fall
+   162→      // back to the slice length.
+   163→      const r = res as { total?: number; customers: Customer[] }
+   164→      setTotalCount(r.total ?? r.customers.length)
+   165→    } catch (err) {
+   166→      toast({
+   167→        title: 'Error',
+   168→        description: err instanceof Error ? err.message : 'Failed to fetch customers',
+   169→        variant: 'destructive',
+   170→      })
+   171→    } finally {
+   172→      setLoading(false)
+   173→    }
+   174→  }, [debouncedSearch])
+   175→
+   176→  React.useEffect(() => {
+   177→    fetchCustomers()
+   178→  }, [fetchCustomers])
+   179→
+   180→  // ── Form handlers ───────────────────────────────────────────────────────
+   181→  const openAddDialog = () => {
+   182→    setEditingCustomer(null)
+   183→    const pending = consumePendingAiResult('customer')
+   184→    if (pending) {
+   185→      const cl = pending.creditLimit
+   186→      setFormData({
+   187→        name: String(pending.name || ''),
+   188→        mobile: String(pending.mobile || pending.contactNumber || ''),
+   189→        gstNumber: String(pending.gstNumber || ''),
+   190→        address: String(pending.address || ''),
+   191→        creditLimit: cl != null && cl !== '' ? String(cl) : '',
+   192→      })
+   193→      toast({ title: 'AI auto-fill applied', description: 'Edit & verify before saving.' })
+   194→    } else {
+   195→      setFormData(emptyForm)
+   196→    }
+   197→    setFormOpen(true)
+   198→  }
+   199→
+   200→  const openEditDialog = (customer: Customer) => {
+   201→    setEditingCustomer(customer)
+   202→    setFormData({
+   203→      name: customer.name,
+   204→      mobile: customer.mobile,
+   205→      gstNumber: customer.gstNumber,
+   206→      address: customer.address,
+   207→      creditLimit: customer.creditLimit,
+   208→    })
+   209→    setFormOpen(true)
+   210→  }
+   211→
+   212→  const handleFormChange = (field: keyof CustomerFormData, value: string) => {
+   213→    setFormData((prev) => ({ ...prev, [field]: value }))
+   214→  }
+   215→
+   216→  const handleSubmit = async () => {
+   217→    // Unified empty-form check — show ONE popup instead of cascading errors
+   218→    if (isFormEmpty([formData.name, formData.mobile, formData.gstNumber, formData.address, formData.creditLimit])) {
+   219→      toast(showPleaseFillDataToast())
+   220→      return
+   221→    }
+   222→    if (!formData.name.trim()) {
+   223→      toast({ title: 'Validation Error', description: 'Customer name is required', variant: 'destructive' })
+   224→      return
+   225→    }
+   226→    if (!formData.mobile.trim()) {
+   227→      toast({ title: 'Validation Error', description: 'Mobile number is required', variant: 'destructive' })
+   228→      return
+   229→    }
+   230→
+   231→    setFormSubmitting(true)
+   232→    try {
+   233→      const payload = {
+   234→        name: formData.name.trim(),
+   235→        mobile: formData.mobile.trim(),
+   236→        gstNumber: formData.gstNumber.trim(),
+   237→        address: formData.address.trim(),
+   238→        creditLimit: Number(formData.creditLimit) || 0,
+   239→      }
+   240→
+   241→      if (editingCustomer) {
+   242→        await api.updateCustomer(editingCustomer.id, payload)
+   243→        toast({ title: 'Success', description: 'Customer updated successfully' })
+   244→      } else {
+   245→        await api.createCustomer(payload)
+   246→        toast({ title: 'Success', description: 'Customer created successfully' })
+   247→      }
+   248→
+   249→      setFormOpen(false)
+   250→      setFormData(emptyForm)
+   251→      setEditingCustomer(null)
+   252→      fetchCustomers()
+   253→    } catch (err) {
+   254→      toast({
+   255→        title: 'Error',
+   256→        description: err instanceof Error ? err.message : 'Failed to save customer',
+   257→        variant: 'destructive',
+   258→      })
+   259→    } finally {
+   260→      setFormSubmitting(false)
+   261→    }
+   262→  }
+   263→
+   264→  // ── Delete handler ──────────────────────────────────────────────────────
+   265→  const handleDelete = async () => {
+   266→    if (!deleteTarget) return
+   267→    setDeleting(true)
+   268→    try {
+   269→      await api.deleteCustomer(deleteTarget.id)
+   270→      toast({ title: 'Success', description: 'Customer deleted successfully' })
+   271→      setDeleteTarget(null)
+   272→      fetchCustomers()
+   273→    } catch (err) {
+   274→      toast({
+   275→        title: 'Error',
+   276→        description: err instanceof Error ? err.message : 'Failed to delete customer',
+   277→        variant: 'destructive',
+   278→      })
+   279→    } finally {
+   280→      setDeleting(false)
+   281→    }
+   282→  }
+   283→
+   284→  // ── Ledger handler ──────────────────────────────────────────────────────
+   285→  const openLedger = async (customer: Customer) => {
+   286→    setLedgerCustomer(customer)
+   287→    setLedgerLoading(true)
+   288→    try {
+   289→      const res = await api.getPayments()
+   290→      const allPayments = res.payments as Payment[]
+   291→      const filtered = allPayments.filter((p) => p.customerId === customer.id)
+   292→      // Sort by date descending
+   293→      filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+   294→      setLedgerPayments(filtered)
+   295→    } catch (err) {
+   296→      toast({
+   297→        title: 'Error',
+   298→        description: err instanceof Error ? err.message : 'Failed to fetch payment history',
+   299→        variant: 'destructive',
+   300→      })
+   301→      setLedgerPayments([])
+   302→    } finally {
+   303→      setLedgerLoading(false)
+   304→    }
+   305→  }
+   306→
+   307→  // ── Render: Loading skeletons ───────────────────────────────────────────
+   308→  const renderSkeletons = () =>
+   309→    Array.from({ length: 5 }).map((_, i) => (
+   310→      <TableRow key={i}>
+   311→        <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+   312→        <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+   313→        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+   314→        <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+   315→        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+   316→        <TableCell><Skeleton className="h-8 w-28" /></TableCell>
+   317→      </TableRow>
+   318→    ))
+   319→
+   320→  // ── Render: Form dialog ─────────────────────────────────────────────────
+   321→  const renderFormDialog = () => (
+   322→    <Dialog open={formOpen} onOpenChange={setFormOpen}>
+   323→      <DialogContent className="sm:max-w-md">
+   324→        <DialogHeader>
+   325→          <DialogTitle>
+   326→            {editingCustomer ? 'Edit Customer' : 'Add Customer'}
+   327→          </DialogTitle>
+   328→          <DialogDescription>
+   329→            {editingCustomer
+   330→              ? 'Update the customer details below.'
+   331→              : 'Fill in the details to create a new customer.'}
+   332→          </DialogDescription>
+   333→        </DialogHeader>
+   334→        {!editingCustomer && (
+   335→          <div className="flex justify-end">
+   336→            <AiFillButton
+   337→              module="customer"
+   338→              onApply={(fields) => setFormData((prev) => ({
+   339→                name: fields.name != null ? String(fields.name) : prev.name,
+   340→                mobile: fields.mobile != null ? String(fields.mobile) : (fields.contactNumber != null ? String(fields.contactNumber) : prev.mobile),
+   341→                gstNumber: fields.gstNumber != null ? String(fields.gstNumber) : prev.gstNumber,
+   342→                address: fields.address != null ? String(fields.address) : prev.address,
+   343→                creditLimit: fields.creditLimit != null && fields.creditLimit !== '' ? String(fields.creditLimit) : prev.creditLimit,
+   344→              }))}
+   345→            />
+   346→          </div>
+   347→        )}
+   348→
+   349→        <div className="grid gap-4 py-2">
+   350→          {/* Customer Name */}
+   351→          <div className="grid gap-2">
+   352→            <Label htmlFor="cust-name">
+   353→              Customer Name <span className="text-destructive">*</span>
+   354→            </Label>
+   355→            <div className="relative">
+   356→              <Input
+   357→                id="cust-name"
+   358→                placeholder="Enter customer name"
+   359→                value={formData.name}
+   360→                onChange={(e) => handleFormChange('name', e.target.value)}
+   361→                className="pr-9"
+   362→              />
+   363→              <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+   364→                <FieldVoiceInput
+   365→                  fieldLabel="customer name"
+   366→                  onChange={(text) => handleFormChange('name', text)}
+   367→                />
+   368→              </div>
+   369→            </div>
+   370→          </div>
+   371→
+   372→          {/* Mobile Number */}
+   373→          <div className="grid gap-2">
+   374→            <Label htmlFor="cust-mobile">
+   375→              Mobile Number <span className="text-destructive">*</span>
+   376→            </Label>
+   377→            <div className="relative">
+   378→              <Input
+   379→                id="cust-mobile"
+   380→                placeholder="Enter mobile number"
+   381→                value={formData.mobile}
+   382→                onChange={(e) => handleFormChange('mobile', e.target.value)}
+   383→                className="pr-9"
+   384→              />
+   385→              <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+   386→                <FieldVoiceInput
+   387→                  fieldLabel="mobile number"
+   388→                  onChange={(text) => handleFormChange('mobile', text.replace(/[^0-9+\-\s]/g, '').trim())}
+   389→                />
+   390→              </div>
+   391→            </div>
+   392→          </div>
+   393→
+   394→          {/* GST Number */}
+   395→          <div className="grid gap-2">
+   396→            <Label htmlFor="cust-gst">GST Number</Label>
+   397→            <div className="relative">
+   398→              <Input
+   399→                id="cust-gst"
+   400→                placeholder="Enter GST number (optional)"
+   401→                value={formData.gstNumber}
+   402→                onChange={(e) => handleFormChange('gstNumber', e.target.value)}
+   403→                className="pr-9"
+   404→              />
+   405→              <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+   406→                <FieldVoiceInput
+   407→                  fieldLabel="GST number"
+   408→                  onChange={(text) => handleFormChange('gstNumber', text.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+   409→                />
+   410→              </div>
+   411→            </div>
+   412→          </div>
+   413→
+   414→          {/* Address */}
+   415→          <div className="grid gap-2">
+   416→            <Label htmlFor="cust-address">Address</Label>
+   417→            <div className="relative">
+   418→              <Textarea
+   419→                id="cust-address"
+   420→                placeholder="Enter address"
+   421→                value={formData.address}
+   422→                onChange={(e) => handleFormChange('address', e.target.value)}
+   423→                className="min-h-[80px] pr-9"
+   424→              />
+   425→              <div className="absolute right-1.5 top-2">
+   426→                <FieldVoiceInput
+   427→                  fieldLabel="address"
+   428→                  onChange={(text) => handleFormChange('address', text)}
+   429→                />
+   430→              </div>
+   431→            </div>
+   432→          </div>
+   433→
+   434→          {/* Credit Limit */}
+   435→          <div className="grid gap-2">
+   436→            <Label htmlFor="cust-credit">Credit Limit (₹)</Label>
+   437→            <div className="relative">
+   438→              <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   439→              <Input
+   440→                id="cust-credit"
+   441→                type="number"
+   442→                placeholder="0"
+   443→                className="pl-9"
+   444→                value={formData.creditLimit}
+   445→                onChange={(e) => handleFormChange('creditLimit', e.target.value)}
+   446→              />
+   447→            </div>
+   448→          </div>
+   449→        </div>
+   450→
+   451→        <DialogFooter>
+   452→          <Button
+   453→            variant="outline"
+   454→            onClick={() => setFormOpen(false)}
+   455→            disabled={formSubmitting}
+   456→          >
+   457→            Cancel
+   458→          </Button>
+   459→          <Button
+   460→            onClick={handleSubmit}
+   461→            disabled={formSubmitting}
+   462→            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   463→          >
+   464→            {formSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+   465→            {editingCustomer ? 'Update Customer' : 'Create Customer'}
+   466→          </Button>
+   467→        </DialogFooter>
+   468→      </DialogContent>
+   469→    </Dialog>
+   470→  )
+   471→
+   472→  // ── Render: Delete confirmation ─────────────────────────────────────────
+   473→  const renderDeleteDialog = () => (
+   474→    <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+   475→      <AlertDialogContent>
+   476→        <AlertDialogHeader>
+   477→          <AlertDialogTitle>Delete Customer</AlertDialogTitle>
+   478→          <AlertDialogDescription>
+   479→            Are you sure you want to delete <strong>{deleteTarget?.name}</strong>? This action
+   480→            cannot be undone.
+   481→          </AlertDialogDescription>
+   482→        </AlertDialogHeader>
+   483→        <AlertDialogFooter>
+   484→          <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+   485→          <AlertDialogAction
+   486→            onClick={handleDelete}
+   487→            disabled={deleting}
+   488→            className="bg-destructive text-white hover:bg-destructive/90"
+   489→          >
+   490→            {deleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+   491→            Delete
+   492→          </AlertDialogAction>
+   493→        </AlertDialogFooter>
+   494→      </AlertDialogContent>
+   495→    </AlertDialog>
+   496→  )
+   497→
+   498→  // ── Render: Ledger dialog ───────────────────────────────────────────────
+   499→  const renderLedgerDialog = () => (
+   500→    <Dialog open={!!ledgerCustomer} onOpenChange={(open) => !open && setLedgerCustomer(null)}>
+   501→      <DialogContent className="sm:max-w-2xl">
+   502→        <DialogHeader>
+   503→          <DialogTitle className="flex items-center gap-2">
+   504→            <BookOpen className="size-5 text-emerald-600" />
+   505→            Payment Ledger — {ledgerCustomer?.name}
+   506→          </DialogTitle>
+   507→          <DialogDescription>
+   508→            Payment history for {ledgerCustomer?.name}
+   509→          </DialogDescription>
+   510→        </DialogHeader>
+   511→
+   512→        {ledgerLoading ? (
+   513→          <div className="space-y-3 py-4">
+   514→            {Array.from({ length: 3 }).map((_, i) => (
+   515→              <Skeleton key={i} className="h-10 w-full" />
+   516→            ))}
+   517→          </div>
+   518→        ) : ledgerPayments.length === 0 ? (
+   519→          <div className="py-8 text-center text-muted-foreground">
+   520→            No payment records found for this customer.
+   521→          </div>
+   522→        ) : (
+   523→          <div className="max-h-96 overflow-y-auto">
+   524→            <Table>
+   525→              <TableHeader>
+   526→                <TableRow>
+   527→                  <TableHead>Date</TableHead>
+   528→                  <TableHead>Type</TableHead>
+   529→                  <TableHead className="text-right">Amount</TableHead>
+   530→                  <TableHead>Remarks</TableHead>
+   531→                </TableRow>
+   532→              </TableHeader>
+   533→              <TableBody>
+   534→                {ledgerPayments.map((payment) => (
+   535→                  <TableRow key={payment.id}>
+   536→                    <TableCell className="whitespace-nowrap">
+   537→                      {formatDate(payment.date)}
+   538→                    </TableCell>
+   539→                    <TableCell>
+   540→                      <Badge
+   541→                        variant={
+   542→                          payment.paymentType?.toLowerCase() === 'credit' ? 'secondary' : 'outline'
+   543→                        }
+   544→                        className={
+   545→                          payment.paymentType?.toLowerCase() === 'credit'
+   546→                            ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+   547→                            : 'bg-orange-100 text-orange-700 border-orange-200'
+   548→                        }
+   549→                      >
+   550→                        {payment.paymentType}
+   551→                      </Badge>
+   552→                    </TableCell>
+   553→                    <TableCell className="text-right font-medium whitespace-nowrap">
+   554→                      {formatCurrency(payment.amount)}
+   555→                    </TableCell>
+   556→                    <TableCell className="max-w-[200px] truncate text-muted-foreground">
+   557→                      {payment.remarks || '—'}
+   558→                    </TableCell>
+   559→                  </TableRow>
+   560→                ))}
+   561→              </TableBody>
+   562→            </Table>
+   563→          </div>
+   564→        )}
+   565→
+   566→        <DialogFooter>
+   567→          <Button variant="outline" onClick={() => setLedgerCustomer(null)}>
+   568→            Close
+   569→          </Button>
+   570→        </DialogFooter>
+   571→      </DialogContent>
+   572→    </Dialog>
+   573→  )
+   574→
+   575→  // ── Render: Main ────────────────────────────────────────────────────────
+   576→  // If a customer is selected for history view, render the full-screen history page
+   577→  // INSTEAD of the customer list — user requested this be a separate page, not a modal.
+   578→  if (historyCustomerId) {
+   579→    return (
+   580→      <CustomerHistoryPage
+   581→        customerId={historyCustomerId}
+   582→        onBack={() => setHistoryCustomerId(null)}
+   583→      />
+   584→    )
+   585→  }
+   586→
+   587→  return (
+   588→    <div className="space-y-4 md:space-y-6">
+   589→      {/* Header */}
+   590→      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   591→        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+   592→          <div className="flex size-9 sm:size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 shrink-0">
+   593→            <Users className="size-4 sm:size-5" />
+   594→          </div>
+   595→          <div className="min-w-0">
+   596→            <h2 className="text-lg sm:text-2xl font-bold tracking-tight truncate">Customer Management</h2>
+   597→            <p className="text-xs sm:text-sm text-muted-foreground truncate">
+   598→              Manage your customer database and ledgers
+   599→            </p>
+   600→          </div>
+   601→        </div>
+   602→        <div className="flex flex-col gap-2 w-full sm:hidden">
+   603→          <Button
+   604→            variant="outline"
+   605→            onClick={() => setImportOpen(true)}
+   606→            className="w-full"
+   607→          >
+   608→            <Upload className="size-4 mr-2" />
+   609→            Import Excel
+   610→          </Button>
+   611→          <Button
+   612→            onClick={openAddDialog}
+   613→            className="bg-emerald-600 hover:bg-emerald-700 text-white w-full"
+   614→          >
+   615→            <Plus className="size-4 mr-2" />
+   616→            Add Customer
+   617→          </Button>
+   618→        </div>
+   619→        <div className="hidden sm:flex gap-2">
+   620→          <Button
+   621→            variant="outline"
+   622→            onClick={() => setImportOpen(true)}
+   623→          >
+   624→            <Upload className="size-4 mr-2" />
+   625→            Import Excel
+   626→          </Button>
+   627→          <Button
+   628→            onClick={openAddDialog}
+   629→            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   630→          >
+   631→            <Plus className="size-4 mr-2" />
+   632→            Add Customer
+   633→          </Button>
+   634→        </div>
+   635→      </div>
+   636→
+   637→      {/* Search */}
+   638→      <Card>
+   639→        <CardContent className="pt-6">
+   640→          <div className="relative">
+   641→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   642→            <Input
+   643→              placeholder="Search customers by name or mobile..."
+   644→              value={search}
+   645→              onChange={(e) => setSearch(e.target.value)}
+   646→              className="pl-9"
+   647→            />
+   648→          </div>
+   649→        </CardContent>
+   650→      </Card>
+   651→
+   652→      {/* Desktop: Table view */}
+   653→      <Card className="hidden sm:block">
+   654→        <CardHeader>
+   655→          <CardTitle className="flex items-center justify-between">
+   656→            <span>Customers</span>
+   657→            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+   658→              {loading
+   659→                ? 'Loading…'
+   660→                : totalCount > customers.length
+   661→                  ? `Showing ${customers.length} of ${totalCount} records`
+   662→                  : `${customers.length} record${customers.length !== 1 ? 's' : ''}`}
+   663→            </Badge>
+   664→          </CardTitle>
+   665→        </CardHeader>
+   666→        <CardContent>
+   667→          <ScrollableTable maxHeight="max-h-[60vh]">
+   668→            <Table>
+   669→              <TableHeader>
+   670→                <TableRow>
+   671→                  <TableHead className="sticky left-0 bg-background z-20 min-w-[140px]">Name</TableHead>
+   672→                  <TableHead className="whitespace-nowrap">Mobile</TableHead>
+   673→                  <TableHead className="whitespace-nowrap">GST Number</TableHead>
+   674→                  <TableHead className="min-w-[180px]">Address</TableHead>
+   675→                  <TableHead className="text-right whitespace-nowrap">Credit Limit (₹)</TableHead>
+   676→                  <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
+   677→                </TableRow>
+   678→              </TableHeader>
+   679→              <TableBody>
+   680→                {loading ? (
+   681→                  renderSkeletons()
+   682→                ) : customers.length === 0 ? (
+   683→                  <TableRow>
+   684→                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+   685→                      {debouncedSearch
+   686→                        ? 'No customers found matching your search.'
+   687→                        : 'No customers yet. Click "Add Customer" to get started.'}
+   688→                    </TableCell>
+   689→                  </TableRow>
+   690→                ) : (
+   691→                  customers.map((customer) => (
+   692→                    <TableRow key={customer.id} className="cursor-pointer hover:bg-emerald-50/40" onClick={() => setHistoryCustomerId(customer.id)}>
+   693→                      <TableCell className="font-medium sticky left-0 bg-background z-10 min-w-[140px]">
+   694→                        <button
+   695→                          type="button"
+   696→                          className="text-emerald-700 hover:text-emerald-900 hover:underline text-left"
+   697→                          onClick={(e) => {
+   698→                            e.stopPropagation()
+   699→                            setHistoryCustomerId(customer.id)
+   700→                          }}
+   701→                          title="Click to view full customer history"
+   702→                        >
+   703→                          {customer.name}
+   704→                        </button>
+   705→                      </TableCell>
+   706→                      <TableCell className="whitespace-nowrap">{customer.mobile}</TableCell>
+   707→                      <TableCell>
+   708→                        {customer.gstNumber ? (
+   709→                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
+   710→                            {customer.gstNumber}
+   711→                          </Badge>
+   712→                        ) : (
+   713→                          <Badge variant="outline" className="text-muted-foreground">
+   714→                            No GST
+   715→                          </Badge>
+   716→                        )}
+   717→                      </TableCell>
+   718→                      <TableCell className="max-w-[200px] truncate text-muted-foreground">
+   719→                        {customer.address || '—'}
+   720→                      </TableCell>
+   721→                      <TableCell className="text-right font-medium whitespace-nowrap">
+   722→                        {formatCurrency(customer.creditLimit)}
+   723→                      </TableCell>
+   724→                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+   725→                        <div className="flex items-center justify-end gap-1">
+   726→                          <Button
+   727→                            variant="ghost"
+   728→                            size="icon"
+   729→                            onClick={() => setHistoryCustomerId(customer.id)}
+   730→                            title="View Full History"
+   731→                            className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+   732→                          >
+   733→                            <BookOpen className="size-4" />
+   734→                          </Button>
+   735→                          <Button
+   736→                            variant="ghost"
+   737→                            size="icon"
+   738→                            onClick={() => openEditDialog(customer)}
+   739→                            title="Edit Customer"
+   740→                          >
+   741→                            <Pencil className="size-4" />
+   742→                          </Button>
+   743→                          <Button
+   744→                            variant="ghost"
+   745→                            size="icon"
+   746→                            onClick={() => setDeleteTarget(customer)}
+   747→                            title="Delete Customer"
+   748→                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+   749→                          >
+   750→                            <Trash2 className="size-4" />
+   751→                          </Button>
+   752→                        </div>
+   753→                      </TableCell>
+   754→                    </TableRow>
+   755→                  ))
+   756→                )}
+   757→              </TableBody>
+   758→            </Table>
+   759→          </ScrollableTable>
+   760→          <p className="text-xs text-muted-foreground mt-2 hidden sm:block">
+   761→            💡 Tip: Click on a customer's name or the book icon to view their complete transaction history (orders, dispatch, payments, sells, production, balance).
+   762→          </p>
+   763→        </CardContent>
+   764→      </Card>
+   765→
+   766→      {/* Mobile: Card list view */}
+   767→      <div className="sm:hidden space-y-3">
+   768→        <div className="flex items-center justify-between px-1">
+   769→          <h3 className="text-base font-semibold">Customers</h3>
+   770→          <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+   771→            {loading ? '…' : `${customers.length} of ${totalCount}`}
+   772→          </Badge>
+   773→        </div>
+   774→        {loading ? Array.from({ length: 4 }).map((_, i) => (
+   775→          <Card key={i}><CardContent className="p-4 space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-2/3" /></CardContent></Card>
+   776→        )) : customers.length === 0 ? (
+   777→          <Card><CardContent className="p-8 text-center text-muted-foreground">
+   778→            {debouncedSearch ? 'No customers found.' : 'No customers yet. Tap "Add Customer" to get started.'}
+   779→          </CardContent></Card>
+   780→        ) : customers.map((customer) => (
+   781→          <Card key={customer.id}>
+   782→            <CardContent className="p-4 space-y-2">
+   783→              <div className="flex items-start justify-between gap-2">
+   784→                <button
+   785→                  type="button"
+   786→                  className="text-emerald-700 hover:text-emerald-900 font-semibold text-left min-w-0 flex-1 truncate"
+   787→                  onClick={() => setHistoryCustomerId(customer.id)}
+   788→                  title="Tap to view full history"
+   789→                >
+   790→                  {customer.name}
+   791→                </button>
+   792→                <p className="font-bold text-emerald-700 whitespace-nowrap text-sm">{formatCurrency(customer.creditLimit)}</p>
+   793→              </div>
+   794→              <div className="grid grid-cols-2 gap-2 text-sm">
+   795→                <div className="min-w-0">
+   796→                  <p className="text-xs text-muted-foreground">Mobile</p>
+   797→                  <p className="font-medium truncate">{customer.mobile || '—'}</p>
+   798→                </div>
+   799→                <div className="min-w-0">
+   800→                  <p className="text-xs text-muted-foreground">GST</p>
+   801→                  {customer.gstNumber ? (
+   802→                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">{customer.gstNumber}</Badge>
+   803→                  ) : (
+   804→                    <p className="text-muted-foreground text-xs">No GST</p>
+   805→                  )}
+   806→                </div>
+   807→              </div>
+   808→              {customer.address && (
+   809→                <p className="text-sm text-muted-foreground">
+   810→                  <span className="font-medium text-foreground">Address:</span>{' '}
+   811→                  <span className="line-clamp-2">{customer.address}</span>
+   812→                </p>
+   813→              )}
+   814→              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+   815→                <Button variant="outline" size="sm" onClick={() => setHistoryCustomerId(customer.id)} className="h-8 text-emerald-700 border-emerald-200">
+   816→                  <BookOpen className="size-3.5 mr-1" />History
+   817→                </Button>
+   818→                <Button variant="outline" size="sm" onClick={() => openEditDialog(customer)} className="h-8">
+   819→                  <Pencil className="size-3.5 mr-1" />Edit
+   820→                </Button>
+   821→                <Button variant="outline" size="sm" onClick={() => setDeleteTarget(customer)} className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive">
+   822→                  <Trash2 className="size-3.5 mr-1" />Delete
+   823→                </Button>
+   824→              </div>
+   825→            </CardContent>
+   826→          </Card>
+   827→        ))}
+   828→      </div>
+   829→
+   830→      {/* Dialogs */}
+   831→      {renderFormDialog()}
+   832→      {renderDeleteDialog()}
+   833→      {renderLedgerDialog()}
+   834→
+   835→      <ExcelImport module="customers" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchCustomers} />
+   836→    </div>
+   837→  )
+   838→}
+   839→
+   840→export default CustomerModule
+   841→
