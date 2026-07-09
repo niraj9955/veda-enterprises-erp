@@ -315,11 +315,11 @@ export function TractorPaymentModule() {
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>{editingItem ? 'Edit Tractor Payment' : 'Add Tractor Payment'}</DialogTitle><DialogDescription>{editingItem ? 'Update the payment details.' : 'Fill in the details to create a new tractor payment.'}</DialogDescription></DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="grid gap-2"><Label htmlFor="tp-date">Date <span className="text-destructive">*</span></Label><Input id="tp-date" type="date" value={formData.date} onChange={(e) => handleFormChange('date', e.target.value)} /></div>
+          <DialogHeader><DialogTitle className="text-base sm:text-lg">{editingItem ? 'Edit Tractor Payment' : 'Add Tractor Payment'}</DialogTitle><DialogDescription className="text-xs sm:text-sm">{editingItem ? 'Update the payment details.' : 'Fill in the details to create a new tractor payment.'}</DialogDescription></DialogHeader>
+          <div className="grid gap-3 sm:gap-4">
+            <div className="grid gap-1.5 sm:gap-2"><Label htmlFor="tp-date" className="text-xs sm:text-sm">Date <span className="text-destructive">*</span></Label><Input id="tp-date" type="date" value={formData.date} onChange={(e) => handleFormChange('date', e.target.value)} className="h-10" /></div>
             {!editingItem && (
-              <div className="flex justify-end">
+              <div className="flex justify-end -mt-1">
                 <AiFillButton module="tractorPayment" onApply={(fields) => setFormData((prev) => ({
                   ...prev,
                   date: fields.date ? String(fields.date).slice(0, 10) : prev.date,
@@ -331,33 +331,33 @@ export function TractorPaymentModule() {
                 }))} />
               </div>
             )}
-            <div className="grid gap-2"><Label htmlFor="tp-vendor">Vendor Name <span className="text-destructive">*</span></Label>
+            <div className="grid gap-1.5 sm:gap-2"><Label htmlFor="tp-vendor" className="text-xs sm:text-sm">Vendor Name <span className="text-destructive">*</span></Label>
               <div className="relative">
-                <Input id="tp-vendor" placeholder="Enter vendor name" value={formData.vendorName} onChange={(e) => handleFormChange('vendorName', e.target.value)} className="pr-9" />
+                <Input id="tp-vendor" placeholder="Enter vendor name" value={formData.vendorName} onChange={(e) => handleFormChange('vendorName', e.target.value)} className="pr-10 h-10" />
                 <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
                   <FieldVoiceInput fieldLabel="vendor name" onChange={(text) => handleFormChange('vendorName', text)} />
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2"><Label htmlFor="tp-qty">Quantity (Ton)</Label><Input id="tp-qty" type="number" min="0" step="0.01" placeholder="0" value={formData.quantityTon} onChange={(e) => handleFormChange('quantityTon', e.target.value)} /></div>
-              <div className="grid gap-2"><Label htmlFor="tp-rate">Rate</Label><div className="relative"><IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" /><Input id="tp-rate" type="number" min="0" placeholder="0" className="pl-9" value={formData.rate} onChange={(e) => handleFormChange('rate', e.target.value)} /></div></div>
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <div className="grid gap-1.5 sm:gap-2"><Label htmlFor="tp-qty" className="text-xs sm:text-sm">Quantity (Ton)</Label><Input id="tp-qty" type="number" min="0" step="0.01" placeholder="0" value={formData.quantityTon} onChange={(e) => handleFormChange('quantityTon', e.target.value)} className="h-10" /></div>
+              <div className="grid gap-1.5 sm:gap-2"><Label htmlFor="tp-rate" className="text-xs sm:text-sm">Rate</Label><div className="relative"><IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" /><Input id="tp-rate" type="number" min="0" placeholder="0" className="pl-9 h-10" value={formData.rate} onChange={(e) => handleFormChange('rate', e.target.value)} /></div></div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2"><Label>Total Amount (₹)</Label><div className="h-10 flex items-center px-3 rounded-md border bg-muted/50 font-medium">{formatCurrency(totalAmount)}</div></div>
-              <div className="grid gap-2"><Label>Remaining (₹)</Label><div className={`h-10 flex items-center px-3 rounded-md border font-medium ${remainingAmount > 0 ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>{formatCurrency(remainingAmount)}</div></div>
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <div className="grid gap-1.5 sm:gap-2"><Label className="text-xs sm:text-sm">Total Amount (₹)</Label><div className="h-10 flex items-center px-3 rounded-md border bg-muted/50 font-medium text-sm">{formatCurrency(totalAmount)}</div></div>
+              <div className="grid gap-1.5 sm:gap-2"><Label className="text-xs sm:text-sm">Remaining (₹)</Label><div className={`h-10 flex items-center px-3 rounded-md border font-medium text-sm ${remainingAmount > 0 ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>{formatCurrency(remainingAmount)}</div></div>
             </div>
-            <div className="grid gap-2"><Label htmlFor="tp-paid">Paid Amount (₹)</Label><div className="relative"><IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" /><Input id="tp-paid" type="number" min="0" placeholder="0" className="pl-9" value={formData.paidAmount} onChange={(e) => handleFormChange('paidAmount', e.target.value)} /></div></div>
-            <div className="grid gap-2"><Label htmlFor="tp-remarks">Remarks</Label>
+            <div className="grid gap-1.5 sm:gap-2"><Label htmlFor="tp-paid" className="text-xs sm:text-sm">Paid Amount (₹)</Label><div className="relative"><IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" /><Input id="tp-paid" type="number" min="0" placeholder="0" className="pl-9 h-10" value={formData.paidAmount} onChange={(e) => handleFormChange('paidAmount', e.target.value)} /></div></div>
+            <div className="grid gap-1.5 sm:gap-2"><Label htmlFor="tp-remarks" className="text-xs sm:text-sm">Remarks</Label>
               <div className="relative">
-                <Textarea id="tp-remarks" placeholder="Optional remarks..." value={formData.remarks} onChange={(e) => handleFormChange('remarks', e.target.value)} className="min-h-[80px] pr-9" />
+                <Textarea id="tp-remarks" placeholder="Optional remarks..." value={formData.remarks} onChange={(e) => handleFormChange('remarks', e.target.value)} className="min-h-[72px] sm:min-h-[80px] pr-10 text-sm" />
                 <div className="absolute right-1.5 top-2">
                   <FieldVoiceInput fieldLabel="remarks" onChange={(text) => handleFormChange('remarks', text)} />
                 </div>
               </div>
             </div>
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setFormOpen(false)} disabled={formSubmitting}>Cancel</Button><Button onClick={handleSubmit} disabled={formSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white">{formSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}{editingItem ? 'Update' : 'Create'}</Button></DialogFooter>
+          <DialogFooter className="pt-2"><Button variant="outline" onClick={() => setFormOpen(false)} disabled={formSubmitting} className="h-10">Cancel</Button><Button onClick={handleSubmit} disabled={formSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white h-10">{formSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}{editingItem ? 'Update' : 'Create'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
