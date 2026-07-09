@@ -599,21 +599,37 @@ export function CustomerModule() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-col gap-2 w-full sm:hidden">
           <Button
             variant="outline"
             onClick={() => setImportOpen(true)}
-            className="flex-1 sm:flex-initial px-3 sm:px-4 text-xs sm:text-sm"
+            className="w-full"
           >
-            <Upload className="size-3.5 sm:size-4 mr-1.5 sm:mr-2" />
-            <span className="truncate">Import Excel</span>
+            <Upload className="size-4 mr-2" />
+            Import Excel
           </Button>
           <Button
             onClick={openAddDialog}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white flex-1 sm:flex-initial px-3 sm:px-4 text-xs sm:text-sm"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white w-full"
           >
-            <Plus className="size-3.5 sm:size-4 mr-1.5 sm:mr-2" />
-            <span className="truncate">Add Customer</span>
+            <Plus className="size-4 mr-2" />
+            Add Customer
+          </Button>
+        </div>
+        <div className="hidden sm:flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+          >
+            <Upload className="size-4 mr-2" />
+            Import Excel
+          </Button>
+          <Button
+            onClick={openAddDialog}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            <Plus className="size-4 mr-2" />
+            Add Customer
           </Button>
         </div>
       </div>
@@ -633,8 +649,8 @@ export function CustomerModule() {
         </CardContent>
       </Card>
 
-      {/* Table */}
-      <Card>
+      {/* Desktop: Table view */}
+      <Card className="hidden sm:block">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Customers</span>
@@ -741,11 +757,75 @@ export function CustomerModule() {
               </TableBody>
             </Table>
           </ScrollableTable>
-          <p className="text-xs text-muted-foreground mt-2">
+          <p className="text-xs text-muted-foreground mt-2 hidden sm:block">
             💡 Tip: Click on a customer's name or the book icon to view their complete transaction history (orders, dispatch, payments, sells, production, balance).
           </p>
         </CardContent>
       </Card>
+
+      {/* Mobile: Card list view */}
+      <div className="sm:hidden space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-base font-semibold">Customers</h3>
+          <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+            {loading ? '…' : `${customers.length} of ${totalCount}`}
+          </Badge>
+        </div>
+        {loading ? Array.from({ length: 4 }).map((_, i) => (
+          <Card key={i}><CardContent className="p-4 space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-2/3" /></CardContent></Card>
+        )) : customers.length === 0 ? (
+          <Card><CardContent className="p-8 text-center text-muted-foreground">
+            {debouncedSearch ? 'No customers found.' : 'No customers yet. Tap "Add Customer" to get started.'}
+          </CardContent></Card>
+        ) : customers.map((customer) => (
+          <Card key={customer.id}>
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <button
+                  type="button"
+                  className="text-emerald-700 hover:text-emerald-900 font-semibold text-left min-w-0 flex-1 truncate"
+                  onClick={() => setHistoryCustomerId(customer.id)}
+                  title="Tap to view full history"
+                >
+                  {customer.name}
+                </button>
+                <p className="font-bold text-emerald-700 whitespace-nowrap text-sm">{formatCurrency(customer.creditLimit)}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">Mobile</p>
+                  <p className="font-medium truncate">{customer.mobile || '—'}</p>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">GST</p>
+                  {customer.gstNumber ? (
+                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">{customer.gstNumber}</Badge>
+                  ) : (
+                    <p className="text-muted-foreground text-xs">No GST</p>
+                  )}
+                </div>
+              </div>
+              {customer.address && (
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">Address:</span>{' '}
+                  <span className="line-clamp-2">{customer.address}</span>
+                </p>
+              )}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" size="sm" onClick={() => setHistoryCustomerId(customer.id)} className="h-8 text-emerald-700 border-emerald-200">
+                  <BookOpen className="size-3.5 mr-1" />History
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => openEditDialog(customer)} className="h-8">
+                  <Pencil className="size-3.5 mr-1" />Edit
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setDeleteTarget(customer)} className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive">
+                  <Trash2 className="size-3.5 mr-1" />Delete
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       {/* Dialogs */}
       {renderFormDialog()}
