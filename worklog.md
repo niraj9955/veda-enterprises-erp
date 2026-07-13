@@ -1496,3 +1496,30 @@ Stage Summary:
   • Database: Export + Restore + Clear All + Clear Specific Section (per-collection)
   • AI: Save + Reset Configuration
 - Safety rails: cannot delete own account, cannot delete/deactivate last admin, all destructive actions require confirmation dialog
+
+---
+Task ID: dashboard-no-data-image-tiles
+Agent: Main Agent
+Task: Remove all data from dashboard cards — only show clickable tiles with images; make cards bigger and attractive
+
+Work Log:
+- Audited existing dashboard-module.tsx (398 lines) — it had 8 KpiCards showing numbers (today's production, sales, payments, stock, expenses etc.) + an Expense Breakdown section with 6 sub-cards showing amounts
+- User wanted: NO data on cards, just the card visible; clicking should still navigate; bigger & more attractive; with images
+- Rewrote dashboard-module.tsx from scratch:
+  • Replaced all KpiCards + ExpenseCards with a single TILES array of 18 navigation tiles
+  • Each tile = button with: unique gradient background (from-X via-Y to-Z), large emoji (6xl-7xl) as visual centerpiece, decorative radial-gradient overlay, bottom label bar with backdrop-blur
+  • aspect-[4/3] for bigger uniform cards
+  • Grid: 2 cols mobile / 3 cols sm / 4 cols lg / 5 cols xl
+  • Hover effects: shadow-2xl glow per category color, -translate-y-1 lift, emoji scale-110, "Open →" fade-in
+  • Focus-visible ring for accessibility
+  • NO numbers, NO stats fetch, NO api.getDashboardStats call — dashboard loads instantly
+- 18 tiles cover: Production, Daily Sell, Customer Payment, Stock, Orders, Dispatch, Expenses, Labour Payment, Tractor Payment, Dust Purchase, Cement Purchase, Hardner, Electricity, Factory Stuff, Bills, Customers, Reports, Settings
+- TypeScript: zero errors in dashboard-module.tsx (all errors shown are pre-existing in other files)
+- Next.js production build: ✓ Compiled successfully in 14.1s
+
+Stage Summary:
+- Dashboard is now a pure navigation hub — no data, just beautiful clickable image tiles
+- Each tile uses a unique gradient + emoji combo (🏭 Production, 🛒 Daily Sell, 💳 Customer Payment, 📦 Stock, 📋 Orders, 🚚 Dispatch, 💸 Expenses, 👷 Labour, 🚜 Tractor, ⛰️ Dust, 🏗️ Cement, 💧 Hardner, ⚡ Electricity, 🔧 Factory Stuff, 🧾 Bills, 👥 Customers, 📊 Reports, ⚙️ Settings)
+- Click any tile → setActiveModule() navigates to that module (same as before)
+- File: /home/z/my-project/src/components/erp/dashboard-module.tsx (was 398 lines, now ~190 lines)
+- Removed dependency on api.getDashboardStats — no more network round-trip on dashboard load
