@@ -43,6 +43,7 @@ import {
   Search,
   Pencil,
   Trash2,
+  Trash,
   BookOpen,
   Loader2,
   IndianRupee,
@@ -54,6 +55,7 @@ import { AiFillButton } from '@/components/ui/ai-fill-button'
 import { FieldVoiceInput } from '@/components/ui/field-voice-input'
 import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
 import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
+import { Checkbox } from '@/components/ui/checkbox'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -133,6 +135,59 @@ export function CustomerModule() {
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = React.useState<Customer | null>(null)
   const [deleting, setDeleting] = React.useState(false)
+
+  // ── Multi-select state ──────────────────────────────────────────────────
+  // Tracks which customer rows the user has ticked. The "Delete Selected"
+  // button appears in the header whenever this set is non-empty. We use a
+  // Set for O(1) toggle/lookup, then convert to an array when sending to
+  // the API. Same pattern as production / daily-sell modules.
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false)
+  const [bulkDeleting, setBulkDeleting] = React.useState(false)
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (prev.size === customers.length && customers.length > 0) {
+        return new Set()
+      }
+      return new Set(customers.map((c) => c.id))
+    })
+  }
+
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    setBulkDeleting(true)
+    try {
+      const res = await api.bulkDeleteCustomers(ids)
+      toast({
+        title: 'Success',
+        description: `${res.deletedCount} of ${ids.length} customer${res.deletedCount === 1 ? '' : 's'} deleted`,
+      })
+      setBulkDeleteOpen(false)
+      clearSelection()
+      fetchCustomers()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete selected customers',
+        variant: 'destructive',
+      })
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   // Ledger
   const [ledgerCustomer, setLedgerCustomer] = React.useState<Customer | null>(null)
@@ -308,6 +363,7 @@ export function CustomerModule() {
   const renderSkeletons = () =>
     Array.from({ length: 5 }).map((_, i) => (
       <TableRow key={i}>
+        <TableCell className="w-10"><Skeleton className="h-4 w-4" /></TableCell>
         <TableCell><Skeleton className="h-4 w-32" /></TableCell>
         <TableCell><Skeleton className="h-4 w-28" /></TableCell>
         <TableCell><Skeleton className="h-5 w-20" /></TableCell>
@@ -495,6 +551,49 @@ export function CustomerModule() {
     </AlertDialog>
   )
 
+  // ── Render: Bulk-delete confirmation ────────────────────────────────────
+  const renderBulkDeleteDialog = () => (
+    <AlertDialog
+      open={bulkDeleteOpen}
+      onOpenChange={(open) => {
+        if (!open && !bulkDeleting) setBulkDeleteOpen(false)
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-destructive">
+            Delete {selectedIds.size} Selected Customer{selectedIds.size === 1 ? '' : 's'}?
+          </AlertDialogTitle>
+          <AlertDialogDescription className="space-y-2 text-sm">
+            <span className="block">
+              You are about to permanently delete{' '}
+              <strong className="text-destructive">
+                {selectedIds.size} customer{selectedIds.size === 1 ? '' : 's'}
+              </strong>
+              . This action <strong>cannot be undone</strong>.
+            </span>
+            <span className="block text-muted-foreground">
+              Linked orders, payments, and dispatches will be kept for audit but
+              disassociated from the deleted customers (their customer field will
+              be cleared).
+            </span>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleBulkDelete}
+            disabled={bulkDeleting || selectedIds.size === 0}
+            className="bg-destructive text-white hover:bg-destructive/90"
+          >
+            {bulkDeleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+            Delete {selectedIds.size} Customer{selectedIds.size === 1 ? '' : 's'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+
   // ── Render: Ledger dialog ───────────────────────────────────────────────
   const renderLedgerDialog = () => (
     <Dialog open={!!ledgerCustomer} onOpenChange={(open) => !open && setLedgerCustomer(null)}>
@@ -586,6 +685,22 @@ export function CustomerModule() {
 
   return (
     <div className="space-y-4 md:space-y-6">
+      {/* Full-screen loading overlay during bulk delete */}
+      {bulkDeleting && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl p-8 flex flex-col items-center gap-4 min-w-[280px]">
+            <Loader2 className="size-12 animate-spin text-emerald-600" />
+            <div className="text-center">
+              <p className="text-lg font-semibold">
+                Deleting {selectedIds.size} customer{selectedIds.size === 1 ? '' : 's'}...
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Please wait while records are removed.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
@@ -608,6 +723,30 @@ export function CustomerModule() {
             <Upload className="size-4 mr-2" />
             Import Excel
           </Button>
+          {selectedIds.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={bulkDeleting || loading}
+              className="w-full text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-4 mr-2" />
+              Delete Selected
+              <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">
+                {selectedIds.size}
+              </Badge>
+            </Button>
+          )}
+          {selectedIds.size > 0 && (
+            <Button
+              variant="ghost"
+              onClick={clearSelection}
+              disabled={bulkDeleting}
+              className="w-full"
+            >
+              Clear Selection
+            </Button>
+          )}
           <Button
             onClick={openAddDialog}
             className="bg-emerald-600 hover:bg-emerald-700 text-white w-full"
@@ -624,6 +763,29 @@ export function CustomerModule() {
             <Upload className="size-4 mr-2" />
             Import Excel
           </Button>
+          {selectedIds.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={bulkDeleting || loading}
+              className="text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-4 mr-2" />
+              Delete Selected
+              <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">
+                {selectedIds.size}
+              </Badge>
+            </Button>
+          )}
+          {selectedIds.size > 0 && (
+            <Button
+              variant="ghost"
+              onClick={clearSelection}
+              disabled={bulkDeleting}
+            >
+              Clear Selection
+            </Button>
+          )}
           <Button
             onClick={openAddDialog}
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -654,13 +816,20 @@ export function CustomerModule() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Customers</span>
-            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
-              {loading
-                ? 'Loading…'
-                : totalCount > customers.length
-                  ? `Showing ${customers.length} of ${totalCount} records`
-                  : `${customers.length} record${customers.length !== 1 ? 's' : ''}`}
-            </Badge>
+            <div className="flex items-center gap-2">
+              {selectedIds.size > 0 && (
+                <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/30">
+                  {selectedIds.size} selected
+                </Badge>
+              )}
+              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                {loading
+                  ? 'Loading…'
+                  : totalCount > customers.length
+                    ? `Showing ${customers.length} of ${totalCount} records`
+                    : `${customers.length} record${customers.length !== 1 ? 's' : ''}`}
+              </Badge>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -668,7 +837,17 @@ export function CustomerModule() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 bg-background z-20 min-w-[140px]">Name</TableHead>
+                  <TableHead className="w-10 sticky left-0 bg-background z-30">
+                    <Checkbox
+                      checked={
+                        customers.length > 0 &&
+                        selectedIds.size === customers.length
+                      }
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all rows"
+                    />
+                  </TableHead>
+                  <TableHead className="sticky left-10 bg-background z-20 min-w-[140px]">Name</TableHead>
                   <TableHead className="whitespace-nowrap">Mobile</TableHead>
                   <TableHead className="whitespace-nowrap">GST Number</TableHead>
                   <TableHead className="min-w-[180px]">Address</TableHead>
@@ -681,7 +860,7 @@ export function CustomerModule() {
                   renderSkeletons()
                 ) : customers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                       {debouncedSearch
                         ? 'No customers found matching your search.'
                         : 'No customers yet. Click "Add Customer" to get started.'}
@@ -689,8 +868,20 @@ export function CustomerModule() {
                   </TableRow>
                 ) : (
                   customers.map((customer) => (
-                    <TableRow key={customer.id} className="cursor-pointer hover:bg-emerald-50/40" onClick={() => setHistoryCustomerId(customer.id)}>
-                      <TableCell className="font-medium sticky left-0 bg-background z-10 min-w-[140px]">
+                    <TableRow
+                      key={customer.id}
+                      data-state={selectedIds.has(customer.id) ? 'selected' : undefined}
+                      className={`cursor-pointer hover:bg-emerald-50/40 ${selectedIds.has(customer.id) ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}`}
+                      onClick={() => setHistoryCustomerId(customer.id)}
+                    >
+                      <TableCell className="w-10 sticky left-0 bg-background z-10" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(customer.id)}
+                          onCheckedChange={() => toggleSelect(customer.id)}
+                          aria-label={`Select row for ${customer.name}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium sticky left-10 bg-background z-10 min-w-[140px]">
                         <button
                           type="button"
                           className="text-emerald-700 hover:text-emerald-900 hover:underline text-left"
@@ -766,7 +957,17 @@ export function CustomerModule() {
       {/* Mobile: Card list view */}
       <div className="sm:hidden space-y-3">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-base font-semibold">Customers</h3>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={
+                customers.length > 0 &&
+                selectedIds.size === customers.length
+              }
+              onCheckedChange={toggleSelectAll}
+              aria-label="Select all customers"
+            />
+            <h3 className="text-base font-semibold">Customers</h3>
+          </div>
           <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
             {loading ? '…' : `${customers.length} of ${totalCount}`}
           </Badge>
@@ -778,17 +979,29 @@ export function CustomerModule() {
             {debouncedSearch ? 'No customers found.' : 'No customers yet. Tap "Add Customer" to get started.'}
           </CardContent></Card>
         ) : customers.map((customer) => (
-          <Card key={customer.id}>
+          <Card
+            key={customer.id}
+            data-state={selectedIds.has(customer.id) ? 'selected' : undefined}
+            className={selectedIds.has(customer.id) ? 'border-destructive/40 bg-destructive/5' : ''}
+          >
             <CardContent className="p-4 space-y-2">
               <div className="flex items-start justify-between gap-2">
-                <button
-                  type="button"
-                  className="text-emerald-700 hover:text-emerald-900 font-semibold text-left min-w-0 flex-1 truncate"
-                  onClick={() => setHistoryCustomerId(customer.id)}
-                  title="Tap to view full history"
-                >
-                  {customer.name}
-                </button>
+                <div className="flex items-start gap-2 min-w-0 flex-1">
+                  <Checkbox
+                    checked={selectedIds.has(customer.id)}
+                    onCheckedChange={() => toggleSelect(customer.id)}
+                    aria-label={`Select ${customer.name}`}
+                    className="mt-1"
+                  />
+                  <button
+                    type="button"
+                    className="text-emerald-700 hover:text-emerald-900 font-semibold text-left min-w-0 flex-1 truncate"
+                    onClick={() => setHistoryCustomerId(customer.id)}
+                    title="Tap to view full history"
+                  >
+                    {customer.name}
+                  </button>
+                </div>
                 <p className="font-bold text-emerald-700 whitespace-nowrap text-sm">{formatCurrency(customer.creditLimit)}</p>
               </div>
               <div className="grid grid-cols-2 gap-2 text-sm">
@@ -830,6 +1043,7 @@ export function CustomerModule() {
       {/* Dialogs */}
       {renderFormDialog()}
       {renderDeleteDialog()}
+      {renderBulkDeleteDialog()}
       {renderLedgerDialog()}
 
       <ExcelImport module="customers" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchCustomers} />

@@ -52,6 +52,11 @@ export const api = {
     request<{ customer: unknown }>(`/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCustomer: (id: string) =>
     request<{ message: string }>(`/customers/${id}`, { method: 'DELETE' }),
+  bulkDeleteCustomers: (ids: string[]) =>
+    request<{ message: string; deletedCount: number; requestedCount: number }>('/customers/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
   getCustomerHistory: (id: string) =>
     request<{ customer: Record<string, unknown>; summary: Record<string, number>; orders: unknown[]; dispatches: unknown[]; payments: unknown[]; customerPayments: unknown[]; timeline: unknown[] }>(`/customers/${id}/history`),
   // Bill-specific history — production + dispatches + previous bills, used
