@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -72,6 +73,10 @@ import {
   Check,
   Sparkles,
   EyeOff,
+  RotateCcw,
+  Eraser,
+  Layers,
+  Plus,
 } from 'lucide-react'
 import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
 
@@ -200,6 +205,169 @@ export default function AdminPanelModule() {
   const [dbAction, setDbAction] = React.useState<'clear' | null>(null)
   const [dbLoading, setDbLoading] = React.useState(false)
 
+  // ── Users bulk operations ───────────────────────────────────────────────
+  // Adds the same multi-select + bulk-delete pattern used in every other ERP
+  // module. Self-selection is auto-excluded from the table so the admin can't
+  // accidentally tick their own row.
+  const [selectedUserIds, setSelectedUserIds] = React.useState<Set<string>>(new Set())
+  const [bulkUserAction, setBulkUserAction] = React.useState<'delete' | 'activate' | 'deactivate' | null>(null)
+  const [bulkUserLoading, setBulkUserLoading] = React.useState(false)
+
+  const toggleSelectUser = (id: string) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const toggleSelectAllUsers = () => {
+    if (selectedUserIds.size === users.length) {
+      setSelectedUserIds(new Set())
+    } else {
+      setSelectedUserIds(new Set(users.map((u) => u.id)))
+    }
+  }
+  const clearUserSelection = () => setSelectedUserIds(new Set())
+
+  const handleBulkUserConfirm = async () => {
+    if (!bulkUserAction || selectedUserIds.size === 0) return
+    const ids = Array.from(selectedUserIds)
+    setBulkUserLoading(true)
+    try {
+      if (bulkUserAction === 'delete') {
+        const res = await api.bulkDeleteUsers(ids)
+        toast({ title: 'Success', description: res.message })
+      } else {
+        const active = bulkUserAction === 'activate'
+        const res = await api.bulkUpdateUsers(ids, active)
+        toast({ title: 'Success', description: res.message })
+      }
+      setBulkUserAction(null)
+      clearUserSelection()
+      fetchUsers()
+    } catch (err) {
+      toast({
+        title: 'Bulk action failed',
+        description: err instanceof Error ? err.message : 'Failed',
+        variant: 'destructive',
+      })
+    } finally {
+      setBulkUserLoading(false)
+    }
+  }
+
+  // ── Company: dirty tracking + discard + reset to defaults ───────────────
+  // `savedCompanyForm` is a snapshot of the form at the moment of last save.
+  // We compare current form vs snapshot to show the "Unsaved changes" badge.
+  const [savedCompanyForm, setSavedCompanyForm] = React.useState<CompanyForm | null>(null)
+  const [resetCompanyOpen, setResetCompanyOpen] = React.useState(false)
+  const companyIsDirty = React.useMemo(() => {
+    if (!savedCompanyForm) return false
+    return (Object.keys(savedCompanyForm) as (keyof CompanyForm)[]).some(
+      (k) => savedCompanyForm[k] !== companyForm[k]
+    )
+  }, [savedCompanyForm, companyForm])
+
+  // Capture snapshot whenever `company` changes from the store (i.e. after save)
+  React.useEffect(() => {
+    if (company) {
+      const snapshot: CompanyForm = {
+        name: company.name || '',
+        tagline: company.tagline || '',
+        phone: company.phone || '',
+        email: company.email || '',
+        address: company.address || '',
+        city: company.city || '',
+        state: company.state || '',
+        pincode: company.pincode || '',
+        gstNumber: company.gstNumber || '',
+        panNumber: company.panNumber || '',
+        bankName: company.bankName || '',
+        bankAccount: company.bankAccount || '',
+        bankIfsc: company.bankIfsc || '',
+        invoicePrefix: company.invoicePrefix || 'INV',
+        dispatchPrefix: company.dispatchPrefix || 'DSP',
+        orderPrefix: company.orderPrefix || 'ORD',
+        terms: company.terms || '',
+        signatureName: company.signatureName || '',
+        logoUrl: company.logoUrl || '',
+        primaryColor: company.primaryColor || '#059669',
+      }
+      setSavedCompanyForm(snapshot)
+    }
+  }, [company])
+
+  const handleDiscardCompanyChanges = () => {
+    if (savedCompanyForm) {
+      setCompanyForm(savedCompanyForm)
+      toast({ title: 'Changes discarded', description: 'Form reverted to last saved state' })
+    } else {
+      setCompanyForm(emptyCompanyForm)
+      toast({ title: 'Form cleared', description: 'No saved state to revert to' })
+    }
+  }
+
+  const handleResetCompanyDefaults = async () => {
+    setResetCompanyOpen(false)
+    setSavingCompany(true)
+    try {
+      // Reset to emptyCompanyForm values but keep setupComplete so the user
+      // doesn't get kicked to the onboarding wizard. We also keep the logo
+      // because removing it would be surprising from a "reset settings" action.
+      const keptLogo = companyForm.logoUrl
+      const resetForm: CompanyForm = { ...emptyCompanyForm, logoUrl: keptLogo }
+      setCompanyForm(resetForm)
+      const result = await api.updateCompany({ ...resetForm, setupComplete: true })
+      setCompany(result.company as Parameters<typeof setCompany>[0])
+      toast({ title: 'Reset to defaults', description: 'All company settings have been cleared' })
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed', variant: 'destructive' })
+    } finally {
+      setSavingCompany(false)
+    }
+  }
+
+  // ── Database: clear specific section ────────────────────────────────────
+  const [clearableSections, setClearableSections] = React.useState<{ key: string; label: string; count: number }[]>([])
+  const [clearSectionKey, setClearSectionKey] = React.useState<string>('')
+  const [clearSectionOpen, setClearSectionOpen] = React.useState(false)
+  const [clearSectionLoading, setClearSectionLoading] = React.useState(false)
+
+  const fetchClearableSections = React.useCallback(async () => {
+    try {
+      const res = await api.getClearableSections()
+      setClearableSections(res.sections)
+      if (!clearSectionKey && res.sections.length > 0) {
+        setClearSectionKey(res.sections[0].key)
+      }
+    } catch {
+      // silent — dropdown just stays empty
+    }
+  }, [clearSectionKey])
+
+  const selectedSectionMeta = clearableSections.find((s) => s.key === clearSectionKey)
+
+  const handleClearSection = async () => {
+    if (!clearSectionKey) return
+    setClearSectionLoading(true)
+    try {
+      const res = await api.clearSection(clearSectionKey)
+      toast({ title: 'Section cleared', description: res.message })
+      setClearSectionOpen(false)
+      // Refresh counts so the dropdown reflects the new state
+      await fetchClearableSections()
+    } catch (err) {
+      toast({
+        title: 'Failed to clear section',
+        description: err instanceof Error ? err.message : 'Failed',
+        variant: 'destructive',
+      })
+    } finally {
+      setClearSectionLoading(false)
+    }
+  }
+
   // Load company data
   React.useEffect(() => {
     if (company) {
@@ -244,6 +412,14 @@ export default function AdminPanelModule() {
   React.useEffect(() => {
     fetchUsers()
   }, [fetchUsers])
+
+  // Fetch the list of clearable sections (with live counts) on mount so the
+  // Database tab dropdown is populated immediately. We also re-fetch after
+  // any database operation (clear all, clear section, restore) so counts
+  // stay in sync.
+  React.useEffect(() => {
+    fetchClearableSections()
+  }, [fetchClearableSections])
 
   // ── Company save ─────────────────────────────────────────────────────────
   const handleSaveCompany = async () => {
@@ -451,6 +627,8 @@ export default function AdminPanelModule() {
           ? `${total} records deleted. Users and company profile preserved.`
           : 'All data has been cleared from the system',
       })
+      // Refresh the per-section counts in the Clear Section dropdown
+      await fetchClearableSections()
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to clear data', variant: 'destructive' })
     } finally {
@@ -505,6 +683,8 @@ export default function AdminPanelModule() {
         })
       } finally {
         setDbLoading(false)
+        // Refresh per-section counts so the dropdown reflects restored data
+        await fetchClearableSections()
       }
     }
     input.click()
@@ -649,6 +829,51 @@ export default function AdminPanelModule() {
 
               <Separator />
 
+              {/* Branding / Theme color customization */}
+              <div>
+                <h4 className="font-medium mb-3 flex items-center gap-2">
+                  <Palette className="h-4 w-4" /> Theme Color
+                </h4>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={companyForm.primaryColor}
+                      onChange={(e) => setCompanyForm({ ...companyForm, primaryColor: e.target.value })}
+                      className="h-10 w-16 rounded border border-input cursor-pointer bg-background"
+                      aria-label="Pick theme color"
+                    />
+                    <Input
+                      value={companyForm.primaryColor}
+                      onChange={(e) => setCompanyForm({ ...companyForm, primaryColor: e.target.value })}
+                      placeholder="#059669"
+                      className="font-mono max-w-[160px]"
+                    />
+                    <div
+                      className="h-10 px-4 rounded border flex items-center justify-center text-xs font-medium text-white"
+                      style={{ backgroundColor: companyForm.primaryColor }}
+                    >
+                      Preview
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {['#059669', '#0284c7', '#7c3aed', '#d97706', '#dc2626', '#0891b2', '#db2777', '#16a34a'].map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setCompanyForm({ ...companyForm, primaryColor: c })}
+                        className={`h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 ${companyForm.primaryColor.toLowerCase() === c.toLowerCase() ? 'border-foreground ring-2 ring-offset-2 ring-foreground/30' : 'border-white shadow'}`}
+                        style={{ backgroundColor: c }}
+                        aria-label={`Use color ${c}`}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Pick a color or click a preset. Applies to buttons, badges, and accents across the app.</p>
+                </div>
+              </div>
+
+              <Separator />
+
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>Terms & Conditions</Label>
@@ -660,10 +885,45 @@ export default function AdminPanelModule() {
                 </div>
               </div>
 
-              <div className="flex justify-end pt-2">
-                <Button onClick={handleSaveCompany} disabled={savingCompany} className="bg-emerald-600 hover:bg-emerald-700 min-w-[160px]">
-                  {savingCompany ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Saving...</> : <><Save className="h-4 w-4 mr-2" />Save Settings</>}
-                </Button>
+              {/* Action bar: Discard + Reset to Defaults + Save */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t">
+                <div className="flex items-center gap-2">
+                  {companyIsDirty ? (
+                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-700">
+                      <AlertCircle className="h-3 w-3 mr-1" /> Unsaved changes
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-700">
+                      <Check className="h-3 w-3 mr-1" /> All changes saved
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleDiscardCompanyChanges}
+                    disabled={savingCompany || !companyIsDirty}
+                    title="Revert form to last saved state"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />Discard Changes
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setResetCompanyOpen(true)}
+                    disabled={savingCompany}
+                    className="text-destructive hover:bg-destructive/10"
+                    title="Clear all company settings back to defaults"
+                  >
+                    <Eraser className="h-4 w-4 mr-2" />Reset to Defaults
+                  </Button>
+                  <Button
+                    onClick={handleSaveCompany}
+                    disabled={savingCompany}
+                    className="bg-emerald-600 hover:bg-emerald-700 min-w-[160px]"
+                  >
+                    {savingCompany ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Saving...</> : <><Save className="h-4 w-4 mr-2" />Save Settings</>}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -803,14 +1063,62 @@ export default function AdminPanelModule() {
           {/* User Management Table */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle className="flex items-center gap-2 flex-wrap">
                   <Users className="h-5 w-5 text-emerald-600" />
                   User Management
+                  {selectedUserIds.size > 0 && (
+                    <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/30">
+                      {selectedUserIds.size} selected
+                    </Badge>
+                  )}
                 </CardTitle>
-                <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700">
-                  Add User
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {/* Bulk action buttons — only visible when rows are selected */}
+                  {selectedUserIds.size > 0 && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setBulkUserAction('activate')}
+                        disabled={bulkUserLoading}
+                        className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-700 dark:hover:bg-emerald-900/20"
+                      >
+                        <Power className="size-4 mr-1.5" />Activate Selected
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setBulkUserAction('deactivate')}
+                        disabled={bulkUserLoading}
+                        className="text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700 dark:hover:bg-amber-900/20"
+                      >
+                        <PowerOff className="size-4 mr-1.5" />Deactivate Selected
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setBulkUserAction('delete')}
+                        disabled={bulkUserLoading}
+                        className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                      >
+                        <Trash2 className="size-4 mr-1.5" />Delete Selected
+                        <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">{selectedUserIds.size}</Badge>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearUserSelection}
+                        disabled={bulkUserLoading}
+                      >
+                        Clear Selection
+                      </Button>
+                    </>
+                  )}
+                  <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700">
+                    <Plus className="size-4 mr-1" />Add User
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -818,6 +1126,13 @@ export default function AdminPanelModule() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={users.length > 0 && selectedUserIds.size === users.length}
+                          onCheckedChange={toggleSelectAllUsers}
+                          aria-label="Select all users"
+                        />
+                      </TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Role</TableHead>
@@ -830,6 +1145,7 @@ export default function AdminPanelModule() {
                     {loadingUsers ? (
                       Array.from({ length: 3 }).map((_, i) => (
                         <TableRow key={i}>
+                          <TableCell><Skeleton className="h-4 w-4" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-40" /></TableCell>
                           <TableCell><Skeleton className="h-5 w-20" /></TableCell>
@@ -840,7 +1156,7 @@ export default function AdminPanelModule() {
                       ))
                     ) : users.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                        <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                           No users yet. Click &quot;Add User&quot; to create one.
                         </TableCell>
                       </TableRow>
@@ -848,8 +1164,20 @@ export default function AdminPanelModule() {
                       users.map((u) => {
                         const isSelf = u.id === currentUser?.id
                         const perms = ROLE_PERMISSIONS[u.role]
+                        const isSelected = selectedUserIds.has(u.id)
                         return (
-                          <TableRow key={u.id}>
+                          <TableRow
+                            key={u.id}
+                            data-state={isSelected ? 'selected' : undefined}
+                            className={isSelected ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}
+                          >
+                            <TableCell className="w-10">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelectUser(u.id)}
+                                aria-label={`Select user ${u.name}`}
+                              />
+                            </TableCell>
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
                                 {u.name}
@@ -956,6 +1284,63 @@ export default function AdminPanelModule() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Clear Specific Section — granular section-level delete */}
+          <Card className="border-amber-200 dark:border-amber-800">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Layers className="h-5 w-5 text-amber-600" />
+                Clear Specific Section
+              </CardTitle>
+              <CardDescription>
+                Delete all records from a single module — useful for resetting just the Customers, Orders, or Payments data without touching anything else. Cannot be undone.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="clear-section-select">Select Section to Clear</Label>
+                  <Select value={clearSectionKey} onValueChange={setClearSectionKey}>
+                    <SelectTrigger id="clear-section-select">
+                      <SelectValue placeholder="Pick a section..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clearableSections.map((s) => (
+                        <SelectItem key={s.key} value={s.key} disabled={s.count === 0}>
+                          <div className="flex items-center justify-between w-full">
+                            <span>{s.label}</span>
+                            <Badge variant="outline" className="ml-2 text-[10px]">
+                              {s.count} record{s.count === 1 ? '' : 's'}
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  onClick={() => setClearSectionOpen(true)}
+                  disabled={!selectedSectionMeta || selectedSectionMeta.count === 0 || clearSectionLoading || dbLoading}
+                  variant="outline"
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10 sm:w-auto"
+                >
+                  <Eraser className="h-4 w-4 mr-2" />
+                  Clear Section
+                </Button>
+              </div>
+              {clearableSections.length === 0 && (
+                <p className="text-xs text-muted-foreground">Loading sections...</p>
+              )}
+              {selectedSectionMeta && selectedSectionMeta.count > 0 && (
+                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                    You are about to permanently delete <strong>{selectedSectionMeta.count}</strong> record{selectedSectionMeta.count === 1 ? '' : 's'} from <strong>{selectedSectionMeta.label}</strong>. Consider exporting a backup first.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ── AI Assistant Tab ──────────────────────────────────────────── */}
@@ -1072,6 +1457,124 @@ export default function AdminPanelModule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Bulk User Action Confirmation ─────────────────────────────────── */}
+      <AlertDialog
+        open={bulkUserAction !== null}
+        onOpenChange={(open) => {
+          if (!open && !bulkUserLoading) setBulkUserAction(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              {bulkUserAction === 'delete' && <Trash2 className="h-5 w-5" />}
+              {bulkUserAction === 'activate' && <Power className="h-5 w-5 text-emerald-600" />}
+              {bulkUserAction === 'deactivate' && <PowerOff className="h-5 w-5 text-amber-600" />}
+              {bulkUserAction === 'delete' && `Delete ${selectedUserIds.size} ${selectedUserIds.size === 1 ? 'User' : 'Users'}?`}
+              {bulkUserAction === 'activate' && `Activate ${selectedUserIds.size} ${selectedUserIds.size === 1 ? 'User' : 'Users'}?`}
+              {bulkUserAction === 'deactivate' && `Deactivate ${selectedUserIds.size} ${selectedUserIds.size === 1 ? 'User' : 'Users'}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              {bulkUserAction === 'delete' && (
+                <span className="block">
+                  You are about to permanently delete <strong className="text-destructive">{selectedUserIds.size} user{selectedUserIds.size === 1 ? '' : 's'}</strong>.
+                  This action <strong>cannot be undone</strong>. You cannot delete your own account or the last active admin.
+                </span>
+              )}
+              {bulkUserAction === 'activate' && (
+                <span className="block">
+                  You are about to activate <strong>{selectedUserIds.size} user{selectedUserIds.size === 1 ? '' : 's'}</strong>. They will be able to log in immediately.
+                </span>
+              )}
+              {bulkUserAction === 'deactivate' && (
+                <span className="block">
+                  You are about to deactivate <strong>{selectedUserIds.size} user{selectedUserIds.size === 1 ? '' : 's'}</strong>. They will be signed out and cannot log in until re-activated. You cannot deactivate your own account or the last active admin.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkUserLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkUserConfirm}
+              disabled={bulkUserLoading || selectedUserIds.size === 0}
+              className={
+                bulkUserAction === 'delete'
+                  ? 'bg-destructive text-white hover:bg-destructive/90'
+                  : bulkUserAction === 'activate'
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'bg-amber-600 text-white hover:bg-amber-700'
+              }
+            >
+              {bulkUserLoading && <Loader2 className="mr-2 size-4 animate-spin" />}
+              {bulkUserAction === 'delete' && `Delete ${selectedUserIds.size} ${selectedUserIds.size === 1 ? 'User' : 'Users'}`}
+              {bulkUserAction === 'activate' && `Activate ${selectedUserIds.size} ${selectedUserIds.size === 1 ? 'User' : 'Users'}`}
+              {bulkUserAction === 'deactivate' && `Deactivate ${selectedUserIds.size} ${selectedUserIds.size === 1 ? 'User' : 'Users'}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Reset Company to Defaults Confirmation ────────────────────────── */}
+      <AlertDialog open={resetCompanyOpen} onOpenChange={setResetCompanyOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Eraser className="h-5 w-5 text-destructive" />
+              Reset All Company Settings?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will clear <strong>all</strong> company information — name, address, GST/PAN, bank details, prefixes, terms — back to empty defaults.
+              The company logo will be preserved. <strong className="block mt-2">This cannot be undone.</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={savingCompany}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleResetCompanyDefaults}
+              disabled={savingCompany}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {savingCompany && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Reset to Defaults
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Clear Specific Section Confirmation ───────────────────────────── */}
+      <AlertDialog
+        open={clearSectionOpen}
+        onOpenChange={(open) => {
+          if (!open && !clearSectionLoading) setClearSectionOpen(false)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <Eraser className="h-5 w-5" />
+              Clear {selectedSectionMeta?.label} Section?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong className="text-destructive">{selectedSectionMeta?.count ?? 0}</strong> record{(selectedSectionMeta?.count ?? 0) === 1 ? '' : 's'} from <strong>{selectedSectionMeta?.label}</strong>.
+              All other sections (Customers, Orders, Payments, etc.) will be untouched.
+              <strong className="block mt-2">This action cannot be undone. Consider exporting a backup first.</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={clearSectionLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleClearSection}
+              disabled={clearSectionLoading}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {clearSectionLoading && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Clear {selectedSectionMeta?.count ?? 0} Record{(selectedSectionMeta?.count ?? 0) === 1 ? '' : 's'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -1094,6 +1597,41 @@ function AiConfigSection() {
   const [loading, setLoading] = React.useState(true)
   const [saving, setSaving] = React.useState(false)
   const [hasExistingKey, setHasExistingKey] = React.useState(false)
+  const [resetLoading, setResetLoading] = React.useState(false)
+
+  // ── Reset AI Configuration ──────────────────────────────────────────────
+  // Disables the AI assistant and clears the saved API key from the server.
+  // The user can re-enable + re-enter a key later — this is not destructive
+  // beyond removing the key.
+  const handleResetAi = async () => {
+    setResetLoading(true)
+    try {
+      await api.updateAiConfig({
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        enabled: false,
+        openaiApiKey: '',
+      })
+      setProvider('openai')
+      setModel('gpt-4o-mini')
+      setEnabled(false)
+      setApiKey('')
+      setHasExistingKey(false)
+      await refreshAiConfig()
+      toast({
+        title: 'AI configuration reset',
+        description: 'AI Assistant has been disabled and the saved API key has been cleared.',
+      })
+    } catch (e) {
+      toast({
+        title: 'Reset failed',
+        description: (e as Error).message,
+        variant: 'destructive',
+      })
+    } finally {
+      setResetLoading(false)
+    }
+  }
 
   // Model presets — change when provider changes
   const MODEL_OPTIONS: Record<'openai' | 'groq', { value: string; label: string }[]> = {
@@ -1382,23 +1920,38 @@ function AiConfigSection() {
             </p>
           </div>
 
-          <Button
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-emerald-600 hover:bg-emerald-700"
-          >
-            {saving ? (
-              <>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              onClick={handleSave}
+              disabled={saving}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Configuration
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleResetAi}
+              disabled={saving || resetLoading}
+              className="text-destructive border-destructive/30 hover:bg-destructive/10"
+            >
+              {resetLoading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                Save Configuration
-              </>
-            )}
-          </Button>
+              ) : (
+                <RotateCcw className="mr-2 h-4 w-4" />
+              )}
+              Reset Configuration
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

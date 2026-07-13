@@ -422,6 +422,16 @@ export const api = {
     request<{ user: Record<string, unknown> }>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteUser: (id: string) =>
     request<{ message: string }>(`/users/${id}`, { method: 'DELETE' }),
+  bulkDeleteUsers: (ids: string[]) =>
+    request<{ message: string; deletedCount: number; requestedCount: number }>('/users/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  bulkUpdateUsers: (ids: string[], active: boolean) =>
+    request<{ message: string; modifiedCount: number; matchedCount: number; requestedCount: number; active: boolean }>('/users/bulk-update', {
+      method: 'POST',
+      body: JSON.stringify({ ids, active }),
+    }),
 
   // Database Management
   exportBackup: () => request<{
@@ -434,6 +444,14 @@ export const api = {
     message: string
     cleared?: Record<string, number>
   }>('/database', { method: 'DELETE' }),
+  getClearableSections: () => request<{
+    sections: { key: string; label: string; count: number }[]
+  }>('/database/clear-section'),
+  clearSection: (collection: string) =>
+    request<{ message: string; collection: string; label: string; deletedCount: number }>('/database/clear-section', {
+      method: 'POST',
+      body: JSON.stringify({ collection }),
+    }),
   restoreBackup: (data: Record<string, unknown>) =>
     request<{
       message: string
