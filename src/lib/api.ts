@@ -258,6 +258,11 @@ export const api = {
     request<{ customerPayment: unknown }>(`/customer-payment/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCustomerPayment: (id: string) =>
     request<{ message: string }>(`/customer-payment/${id}`, { method: 'DELETE' }),
+  bulkDeleteCustomerPayments: (ids: string[]) =>
+    request<{ message: string; deletedCount: number; requestedCount: number }>('/customer-payment/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 
   // Labour Payment
   getLabourPayments: () => request<{ labourPayments: unknown[] }>('/labour-payment'),
@@ -267,6 +272,11 @@ export const api = {
     request<{ labourPayment: unknown }>(`/labour-payment/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteLabourPayment: (id: string) =>
     request<{ message: string }>(`/labour-payment/${id}`, { method: 'DELETE' }),
+  bulkDeleteLabourPayments: (ids: string[]) =>
+    request<{ message: string; deletedCount: number; requestedCount: number }>('/labour-payment/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 
   // Tractor Payment
   getTractorPayments: () => request<{ tractorPayments: unknown[] }>('/tractor-payment'),
@@ -276,6 +286,11 @@ export const api = {
     request<{ tractorPayment: unknown }>(`/tractor-payment/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTractorPayment: (id: string) =>
     request<{ message: string }>(`/tractor-payment/${id}`, { method: 'DELETE' }),
+  bulkDeleteTractorPayments: (ids: string[]) =>
+    request<{ message: string; deletedCount: number; requestedCount: number }>('/tractor-payment/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 
   // Dust Purchase
   getDustPurchases: () => request<{ dustPurchases: unknown[] }>('/dust-purchase'),
