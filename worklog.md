@@ -1466,3 +1466,33 @@ Stage Summary:
 - All bulk-delete work for Purchases & Expenses + Management sections was already completed by the previous subagent rollout. No additional code changes needed.
 - Both sections now have: per-row checkbox, header select-all checkbox, "Delete Selected" button with count badge, "Clear Selection" button, confirmation AlertDialog, full-screen loading overlay, accountant-role deny at the API layer.
 - Payment → CustomerPayment mirror sync is preserved on bulk delete (best-effort, never blocks the parent delete).
+
+---
+Task ID: admin-panel-full-crud-customization
+Agent: Main Agent
+Task: Add update/delete/customization options to every Admin Panel section ("har section me update krne ka add kro jaise section ko delete krna update krna full customisation")
+
+Work Log:
+- Audited admin-panel-module.tsx (5 tabs: Company, Logo, Users, Database, AI Assistant)
+- Identified gaps: Company had only Save, Users had per-row CRUD but no bulk, Database had only Clear All, AI had only Save
+- Created 3 new API endpoints:
+  • POST /api/users/bulk-delete — admin-only, blocks self-delete + last-admin-delete
+  • POST /api/users/bulk-update — admin-only, bulk activate/deactivate, blocks self + last admin deactivation
+  • GET/POST /api/database/clear-section — list 17 clearable collections with counts, clear one by key
+- Added 4 new helpers to api.ts: bulkDeleteUsers, bulkUpdateUsers, getClearableSections, clearSection
+- Modified admin-panel-module.tsx (added ~450 lines):
+  • Company tab: Discard Changes button (revert to last saved), Reset to Defaults button (clears all settings, keeps logo), unsaved-changes badge, theme color picker with 8 preset swatches
+  • Users tab: full multi-select pattern (checkbox column, select-all header, 4 bulk action buttons, confirmation dialog, row highlight)
+  • Database tab: new "Clear Specific Section" card with dropdown of all 17 sections + live record counts, per-section delete with confirmation
+  • AI tab: Reset Configuration button (disables AI + clears saved API key)
+- Added 3 new AlertDialogs: bulk user action confirm, reset company confirm, clear section confirm
+- TypeScript: only 1 new TS warning introduced (line 322), uses same pre-existing `setCompany(result.company as ...)` pattern as 5 other lines; Next.js build passes
+- Pushed to origin/main (commit 00ad053)
+
+Stage Summary:
+- Every Admin Panel section now has update + delete + customization options:
+  • Company: Save + Discard + Reset to Defaults + theme color customization
+  • Users: per-row CRUD + multi-select bulk Delete/Activate/Deactivate
+  • Database: Export + Restore + Clear All + Clear Specific Section (per-collection)
+  • AI: Save + Reset Configuration
+- Safety rails: cannot delete own account, cannot delete/deactivate last admin, all destructive actions require confirmation dialog
