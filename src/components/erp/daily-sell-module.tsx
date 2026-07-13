@@ -84,7 +84,10 @@ interface DailySell {
   contactNumber: string
   product: string
   quantity: number
+  rate?: number
   amount: number
+  transporterName?: string
+  transporterFair?: number
   remarks: string
   createdAt: string
   updatedAt: string
@@ -97,7 +100,10 @@ interface DailySellFormData {
   contactNumber: string
   product: string
   quantity: string
+  rate: string
   amount: string
+  transporterName: string
+  transporterFair: string
   remarks: string
 }
 
@@ -125,7 +131,10 @@ const emptyForm: DailySellFormData = {
   contactNumber: '',
   product: '',
   quantity: '',
+  rate: '',
   amount: '',
+  transporterName: '',
+  transporterFair: '',
   remarks: '',
 }
 
@@ -278,7 +287,10 @@ export function DailySellModule() {
         contactNumber: String(pending.contactNumber || ''),
         product: String(pending.product || ''),
         quantity: pending.quantity != null ? String(pending.quantity) : '',
+        rate: pending.rate != null ? String(pending.rate) : '',
         amount: pending.amount != null ? String(pending.amount) : '',
+        transporterName: String(pending.transporterName || ''),
+        transporterFair: pending.transporterFair != null ? String(pending.transporterFair) : '',
         remarks: String(pending.remarks || ''),
       })
       toast({ title: 'AI auto-fill applied', description: 'Edit & verify before saving.' })
@@ -297,7 +309,10 @@ export function DailySellModule() {
       contactNumber: item.contactNumber || '',
       product: item.product || '',
       quantity: String(item.quantity ?? ''),
+      rate: String(item.rate ?? ''),
       amount: String(item.amount || ''),
+      transporterName: item.transporterName || '',
+      transporterFair: String(item.transporterFair ?? ''),
       remarks: item.remarks || '',
     })
     setFormOpen(true)
@@ -307,9 +322,16 @@ export function DailySellModule() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
+  // ── Computed amount (auto = quantity × rate) ───────────────────────────
+  const computedAmount = React.useMemo(() => {
+    const qty = Number(formData.quantity) || 0
+    const rate = Number(formData.rate) || 0
+    return qty * rate
+  }, [formData.quantity, formData.rate])
+
   const handleSubmit = async () => {
     // Unified empty-form check — show ONE popup instead of cascading errors
-    if (isFormEmpty([formData.date, formData.customerName, formData.address, formData.contactNumber, formData.product, formData.quantity, formData.amount, formData.remarks])) {
+    if (isFormEmpty([formData.date, formData.customerName, formData.address, formData.contactNumber, formData.product, formData.quantity, formData.rate, formData.amount, formData.transporterName, formData.transporterFair, formData.remarks])) {
       toast(showPleaseFillDataToast())
       return
     }
@@ -331,7 +353,10 @@ export function DailySellModule() {
         contactNumber: formData.contactNumber.trim(),
         product: formData.product.trim(),
         quantity: Number(formData.quantity) || 0,
-        amount: Number(formData.amount) || 0,
+        rate: Number(formData.rate) || 0,
+        amount: computedAmount,
+        transporterName: formData.transporterName.trim(),
+        transporterFair: Number(formData.transporterFair) || 0,
         remarks: formData.remarks.trim(),
       }
 
@@ -565,7 +590,10 @@ export function DailySellModule() {
                   <TableHead>Contact Number</TableHead>
                   <TableHead>Product</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Quantity</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Rate (₹)</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Amount (₹)</TableHead>
+                  <TableHead>Transporter Name</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Transporter Fair (₹)</TableHead>
                   <TableHead>Remarks</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -575,7 +603,7 @@ export function DailySellModule() {
                   renderSkeletons()
                 ) : filteredDailySells.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={13} className="h-32 text-center text-muted-foreground">
                       No daily sell entries yet. Click &quot;Add Daily Sell&quot; to get started.
                     </TableCell>
                   </TableRow>
@@ -603,7 +631,14 @@ export function DailySellModule() {
                       <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">
                         {item.quantity != null ? item.quantity.toLocaleString('en-IN') : '—'}
                       </TableCell>
+                      <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">
+                        {item.rate != null ? formatCurrency(item.rate) : '—'}
+                      </TableCell>
                       <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">{formatCurrency(item.amount)}</TableCell>
+                      <TableCell className="max-w-[150px] truncate">{item.transporterName || '—'}</TableCell>
+                      <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">
+                        {item.transporterFair != null ? formatCurrency(item.transporterFair) : '—'}
+                      </TableCell>
                       <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.remarks || '—'}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -650,7 +685,10 @@ export function DailySellModule() {
                   contactNumber: fields.contactNumber != null ? String(fields.contactNumber) : prev.contactNumber,
                   product: fields.product != null ? String(fields.product) : prev.product,
                   quantity: fields.quantity != null ? String(fields.quantity) : prev.quantity,
+                  rate: fields.rate != null ? String(fields.rate) : prev.rate,
                   amount: fields.amount != null ? String(fields.amount) : prev.amount,
+                  transporterName: fields.transporterName != null ? String(fields.transporterName) : prev.transporterName,
+                  transporterFair: fields.transporterFair != null ? String(fields.transporterFair) : prev.transporterFair,
                   remarks: fields.remarks != null ? String(fields.remarks) : prev.remarks,
                 }))}
               />
@@ -713,6 +751,7 @@ export function DailySellModule() {
                 <span className="font-medium"> Available = Total Production − Sell Item</span>.
               </p>
             </div>
+            {/* Quantity */}
             <div className="grid gap-2">
               <Label htmlFor="ds-quantity">Quantity</Label>
               <div className="relative">
@@ -736,18 +775,82 @@ export function DailySellModule() {
                 Number of units sold. Used by Stock Overview as the “Sell Item” value.
               </p>
             </div>
+
+            {/* Rate — comes AFTER Quantity */}
             <div className="grid gap-2">
-              <Label htmlFor="ds-amount">Amount (₹)</Label>
+              <Label htmlFor="ds-rate">Rate (₹)</Label>
               <div className="relative">
                 <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                <Input id="ds-amount" type="number" min="0" placeholder="0" className="pl-9 pr-9" value={formData.amount} onChange={(e) => handleFormChange('amount', e.target.value)} />
+                <Input
+                  id="ds-rate"
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  className="pl-9 pr-9"
+                  value={formData.rate}
+                  onChange={(e) => handleFormChange('rate', e.target.value)}
+                />
                 <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
-                  <FieldVoiceInput fieldLabel="amount" onChange={(text) => handleFormChange('amount', text.replace(/[^0-9.]/g, ''))} />
+                  <FieldVoiceInput
+                    fieldLabel="rate"
+                    onChange={(text) => handleFormChange('rate', text.replace(/[^0-9.]/g, ''))}
+                  />
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Total sale amount in rupees (quantity × rate, or whatever the customer paid).
+                Per-unit selling price. Amount auto-calculates as Quantity × Rate.
               </p>
+            </div>
+
+            {/* Amount — auto-calculated (read-only display) */}
+            <div className="grid gap-2">
+              <Label>Amount (₹) <span className="text-muted-foreground text-xs font-normal">(auto = quantity × rate)</span></Label>
+              <div className="flex h-9 items-center rounded-md border bg-emerald-50 dark:bg-emerald-900/20 px-3 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                {formatCurrency(computedAmount)}
+              </div>
+            </div>
+
+            {/* Transporter Name — NEW */}
+            <div className="grid gap-2">
+              <Label htmlFor="ds-transporter-name">Transporter Name</Label>
+              <div className="relative">
+                <Input
+                  id="ds-transporter-name"
+                  placeholder="e.g. Ramesh Transport"
+                  value={formData.transporterName}
+                  onChange={(e) => handleFormChange('transporterName', e.target.value)}
+                  className="pr-9"
+                />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <FieldVoiceInput
+                    fieldLabel="transporter name"
+                    onChange={(text) => handleFormChange('transporterName', text)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Transporter Fair — NEW */}
+            <div className="grid gap-2">
+              <Label htmlFor="ds-transporter-fair">Transporter Fair (₹)</Label>
+              <div className="relative">
+                <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                <Input
+                  id="ds-transporter-fair"
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  className="pl-9 pr-9"
+                  value={formData.transporterFair}
+                  onChange={(e) => handleFormChange('transporterFair', e.target.value)}
+                />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <FieldVoiceInput
+                    fieldLabel="transporter fair"
+                    onChange={(text) => handleFormChange('transporterFair', text.replace(/[^0-9.]/g, ''))}
+                  />
+                </div>
+              </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ds-remarks">Remarks</Label>

@@ -48,7 +48,10 @@ export async function POST(request: Request) {
       contactNumber: body.contactNumber || '',
       product: body.product || '',
       quantity: Number(body.quantity) || 0,
+      rate: Number(body.rate) || 0,
       amount: Number(body.amount),
+      transporterName: body.transporterName || '',
+      transporterFair: Number(body.transporterFair) || 0,
       remarks: body.remarks || '',
     })
     return NextResponse.json({ dailySell: toObject(record) }, { status: 201 })

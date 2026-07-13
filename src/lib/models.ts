@@ -98,7 +98,10 @@ const DailySellSchema = new mongoose.Schema({
   contactNumber: { type: String, default: '' },
   product: { type: String, default: '' },
   quantity: { type: Number, default: 0 },
+  rate: { type: Number, default: 0 },
   amount: { type: Number, required: true },
+  transporterName: { type: String, default: '' },
+  transporterFair: { type: Number, default: 0 },
   remarks: { type: String, default: '' },
 }, { timestamps: true });
 DailySellSchema.index({ date: -1 });
