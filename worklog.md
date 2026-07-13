@@ -1445,3 +1445,24 @@ Stage Summary:
 - Pattern: `<Card className="hidden sm:block">...table...</Card>` + `<div className="sm:hidden space-y-3">...cards...</div>`
 - Desktop layout preserved unchanged; mobile UX completely redesigned from cramped horizontal-scroll table to readable vertical card list
 - All 8 modules consistent in design language (header card with name/date/amount, optional 2-col grid for secondary fields, footer with Edit/Delete buttons)
+
+---
+Task ID: bulk-delete-verify-purchase-management
+Agent: Main Agent
+Task: Verify bulk-delete (select + Delete Selected) is in place for Purchases & Expenses and Management sections
+
+Work Log:
+- Ran grep across all 16 module files for `selectedIds`, `toggleSelect`, `bulkDeleteOpen`, `Delete Selected`, `Clear Selection`
+- Confirmed UI is fully wired in:
+  • Purchases & Expenses (5/5): dust-purchase, cement-purchase, hardner, electricity, factory-stuff
+  • Management (4/4 + reports read-only): orders, dispatch, payments, expenses
+- Confirmed API endpoints exist at /api/{resource}/bulk-delete/route.ts for all 9 modules
+- Confirmed api.ts has bulkDelete<X> helper for all 9 modules
+- Spot-checked order-module.tsx end-to-end: state, handlers, AlertDialog confirmation, loading overlay, mobile+desktop buttons, table checkbox column, header select-all checkbox, row highlight when selected
+- Verified payments/bulk-delete also calls syncDeleteCustomerPayment per-id BEFORE deleteMany (so Customer Payment mirror stays consistent when bulk-deleting Payments)
+- TypeScript check (`npx tsc --noEmit`): zero errors in any of the 9 target module files or their bulk-delete API routes
+
+Stage Summary:
+- All bulk-delete work for Purchases & Expenses + Management sections was already completed by the previous subagent rollout. No additional code changes needed.
+- Both sections now have: per-row checkbox, header select-all checkbox, "Delete Selected" button with count badge, "Clear Selection" button, confirmation AlertDialog, full-screen loading overlay, accountant-role deny at the API layer.
+- Payment → CustomerPayment mirror sync is preserved on bulk delete (best-effort, never blocks the parent delete).

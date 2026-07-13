@@ -57,6 +57,7 @@ import {
 } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
+import { Checkbox } from '@/components/ui/checkbox'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -145,6 +146,55 @@ export default function ExpenseModule() {
 
   // Excel import
   const [importOpen, setImportOpen] = React.useState(false)
+
+  // ── Multi-select state ──────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false)
+  const [bulkDeleting, setBulkDeleting] = React.useState(false)
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (prev.size === filteredExpenses.length && filteredExpenses.length > 0) {
+        return new Set()
+      }
+      return new Set(filteredExpenses.map((i) => i.id))
+    })
+  }
+
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    setBulkDeleting(true)
+    try {
+      const res = await api.bulkDeleteExpenses(ids)
+      toast({
+        title: 'Success',
+        description: `${res.deletedCount} of ${ids.length} expense${res.deletedCount === 1 ? '' : 's'} deleted`,
+      })
+      setBulkDeleteOpen(false)
+      clearSelection()
+      fetchExpenses()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete selected expenses',
+        variant: 'destructive',
+      })
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   // ── Fetch expenses ──────────────────────────────────────────────────────
 
@@ -309,6 +359,18 @@ export default function ExpenseModule() {
 
   return (
     <div className="space-y-6">
+      {/* Full-screen loading overlay during bulk delete */}
+      {bulkDeleting && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl p-8 flex flex-col items-center gap-4 min-w-[280px]">
+            <Loader2 className="size-12 animate-spin text-emerald-600" />
+            <div className="text-center">
+              <p className="text-lg font-semibold">Deleting {selectedIds.size} expense{selectedIds.size === 1 ? '' : 's'}...</p>
+              <p className="text-sm text-muted-foreground mt-1">Please wait while records are removed.</p>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -324,6 +386,20 @@ export default function ExpenseModule() {
             <Upload className="mr-2 h-4 w-4" />
             Import Excel
           </Button>
+          {selectedIds.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={bulkDeleting || loading}
+              className="w-full text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />Delete Selected
+              <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">{selectedIds.size}</Badge>
+            </Button>
+          )}
+          {selectedIds.size > 0 && (
+            <Button variant="ghost" onClick={clearSelection} disabled={bulkDeleting} className="w-full">Clear Selection</Button>
+          )}
           <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700 text-white w-full">
             <Plus className="mr-2 h-4 w-4" />
             Add Expense
@@ -337,6 +413,20 @@ export default function ExpenseModule() {
             <Upload className="mr-2 h-4 w-4" />
             Import Excel
           </Button>
+          {selectedIds.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={bulkDeleting || loading}
+              className="text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />Delete Selected
+              <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">{selectedIds.size}</Badge>
+            </Button>
+          )}
+          {selectedIds.size > 0 && (
+            <Button variant="ghost" onClick={clearSelection} disabled={bulkDeleting}>Clear Selection</Button>
+          )}
           <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700 text-white">
             <Plus className="mr-2 h-4 w-4" />
             Add Expense
@@ -435,6 +525,7 @@ export default function ExpenseModule() {
         <Table>
           <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>
+              <TableHead className="w-10"><Checkbox checked={filteredExpenses.length > 0 && selectedIds.size === filteredExpenses.length} onCheckedChange={toggleSelectAll} aria-label="Select all rows" /></TableHead>
               <TableHead>Category</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead>Date</TableHead>
@@ -446,6 +537,7 @@ export default function ExpenseModule() {
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
+                  <TableCell><Skeleton className="h-5 w-6" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                   <TableCell><Skeleton className="ml-auto h-5 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-24" /></TableCell>
@@ -455,13 +547,14 @@ export default function ExpenseModule() {
               ))
             ) : filteredExpenses.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground py-12 text-center">
+                <TableCell colSpan={6} className="text-muted-foreground py-12 text-center">
                   No expenses found. Click &quot;Add Expense&quot; to get started.
                 </TableCell>
               </TableRow>
             ) : (
               filteredExpenses.map((expense) => (
-                <TableRow key={expense.id}>
+                <TableRow key={expense.id} data-state={selectedIds.has(expense.id) ? 'selected' : undefined} className={selectedIds.has(expense.id) ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}>
+                  <TableCell className="w-10"><Checkbox checked={selectedIds.has(expense.id)} onCheckedChange={() => toggleSelect(expense.id)} aria-label={`Select row for ${expense.category}`} /></TableCell>
                   <TableCell>
                     <Badge
                       variant="outline"
@@ -608,6 +701,22 @@ export default function ExpenseModule() {
               {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Delete
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Selected confirmation */}
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => { if (!open && !bulkDeleting) setBulkDeleteOpen(false) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Delete {selectedIds.size} Selected {selectedIds.size === 1 ? 'Expense' : 'Expenses'}?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-sm">
+              <span className="block">You are about to permanently delete <strong className="text-destructive">{selectedIds.size} expense{selectedIds.size === 1 ? '' : 's'}</strong>. This action <strong>cannot be undone</strong>.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete} disabled={bulkDeleting || selectedIds.size === 0} className="bg-destructive text-white hover:bg-destructive/90">{bulkDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Delete {selectedIds.size} {selectedIds.size === 1 ? 'Expense' : 'Expenses'}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

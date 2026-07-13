@@ -198,6 +198,11 @@ export const api = {
     request<{ order: unknown }>(`/orders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteOrder: (id: string) =>
     request<{ message: string }>(`/orders/${id}`, { method: 'DELETE' }),
+  bulkDeleteOrders: (ids: string[]) =>
+    request<{ message: string; deletedCount: number; requestedCount: number }>('/orders/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 
   // Dispatch
   getDispatches: () => request<{ dispatches: unknown[] }>('/dispatch'),
@@ -207,6 +212,11 @@ export const api = {
     request<{ dispatch: unknown }>(`/dispatch/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteDispatch: (id: string) =>
     request<{ message: string }>(`/dispatch/${id}`, { method: 'DELETE' }),
+  bulkDeleteDispatches: (ids: string[]) =>
+    request<{ message: string; deletedCount: number; requestedCount: number }>('/dispatch/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 
   // Payments
   getPayments: () => request<{ payments: unknown[] }>('/payments'),
@@ -216,6 +226,11 @@ export const api = {
     request<{ payment: unknown }>(`/payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deletePayment: (id: string) =>
     request<{ message: string }>(`/payments/${id}`, { method: 'DELETE' }),
+  bulkDeletePayments: (ids: string[]) =>
+    request<{ message: string; deletedCount: number; requestedCount: number }>('/payments/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 
   // Expenses
   getExpenses: (filters?: { category?: string; date?: string }) => {
@@ -231,6 +246,11 @@ export const api = {
     request<{ expense: unknown }>(`/expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteExpense: (id: string) =>
     request<{ message: string }>(`/expenses/${id}`, { method: 'DELETE' }),
+  bulkDeleteExpenses: (ids: string[]) =>
+    request<{ message: string; deletedCount: number; requestedCount: number }>('/expenses/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 
   // Daily Sell
   getDailySells: () => request<{ dailySells: unknown[] }>('/daily-sell'),
@@ -300,6 +320,11 @@ export const api = {
     request<{ dustPurchase: unknown }>(`/dust-purchase/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteDustPurchase: (id: string) =>
     request<{ message: string }>(`/dust-purchase/${id}`, { method: 'DELETE' }),
+  bulkDeleteDustPurchases: (ids: string[]) =>
+    request<{ message: string; deletedCount: number; requestedCount: number }>('/dust-purchase/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 
   // Cement Purchase
   getCementPurchases: () => request<{ cementPurchases: unknown[] }>('/cement-purchase'),
@@ -309,6 +334,11 @@ export const api = {
     request<{ cementPurchase: unknown }>(`/cement-purchase/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCementPurchase: (id: string) =>
     request<{ message: string }>(`/cement-purchase/${id}`, { method: 'DELETE' }),
+  bulkDeleteCementPurchases: (ids: string[]) =>
+    request<{ message: string; deletedCount: number; requestedCount: number }>('/cement-purchase/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 
   // Hardner
   getHardners: () => request<{ hardners: unknown[] }>('/hardner'),
@@ -318,6 +348,11 @@ export const api = {
     request<{ hardner: unknown }>(`/hardner/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteHardner: (id: string) =>
     request<{ message: string }>(`/hardner/${id}`, { method: 'DELETE' }),
+  bulkDeleteHardners: (ids: string[]) =>
+    request<{ message: string; deletedCount: number; requestedCount: number }>('/hardner/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 
   // Electricity
   getElectricitys: () => request<{ electricitys: unknown[] }>('/electricity'),
@@ -327,6 +362,11 @@ export const api = {
     request<{ electricity: unknown }>(`/electricity/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteElectricity: (id: string) =>
     request<{ message: string }>(`/electricity/${id}`, { method: 'DELETE' }),
+  bulkDeleteElectricitys: (ids: string[]) =>
+    request<{ message: string; deletedCount: number; requestedCount: number }>('/electricity/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 
   // Factory Stuff
   getFactoryStuffs: () => request<{ factoryStuffs: unknown[] }>('/factory-stuff'),
@@ -336,6 +376,11 @@ export const api = {
     request<{ factoryStuff: unknown }>(`/factory-stuff/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteFactoryStuff: (id: string) =>
     request<{ message: string }>(`/factory-stuff/${id}`, { method: 'DELETE' }),
+  bulkDeleteFactoryStuffs: (ids: string[]) =>
+    request<{ message: string; deletedCount: number; requestedCount: number }>('/factory-stuff/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 
   // Bills (Billing system)
   getBills: (filters?: { billType?: string; status?: string; search?: string }) => {

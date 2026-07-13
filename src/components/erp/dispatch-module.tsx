@@ -59,6 +59,7 @@ import {
 import ExcelImport from '@/components/erp/excel-import'
 import CustomerSearchInput from '@/components/erp/customer-search-input'
 import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
+import { Checkbox } from '@/components/ui/checkbox'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -168,6 +169,55 @@ export function DispatchModule() {
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = React.useState<Dispatch | null>(null)
   const [deleting, setDeleting] = React.useState(false)
+
+  // ── Multi-select state ──────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false)
+  const [bulkDeleting, setBulkDeleting] = React.useState(false)
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (prev.size === filteredDispatches.length && filteredDispatches.length > 0) {
+        return new Set()
+      }
+      return new Set(filteredDispatches.map((i) => i.id))
+    })
+  }
+
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    setBulkDeleting(true)
+    try {
+      const res = await api.bulkDeleteDispatches(ids)
+      toast({
+        title: 'Success',
+        description: `${res.deletedCount} of ${ids.length} dispatch entr${res.deletedCount === 1 ? 'y' : 'ies'} deleted`,
+      })
+      setBulkDeleteOpen(false)
+      clearSelection()
+      fetchDispatches()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete selected dispatches',
+        variant: 'destructive',
+      })
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   // ── Fetch dispatches ──────────────────────────────────────────────────
   const fetchDispatches = React.useCallback(async () => {
@@ -353,6 +403,7 @@ export function DispatchModule() {
   const renderSkeletons = () =>
     Array.from({ length: 5 }).map((_, i) => (
       <TableRow key={i}>
+        <TableCell><Skeleton className="h-4 w-6" /></TableCell>
         <TableCell><Skeleton className="h-4 w-24" /></TableCell>
         <TableCell><Skeleton className="h-4 w-28" /></TableCell>
         <TableCell><Skeleton className="h-4 w-20" /></TableCell>
@@ -728,6 +779,18 @@ export function DispatchModule() {
   // ── Render: Main ──────────────────────────────────────────────────────
   return (
     <div className="space-y-6 print:hidden">
+      {/* Full-screen loading overlay during bulk delete */}
+      {bulkDeleting && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl p-8 flex flex-col items-center gap-4 min-w-[280px]">
+            <Loader2 className="size-12 animate-spin text-emerald-600" />
+            <div className="text-center">
+              <p className="text-lg font-semibold">Deleting {selectedIds.size} entr{selectedIds.size === 1 ? 'y' : 'ies'}...</p>
+              <p className="text-sm text-muted-foreground mt-1">Please wait while records are removed.</p>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
@@ -750,6 +813,20 @@ export function DispatchModule() {
             <Upload className="size-4 mr-2" />
             Import Excel
           </Button>
+          {selectedIds.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={bulkDeleting || loading}
+              className="w-full sm:w-auto text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-4 mr-2" />Delete Selected
+              <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">{selectedIds.size}</Badge>
+            </Button>
+          )}
+          {selectedIds.size > 0 && (
+            <Button variant="ghost" onClick={clearSelection} disabled={bulkDeleting} className="w-full sm:w-auto">Clear Selection</Button>
+          )}
           <Button
             onClick={openCreateDialog}
             className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
@@ -780,9 +857,12 @@ export function DispatchModule() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Dispatches</span>
-            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
-              {filteredDispatches.length} of {dispatches.length} record{dispatches.length !== 1 ? 's' : ''}
-            </Badge>
+            <div className="flex items-center gap-2">
+              {selectedIds.size > 0 && <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/30">{selectedIds.size} selected</Badge>}
+              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                {filteredDispatches.length} of {dispatches.length} record{dispatches.length !== 1 ? 's' : ''}
+              </Badge>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -790,6 +870,7 @@ export function DispatchModule() {
             <Table>
               <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
+                  <TableHead className="w-10"><Checkbox checked={filteredDispatches.length > 0 && selectedIds.size === filteredDispatches.length} onCheckedChange={toggleSelectAll} aria-label="Select all rows" /></TableHead>
                   <TableHead>Dispatch No.</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Brick Type</TableHead>
@@ -805,7 +886,7 @@ export function DispatchModule() {
                   renderSkeletons()
                 ) : filteredDispatches.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <Truck className="size-8 text-muted-foreground/40" />
                         <span>No dispatch entries yet. Click &quot;Create Dispatch&quot; to get started.</span>
@@ -814,7 +895,8 @@ export function DispatchModule() {
                   </TableRow>
                 ) : (
                   filteredDispatches.map((dispatch) => (
-                    <TableRow key={dispatch.id}>
+                    <TableRow key={dispatch.id} data-state={selectedIds.has(dispatch.id) ? 'selected' : undefined} className={selectedIds.has(dispatch.id) ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}>
+                      <TableCell className="w-10"><Checkbox checked={selectedIds.has(dispatch.id)} onCheckedChange={() => toggleSelect(dispatch.id)} aria-label={`Select row for ${dispatch.dispatchNumber}`} /></TableCell>
                       <TableCell className="font-medium font-mono text-xs">
                         {dispatch.dispatchNumber}
                       </TableCell>
@@ -883,6 +965,22 @@ export function DispatchModule() {
       {renderCreateDialog()}
       {renderChallanDialog()}
       {renderDeleteDialog()}
+
+      {/* Bulk Delete Selected confirmation */}
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => { if (!open && !bulkDeleting) setBulkDeleteOpen(false) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Delete {selectedIds.size} Selected Dispatch {selectedIds.size === 1 ? 'Entry' : 'Entries'}?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-sm">
+              <span className="block">You are about to permanently delete <strong className="text-destructive">{selectedIds.size} dispatch {selectedIds.size === 1 ? 'entry' : 'entries'}</strong>. This action <strong>cannot be undone</strong>.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete} disabled={bulkDeleting || selectedIds.size === 0} className="bg-destructive text-white hover:bg-destructive/90">{bulkDeleting && <Loader2 className="mr-2 size-4 animate-spin" />}Delete {selectedIds.size} {selectedIds.size === 1 ? 'Entry' : 'Entries'}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ExcelImport module="dispatch" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchDispatches} />
     </div>

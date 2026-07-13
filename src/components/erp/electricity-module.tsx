@@ -42,6 +42,7 @@ import { AiFillButton } from '@/components/ui/ai-fill-button'
 import { FieldVoiceInput } from '@/components/ui/field-voice-input'
 import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
 import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
+import { Checkbox } from '@/components/ui/checkbox'
 
 interface Electricity {
   id: string
@@ -81,6 +82,55 @@ export function ElectricityModule() {
   const [formSubmitting, setFormSubmitting] = React.useState(false)
   const [deleteTarget, setDeleteTarget] = React.useState<Electricity | null>(null)
   const [deleting, setDeleting] = React.useState(false)
+
+  // ── Multi-select state ──────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false)
+  const [bulkDeleting, setBulkDeleting] = React.useState(false)
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (prev.size === filteredItems.length && filteredItems.length > 0) {
+        return new Set()
+      }
+      return new Set(filteredItems.map((i) => i.id))
+    })
+  }
+
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    setBulkDeleting(true)
+    try {
+      const res = await api.bulkDeleteElectricitys(ids)
+      toast({
+        title: 'Success',
+        description: `${res.deletedCount} of ${ids.length} electricity entr${res.deletedCount === 1 ? 'y' : 'ies'} deleted`,
+      })
+      setBulkDeleteOpen(false)
+      clearSelection()
+      fetchData()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete selected entries',
+        variant: 'destructive',
+      })
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   const fetchData = React.useCallback(async () => {
     setLoading(true)
@@ -190,6 +240,18 @@ export function ElectricityModule() {
 
   return (
     <div className="space-y-6">
+      {/* Full-screen loading overlay during bulk delete */}
+      {bulkDeleting && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl p-8 flex flex-col items-center gap-4 min-w-[280px]">
+            <Loader2 className="size-12 animate-spin text-emerald-600" />
+            <div className="text-center">
+              <p className="text-lg font-semibold">Deleting {selectedIds.size} entr{selectedIds.size === 1 ? 'y' : 'ies'}...</p>
+              <p className="text-sm text-muted-foreground mt-1">Please wait while records are removed.</p>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700"><Zap className="size-5" /></div>
@@ -200,10 +262,38 @@ export function ElectricityModule() {
         </div>
         <div className="flex flex-col gap-2 w-full sm:hidden">
           <Button variant="outline" onClick={() => setImportOpen(true)} className="w-full"><Upload className="size-4 mr-2" />Import Excel</Button>
+          {selectedIds.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={bulkDeleting || loading}
+              className="w-full text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-4 mr-2" />Delete Selected
+              <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">{selectedIds.size}</Badge>
+            </Button>
+          )}
+          {selectedIds.size > 0 && (
+            <Button variant="ghost" onClick={clearSelection} disabled={bulkDeleting} className="w-full">Clear Selection</Button>
+          )}
           <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700 text-white w-full"><Plus className="size-4" />Add Entry</Button>
         </div>
         <div className="hidden sm:flex gap-2">
           <Button variant="outline" onClick={() => setImportOpen(true)}><Upload className="size-4 mr-2" />Import Excel</Button>
+          {selectedIds.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={bulkDeleting || loading}
+              className="text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-4 mr-2" />Delete Selected
+              <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">{selectedIds.size}</Badge>
+            </Button>
+          )}
+          {selectedIds.size > 0 && (
+            <Button variant="ghost" onClick={clearSelection} disabled={bulkDeleting}>Clear Selection</Button>
+          )}
           <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700 text-white"><Plus className="size-4" />Add Entry</Button>
         </div>
       </div>
@@ -230,16 +320,17 @@ export function ElectricityModule() {
 
       {/* Desktop: Table view */}
       <Card className="hidden sm:block">
-        <CardHeader><CardTitle className="flex items-center justify-between"><span>Electricity Records</span><Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">{filteredItems.length} of {items.length} record{items.length !== 1 ? 's' : ''}</Badge></CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center justify-between"><span>Electricity Records</span><div className="flex items-center gap-2">{selectedIds.size > 0 && <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/30">{selectedIds.size} selected</Badge>}<Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">{filteredItems.length} of {items.length} record{items.length !== 1 ? 's' : ''}</Badge></div></CardTitle></CardHeader>
         <CardContent>
           <div className="max-h-[60vh] overflow-auto rounded-md border">
             <Table>
-              <TableHeader className="sticky top-0 bg-background z-10"><TableRow><TableHead>Date</TableHead><TableHead>Name</TableHead><TableHead>Work</TableHead><TableHead className="text-right">Amount (₹)</TableHead><TableHead>Remarks</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+              <TableHeader className="sticky top-0 bg-background z-10"><TableRow><TableHead className="w-10"><Checkbox checked={filteredItems.length > 0 && selectedIds.size === filteredItems.length} onCheckedChange={toggleSelectAll} aria-label="Select all rows" /></TableHead><TableHead>Date</TableHead><TableHead>Name</TableHead><TableHead>Work</TableHead><TableHead className="text-right">Amount (₹)</TableHead><TableHead>Remarks</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
               <TableBody>
-                {loading ? Array.from({ length: 5 }).map((_, i) => <TableRow key={i}><TableCell><Skeleton className="h-4 w-24" /></TableCell><TableCell><Skeleton className="h-4 w-32" /></TableCell><TableCell><Skeleton className="h-4 w-28" /></TableCell><TableCell><Skeleton className="h-4 w-24" /></TableCell><TableCell><Skeleton className="h-4 w-20" /></TableCell><TableCell><Skeleton className="h-8 w-20" /></TableCell></TableRow>)
-                : filteredItems.length === 0 ? <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">No electricity entries yet. Click &quot;Add Entry&quot; to get started.</TableCell></TableRow>
+                {loading ? Array.from({ length: 5 }).map((_, i) => <TableRow key={i}>{Array.from({ length: 7 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-16" /></TableCell>)}</TableRow>)
+                : filteredItems.length === 0 ? <TableRow><TableCell colSpan={7} className="h-32 text-center text-muted-foreground">No electricity entries yet. Click &quot;Add Entry&quot; to get started.</TableCell></TableRow>
                 : filteredItems.map((item) => (
-                  <TableRow key={item.id}>
+                  <TableRow key={item.id} data-state={selectedIds.has(item.id) ? 'selected' : undefined} className={selectedIds.has(item.id) ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}>
+                    <TableCell className="w-10"><Checkbox checked={selectedIds.has(item.id)} onCheckedChange={() => toggleSelect(item.id)} aria-label={`Select row for ${item.name || 'electricity entry'}`} /></TableCell>
                     <TableCell className="font-medium whitespace-nowrap">{formatDate(item.date)}</TableCell>
                     <TableCell className="font-medium">{item.name || '—'}</TableCell>
                     <TableCell>{item.work || '—'}</TableCell>
@@ -257,18 +348,28 @@ export function ElectricityModule() {
       {/* Mobile: Card list view */}
       <div className="sm:hidden space-y-3">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-base font-semibold">Records</h3>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={filteredItems.length > 0 && selectedIds.size === filteredItems.length}
+              onCheckedChange={toggleSelectAll}
+              aria-label="Select all"
+            />
+            <h3 className="text-base font-semibold">Records</h3>
+          </div>
           <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">{filteredItems.length} of {items.length}</Badge>
         </div>
         {loading ? Array.from({ length: 4 }).map((_, i) => <Card key={i}><CardContent className="p-4 space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-2/3" /></CardContent></Card>)
         : filteredItems.length === 0 ? <Card><CardContent className="p-8 text-center text-muted-foreground">No electricity entries yet. Tap &quot;Add Entry&quot; to get started.</CardContent></Card>
         : filteredItems.map((item) => (
-          <Card key={item.id}>
+          <Card key={item.id} data-state={selectedIds.has(item.id) ? 'selected' : undefined} className={selectedIds.has(item.id) ? 'border-destructive/40 bg-destructive/5' : ''}>
             <CardContent className="p-4 space-y-2">
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold truncate">{item.name || '—'}</p>
-                  <p className="text-xs text-muted-foreground">{formatDate(item.date)}</p>
+                <div className="flex items-start gap-2 min-w-0 flex-1">
+                  <Checkbox checked={selectedIds.has(item.id)} onCheckedChange={() => toggleSelect(item.id)} aria-label={`Select ${item.name || 'electricity entry'}`} className="mt-1" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold truncate">{item.name || '—'}</p>
+                    <p className="text-xs text-muted-foreground">{formatDate(item.date)}</p>
+                  </div>
                 </div>
                 <p className="font-bold text-emerald-700 whitespace-nowrap">{formatCurrency(item.amount)}</p>
               </div>
@@ -336,6 +437,22 @@ export function ElectricityModule() {
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Electricity Entry</AlertDialogTitle><AlertDialogDescription>Are you sure you want to delete this entry? This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} disabled={deleting} className="bg-destructive text-white hover:bg-destructive/90">{deleting && <Loader2 className="mr-2 size-4 animate-spin" />}Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Selected confirmation */}
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => { if (!open && !bulkDeleting) setBulkDeleteOpen(false) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Delete {selectedIds.size} Selected Electricity {selectedIds.size === 1 ? 'Entry' : 'Entries'}?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-sm">
+              <span className="block">You are about to permanently delete <strong className="text-destructive">{selectedIds.size} electricity {selectedIds.size === 1 ? 'entry' : 'entries'}</strong>. This action <strong>cannot be undone</strong>.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete} disabled={bulkDeleting || selectedIds.size === 0} className="bg-destructive text-white hover:bg-destructive/90">{bulkDeleting && <Loader2 className="mr-2 size-4 animate-spin" />}Delete {selectedIds.size} {selectedIds.size === 1 ? 'Entry' : 'Entries'}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
       </AlertDialog>
 
       <ExcelImport module="electricity" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchData} />
