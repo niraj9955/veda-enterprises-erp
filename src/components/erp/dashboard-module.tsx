@@ -15,7 +15,6 @@ import {
   Zap,
   Wrench,
   IndianRupee,
-  TrendingUp,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -34,7 +33,6 @@ interface DashboardStats {
   totalStock: number
   totalStockCement: number
   totalExpensesToday: number
-  netCashFlow: number
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -176,14 +174,14 @@ export default function DashboardModule() {
           onClick={() => setActiveModule('expenses')}
         />
         <KpiCard
-          label="Net Cash Flow"
-          value={formatCurrency(stats.netCashFlow)}
-          icon={<TrendingUp className="h-5 w-5" />}
+          label="Daily Sale"
+          value={formatCurrency(stats.todaySales)}
+          icon={<ShoppingCart className="h-5 w-5" />}
           iconBg="bg-teal-100 dark:bg-teal-900/30"
           iconColor="text-teal-600 dark:text-teal-400"
           borderColor="border-l-teal-500"
-          sublabel="income minus expenses"
-          onClick={() => setActiveModule('reports')}
+          sublabel="jump to daily sell module"
+          onClick={() => setActiveModule('dailySell')}
         />
         <KpiCard
           label="Orders"
