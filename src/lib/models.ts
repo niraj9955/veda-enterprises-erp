@@ -110,15 +110,17 @@ const DailySellSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   transporterName: { type: String, default: '' },
   transporterFair: { type: Number, default: 0 },
+  // ── Payment tracking ──────────────────────────────────────────────────
+  // receivedAmount = what customer paid for THIS sale (cash/online/etc).
+  // pendingAmount  = amount − receivedAmount (auto-computed on save).
+  // When synced to CustomerPayment, the recorded amount = receivedAmount.
+  receivedAmount: { type: Number, default: 0 },
+  pendingAmount: { type: Number, default: 0 },
   remarks: { type: String, default: '' },
   // ── Auto-sync linkage ──────────────────────────────────────────────────
-  // IDs of the records auto-created/updated in other modules when this
-  // DailySell entry was saved. Used by PUT/DELETE to clean up the mirrors.
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null },
   orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', default: null },
   customerPaymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'CustomerPayment', default: null },
-  // Human-readable summary of what was synced — shown as a badge in the UI.
-  // Example: "Customer ✓ · Order ORD-0123 ✓ · Payment ✓ · Stock auto-updated"
   syncNotes: { type: String, default: '' },
 }, { timestamps: true });
 DailySellSchema.index({ date: -1 });

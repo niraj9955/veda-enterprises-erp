@@ -45,6 +45,8 @@ export interface DailySellInput {
   amount: number
   transporterName?: string
   transporterFair?: number
+  receivedAmount?: number
+  pendingAmount?: number
   remarks?: string
 }
 
@@ -173,6 +175,10 @@ export async function syncOrder(
 }
 
 // ── 3. Customer Payment sync ─────────────────────────────────────────────────
+// Records the RECEIVED amount (what the customer actually paid for this sale)
+// in the Customer Payment module. If the sale is partially paid or unpaid,
+// the pending balance is noted in the remarks so the user can see at a glance
+// how much is still outstanding.
 
 export async function syncCustomerPayment(
   input: DailySellInput
@@ -184,20 +190,32 @@ export async function syncCustomerPayment(
     }
 
     const product = (input.product || '').trim()
-    const amount = Number(input.amount) || 0
-    const remarks = `Auto from Daily Sell${product ? ` — ${product}` : ''}${input.transporterName ? ` · Transporter: ${input.transporterName}` : ''}`
+    const totalAmount = Number(input.amount) || 0
+    const received = Number(input.receivedAmount) || 0
+    const pending = Math.max(0, totalAmount - received)
+
+    // Build a descriptive remark so the user can trace this payment back to
+    // the source Daily Sell entry even when looking at Customer Payment alone.
+    const remarkParts: string[] = [`Auto from Daily Sell${product ? ` — ${product}` : ''}`]
+    if (input.transporterName) remarkParts.push(`Transporter: ${input.transporterName}`)
+    if (pending > 0) {
+      remarkParts.push(`Pending: ₹${pending}`)
+    } else if (received > 0) {
+      remarkParts.push('Fully paid')
+    }
+    const remarks = remarkParts.join(' · ')
 
     const record = await CustomerPayment.create({
       date: input.date,
       name,
       address: (input.address || '').trim(),
-      amount,
+      amount: received, // ← what was actually received, NOT the total sale
       remarks,
     })
 
     return {
       customerPaymentId: record._id.toString(),
-      note: `Payment recorded (₹${amount})`,
+      note: `Payment ₹${received}${pending > 0 ? ` (pending ₹${pending})` : ''}`,
     }
   } catch (err) {
     console.error('[daily-sell-sync] CustomerPayment sync failed:', err)

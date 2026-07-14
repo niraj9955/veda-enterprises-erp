@@ -10,6 +10,7 @@ export const revalidate = 0
 // Whitelist of updatable fields. Must match DailySellSchema in src/lib/models.ts.
 // Note: customerId / orderId / customerPaymentId / syncNotes are managed by the
 // auto-sync engine — NOT user-editable through this route.
+// pendingAmount is auto-derived (amount − receivedAmount) on save.
 const DAILY_SELL_FIELDS = [
   'date',
   'customerName',
@@ -21,8 +22,11 @@ const DAILY_SELL_FIELDS = [
   'amount',
   'transporterName',
   'transporterFair',
+  'receivedAmount',
   'remarks',
 ] as const
+
+const NUMERIC_FIELDS = new Set(['amount', 'quantity', 'rate', 'transporterFair', 'receivedAmount'])
 
 // GET /api/daily-sell/[id] — fetch a single daily sell entry
 export async function GET(
@@ -61,7 +65,7 @@ export async function PUT(
     const updateData: Record<string, unknown> = {}
     for (const field of DAILY_SELL_FIELDS) {
       if (body[field] !== undefined) {
-        if (field === 'amount' || field === 'quantity' || field === 'rate' || field === 'transporterFair') {
+        if (NUMERIC_FIELDS.has(field)) {
           updateData[field] = Number(body[field])
         } else {
           updateData[field] = String(body[field])
@@ -73,6 +77,11 @@ export async function PUT(
     if (!record) {
       return NextResponse.json({ error: 'Daily sell entry not found' }, { status: 404 })
     }
+
+    // ── Auto-compute pendingAmount = amount − receivedAmount ───────────
+    const amt = Number(record.amount) || 0
+    const rec = Number(record.receivedAmount) || 0
+    record.pendingAmount = Math.max(0, amt - rec)
 
     // ── Re-run auto-sync with the new field values ────────────────────
     // Step 1: clean up the previously-linked Order + CustomerPayment so
@@ -97,9 +106,11 @@ export async function PUT(
         product: String(record.product || ''),
         quantity: Number(record.quantity) || 0,
         rate: Number(record.rate) || 0,
-        amount: Number(record.amount),
+        amount: amt,
         transporterName: String(record.transporterName || ''),
         transporterFair: Number(record.transporterFair) || 0,
+        receivedAmount: rec,
+        pendingAmount: Number(record.pendingAmount) || 0,
         remarks: String(record.remarks || ''),
       })
       record.customerId = sync.customerId as any

@@ -1568,3 +1568,38 @@ Stage Summary:
 - New files: src/lib/daily-sell-sync.ts
 - Modified files: src/lib/models.ts, src/app/api/daily-sell/route.ts, src/app/api/daily-sell/[id]/route.ts, src/components/erp/daily-sell-module.tsx
 - User can verify by: (1) creating a Daily Sell entry, (2) checking the green "Synced" badge in the table, (3) navigating to Customers / Orders / Customer Payment modules to see the auto-created records
+
+---
+Task ID: daily-sell-inline-table-received-pending
+Agent: Main Agent
+Task: Replace popup form with inline editable table below search bar; add Received Amount + Pending Amount columns; link all fields via auto-sync
+
+Work Log:
+- Added receivedAmount + pendingAmount fields to DailySellSchema (default 0 each). pendingAmount is auto-derived = amount − receivedAmount, computed on every PUT/POST.
+- Updated src/lib/daily-sell-sync.ts: CustomerPayment mirror now records RECEIVED amount (what customer actually paid), NOT the full sale amount. Remarks note the pending balance if any ("Pending: ₹X" or "Fully paid"). This links the Daily Sell entry's payment status to the Customer Payment / Finance module correctly.
+- Updated POST /api/daily-sell to accept + persist receivedAmount and auto-compute pendingAmount before triggering syncAllFromDailySell.
+- Updated PUT /api/daily-sell/[id] to: (1) accept receivedAmount in whitelist, (2) auto-recompute pendingAmount = amount − received after the findByIdAndUpdate, (3) pass both values into syncAllFromDailySell for the cleanup-then-recreate cycle. Also extracted NUMERIC_FIELDS set for cleaner numeric coercion.
+- Completely rewrote src/components/erp/daily-sell-module.tsx (~700 lines):
+  • REMOVED the Dialog-based Add/Edit form entirely (no more popup)
+  • ADDED a permanent green-tinted "Quick Add" row as the first row of the table — all 13 fields inline (Date, Customer, Address, Contact, Product dropdown, Qty, Rate, Amount auto, Transporter, T.Fair, Received, Pending auto, Remarks) + Save button at end
+  • ADDED inline edit mode: clicking Edit pencil on any existing row converts that row into editable inputs (same 13 fields) with Save (✓) + Cancel (✗) buttons; other rows' Edit/Delete buttons are disabled while one row is being edited
+  • ADDED two new columns: "Received" (blue text) and "Pending" (amber if > 0, green if 0) — auto-calculated as Amount − Received for both new row and edit row
+  • Amount and Pending cells in new/edit rows are read-only auto-calculated displays (not inputs) — they update reactively as user types Qty/Rate/Received
+  • Updated summary cards from 2 to 3: Total Sales (emerald), Total Received (blue), Total Pending (amber)
+  • Removed the now-unused "Add Daily Sell" button from the header (the Quick Add row IS the form now)
+  • Kept AiFillButton in the CardTitle area — onApply now fills the Quick Add row instead of the old dialog form
+  • Kept FieldVoiceInput out of inline cells (would have made rows too tall) — chat-widget AI auto-fill still works via consumePendingAiResult effect
+  • CellInput is a React.memo'd component for performance (prevents whole-table re-render on every keystroke)
+  • Updated all 3 delete confirmation dialogs to mention auto-linked Orders + Customer Payments will be cleaned up
+  • colSpan bumped 14 → 16 for empty-state row to match new column count
+- TypeScript check (npx tsc --noEmit): zero new errors in daily-sell files, models.ts, or daily-sell-sync.ts (all errors in tsc output are pre-existing in unrelated files)
+- Next.js production build: ✓ Compiled successfully in 22.8s
+- Committed and pushed to origin/main
+
+Stage Summary:
+- The Daily Sell module now uses a proper inline editable table — NO POPUP. The green Quick Add row sits at the top of the table (below the search bar), and clicking Edit on any existing row turns it inline-editable in place.
+- Two new fields added throughout the stack: Received Amount (what customer paid for this sale) and Pending Amount (auto = Amount − Received). Both flow into the auto-sync engine — Customer Payment / Finance now records the RECEIVED amount with a "Pending: ₹X" note in remarks, so users can see at a glance how much is outstanding per sale.
+- Three summary cards at top: Total Sales, Total Received, Total Pending — all calculated from current data.
+- All 13 fields visible in one row, horizontally scrollable on smaller screens via ScrollableTable.
+- Auto-sync to Customer, Order, CustomerPayment, and Stock (computed dynamically) remains intact.
+- Modified files: src/lib/models.ts, src/lib/daily-sell-sync.ts, src/app/api/daily-sell/route.ts, src/app/api/daily-sell/[id]/route.ts, src/components/erp/daily-sell-module.tsx

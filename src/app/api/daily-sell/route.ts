@@ -60,6 +60,9 @@ export async function POST(request: Request) {
     if (!body.date || !body.customerName || body.amount == null) {
       return NextResponse.json({ error: 'Date, customer name and amount are required' }, { status: 400 })
     }
+    const amount = Number(body.amount)
+    const received = Number(body.receivedAmount) || 0
+    const pending = Math.max(0, amount - received)
     const record = await DailySell.create({
       date: body.date,
       customerName: body.customerName,
@@ -68,9 +71,11 @@ export async function POST(request: Request) {
       product: body.product || '',
       quantity: Number(body.quantity) || 0,
       rate: Number(body.rate) || 0,
-      amount: Number(body.amount),
+      amount,
       transporterName: body.transporterName || '',
       transporterFair: Number(body.transporterFair) || 0,
+      receivedAmount: received,
+      pendingAmount: pending,
       remarks: body.remarks || '',
     })
 
@@ -87,9 +92,11 @@ export async function POST(request: Request) {
         product: body.product || '',
         quantity: Number(body.quantity) || 0,
         rate: Number(body.rate) || 0,
-        amount: Number(body.amount),
+        amount,
         transporterName: body.transporterName || '',
         transporterFair: Number(body.transporterFair) || 0,
+        receivedAmount: received,
+        pendingAmount: pending,
         remarks: body.remarks || '',
       })
       record.customerId = sync.customerId as any
