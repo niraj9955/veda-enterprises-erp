@@ -28,6 +28,11 @@ import {
   TrendingUp,
   AlertCircle,
   IndianRupee,
+  Filter,
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+  RotateCcw,
 } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -152,6 +157,221 @@ function exportPDF() {
   window.print()
 }
 
+// ── Report Date Filters ─────────────────────────────────────────────────────
+
+export type ReportPreset = 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | 'last30' | 'custom'
+
+export interface ReportFilterValue {
+  preset: ReportPreset
+  month: string         // 'YYYY-MM' — used when preset === 'thisMonth' | 'lastMonth'
+  from: string          // 'YYYY-MM-DD'
+  to: string            // 'YYYY-MM-DD'
+}
+
+/**
+ * Returns the {month?, from?, to?} object the API expects.
+ * Returns {} when preset === 'all' (no filter).
+ */
+function resolveFilterApiParams(v: ReportFilterValue): { month?: string; from?: string; to?: string } {
+  const now = new Date()
+  const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  const ymd = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+  switch (v.preset) {
+    case 'thisMonth': {
+      const m = ym(now)
+      return { month: m }
+    }
+    case 'lastMonth': {
+      const d = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      return { month: ym(d) }
+    }
+    case 'thisYear': {
+      const start = `${now.getFullYear()}-01-01`
+      const end = `${now.getFullYear()}-12-31`
+      return { from: start, to: end }
+    }
+    case 'last30': {
+      const end = new Date()
+      const start = new Date()
+      start.setDate(end.getDate() - 30)
+      return { from: ymd(start), to: ymd(end) }
+    }
+    case 'custom': {
+      const out: { month?: string; from?: string; to?: string } = {}
+      if (v.from) out.from = v.from
+      if (v.to) out.to = v.to
+      // If only from is set, treat it as a month filter for cleaner API behavior
+      if (!v.from && !v.to && v.month) out.month = v.month
+      return out
+    }
+    case 'all':
+    default:
+      return {}
+  }
+}
+
+function describeFilter(v: ReportFilterValue): string {
+  switch (v.preset) {
+    case 'all':
+      return 'All Time'
+    case 'thisMonth':
+      return 'This Month'
+    case 'lastMonth':
+      return 'Last Month'
+    case 'thisYear':
+      return 'This Year'
+    case 'last30':
+      return 'Last 30 Days'
+    case 'custom': {
+      if (v.from && v.to) return `${v.from} → ${v.to}`
+      if (v.from) return `From ${v.from}`
+      if (v.to) return `Up to ${v.to}`
+      if (v.month) return `Month: ${v.month}`
+      return 'Custom'
+    }
+    default:
+      return '—'
+  }
+}
+
+const DEFAULT_FILTER: ReportFilterValue = {
+  preset: 'all',
+  month: '',
+  from: '',
+  to: '',
+}
+
+function ReportFilters({
+  value,
+  onChange,
+  excludePresets,
+}: {
+  value: ReportFilterValue
+  onChange: (v: ReportFilterValue) => void
+  /** Hide presets that don't make sense for this report (e.g. stock is a snapshot) */
+  excludePresets?: ReportPreset[]
+}) {
+  const [expanded, setExpanded] = React.useState(false)
+  const exclude = new Set<ReportPreset>(excludePresets || [])
+  const allPresets: { key: ReportPreset; label: string }[] = [
+    { key: 'all', label: 'All Time' },
+    { key: 'thisMonth', label: 'This Month' },
+    { key: 'lastMonth', label: 'Last Month' },
+    { key: 'last30', label: 'Last 30 Days' },
+    { key: 'thisYear', label: 'This Year' },
+    { key: 'custom', label: 'Custom' },
+  ]
+  const presets = allPresets.filter((p) => !exclude.has(p.key))
+
+  const setPreset = (p: ReportPreset) => {
+    // Reset custom fields when moving to a preset that doesn't use them
+    onChange({ ...value, preset: p })
+  }
+
+  const isCustom = value.preset === 'custom'
+  const isDirty = JSON.stringify(value) !== JSON.stringify(DEFAULT_FILTER)
+
+  return (
+    <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-900/10 p-3 print:hidden">
+      <div className="flex flex-wrap items-center gap-2">
+        <Filter className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300 mr-2">Period:</span>
+        <div className="flex flex-wrap gap-1.5">
+          {presets.map((p) => (
+            <Button
+              key={p.key}
+              type="button"
+              size="sm"
+              variant={value.preset === p.key ? 'default' : 'outline'}
+              onClick={() => setPreset(p.key)}
+              className={`h-7 px-2.5 text-xs ${
+                value.preset === p.key
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
+                  : 'border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/20'
+              }`
+            }
+            >
+              {p.label}
+            </Button>
+          ))}
+        </div>
+
+        {/* Show current range as a badge */}
+        <Badge
+          variant="outline"
+          className="border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-400 ml-1"
+        >
+          <Calendar className="h-3 w-3 mr-1" />
+          {describeFilter(value)}
+        </Badge>
+
+        {isCustom && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setExpanded((e) => !e)}
+            className="h-7 px-2 text-xs text-emerald-700 dark:text-emerald-400"
+          >
+            {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            {expanded ? 'Hide dates' : 'Set dates'}
+          </Button>
+        )}
+
+        {isDirty && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => onChange({ ...DEFAULT_FILTER })}
+            className="h-7 px-2 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/20"
+          >
+            <RotateCcw className="h-3 w-3 mr-1" />
+            Reset
+          </Button>
+        )}
+      </div>
+
+      {isCustom && expanded && (
+        <div className="mt-3 pt-3 border-t border-emerald-200 dark:border-emerald-800 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">From date</label>
+            <input
+              type="date"
+              value={value.from}
+              onChange={(e) => onChange({ ...value, from: e.target.value })}
+              className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">To date</label>
+            <input
+              type="date"
+              value={value.to}
+              onChange={(e) => onChange({ ...value, to: e.target.value })}
+              className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Or pick a month</label>
+            <input
+              type="month"
+              value={value.month}
+              onChange={(e) => onChange({ ...value, month: e.target.value })}
+              className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground sm:col-span-3">
+            Tip: leave the date fields empty and pick a month to filter by whole month. Or set From/To for a custom range.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Stock Status ─────────────────────────────────────────────────────────────
 
 function getStockStatus(currentStock: number) {
@@ -236,11 +456,12 @@ function SalesReport() {
   const [data, setData] = React.useState<SalesRow[]>([])
   const [totalSales, setTotalSales] = React.useState(0)
   const [loading, setLoading] = React.useState(true)
+  const [filter, setFilter] = React.useState<ReportFilterValue>({ ...DEFAULT_FILTER })
 
   const loadData = React.useCallback(async () => {
     setLoading(true)
     try {
-      const res = (await api.getReport('sales')) as {
+      const res = (await api.getReport('sales', resolveFilterApiParams(filter))) as {
         data: SalesRow[]
         totalSales: number
       }
@@ -255,7 +476,7 @@ function SalesReport() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [filter])
 
   React.useEffect(() => {
     loadData()
@@ -278,6 +499,8 @@ function SalesReport() {
 
   return (
     <div className="space-y-4">
+      <ReportFilters value={filter} onChange={setFilter} />
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <SummaryCard title="Total Sales" value={formatCurrency(totalSales)} icon={IndianRupee} variant="positive" />
         <SummaryCard title="Total Dispatches" value={formatNumber(data.length)} icon={BarChart3} />
@@ -365,11 +588,12 @@ function ProductionReport() {
   const [totalProduced, setTotalProduced] = React.useState(0)
   const [byBrickType, setByBrickType] = React.useState<Record<string, number>>({})
   const [loading, setLoading] = React.useState(true)
+  const [filter, setFilter] = React.useState<ReportFilterValue>({ ...DEFAULT_FILTER })
 
   const loadData = React.useCallback(async () => {
     setLoading(true)
     try {
-      const res = (await api.getReport('production')) as {
+      const res = (await api.getReport('production', resolveFilterApiParams(filter))) as {
         data: ProductionRow[]
         totalProduced: number
         byBrickType: Record<string, number>
@@ -386,7 +610,7 @@ function ProductionReport() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [filter])
 
   React.useEffect(() => {
     loadData()
@@ -407,6 +631,8 @@ function ProductionReport() {
 
   return (
     <div className="space-y-4">
+      <ReportFilters value={filter} onChange={setFilter} />
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <SummaryCard title="Total Produced" value={formatNumber(totalProduced)} icon={Factory} variant="positive" />
         <SummaryCard title="Total Entries" value={formatNumber(data.length)} icon={BarChart3} />
@@ -744,6 +970,15 @@ function StockReport() {
 
   return (
     <div className="space-y-4">
+      <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-900/10 p-3 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2 print:hidden">
+        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+        <span>
+          Stock is a <b>live snapshot</b> of all-time production minus all-time sales.
+          Date filters don&apos;t apply here — open the <b>Production</b> or <b>Sales</b> tab
+          if you want period-based numbers.
+        </span>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <SummaryCard title="Total Current Stock" value={formatNumber(totalCurrentStock)} icon={Package} variant="positive" />
         <SummaryCard title="Total Opening Stock" value={formatNumber(totalOpeningStock)} icon={BarChart3} />
@@ -835,11 +1070,15 @@ function StockReport() {
 function ProfitLossReport() {
   const [data, setData] = React.useState<ProfitLossData | null>(null)
   const [loading, setLoading] = React.useState(true)
+  const [filter, setFilter] = React.useState<ReportFilterValue>({
+    ...DEFAULT_FILTER,
+    preset: 'thisMonth', // P&L defaults to current month
+  })
 
   const loadData = React.useCallback(async () => {
     setLoading(true)
     try {
-      const res = (await api.getReport('profit-loss')) as unknown as ProfitLossData
+      const res = (await api.getReport('profit-loss', resolveFilterApiParams(filter))) as unknown as ProfitLossData
       setData(res)
     } catch (err) {
       toast({
@@ -850,7 +1089,7 @@ function ProfitLossReport() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [filter])
 
   React.useEffect(() => {
     loadData()
@@ -888,6 +1127,8 @@ function ProfitLossReport() {
 
   return (
     <div className="space-y-4">
+      <ReportFilters value={filter} onChange={setFilter} />
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <SummaryCard title="Revenue" value={formatCurrency(data.totalRevenue)} icon={TrendingUp} variant="positive" />
         <SummaryCard title="Expenses" value={formatCurrency(data.totalExpenses)} icon={IndianRupee} variant="negative" />
@@ -1005,11 +1246,12 @@ function OutstandingReport() {
   const [data, setData] = React.useState<OutstandingRow[]>([])
   const [totalOutstanding, setTotalOutstanding] = React.useState(0)
   const [loading, setLoading] = React.useState(true)
+  const [filter, setFilter] = React.useState<ReportFilterValue>({ ...DEFAULT_FILTER })
 
   const loadData = React.useCallback(async () => {
     setLoading(true)
     try {
-      const res = (await api.getReport('outstanding')) as {
+      const res = (await api.getReport('outstanding', resolveFilterApiParams(filter))) as {
         data: OutstandingRow[]
         totalOutstanding: number
       }
@@ -1024,7 +1266,7 @@ function OutstandingReport() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [filter])
 
   React.useEffect(() => {
     loadData()
@@ -1048,6 +1290,8 @@ function OutstandingReport() {
 
   return (
     <div className="space-y-4">
+      <ReportFilters value={filter} onChange={setFilter} />
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <SummaryCard title="Total Amount Due" value={formatCurrency(totalDue)} icon={IndianRupee} variant="negative" />
         <SummaryCard title="Total Paid" value={formatCurrency(totalPaid)} icon={Users} variant="positive" />

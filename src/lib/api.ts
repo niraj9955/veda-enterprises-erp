@@ -448,7 +448,14 @@ export const api = {
     request<{ message: string }>(`/bills/${id}`, { method: 'DELETE' }),
 
   // Reports
-  getReport: (type: string) => request<Record<string, unknown>>(`/reports?type=${type}`),
+  // Optional filters: { month?: 'YYYY-MM', from?: 'YYYY-MM-DD', to?: 'YYYY-MM-DD' }
+  getReport: (type: string, filters?: { month?: string; from?: string; to?: string }) => {
+    const params = new URLSearchParams({ type })
+    if (filters?.month) params.set('month', filters.month)
+    if (filters?.from) params.set('from', filters.from)
+    if (filters?.to) params.set('to', filters.to)
+    return request<Record<string, unknown>>(`/reports?${params.toString()}`)
+  },
 
   // Import
   importData: (module: string, data: Record<string, unknown>[]) =>
