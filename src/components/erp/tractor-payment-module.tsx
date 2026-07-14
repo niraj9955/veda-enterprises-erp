@@ -54,6 +54,8 @@ interface TractorPayment {
   paidAmount: number
   remainingAmount: number
   remarks: string
+  type?: 'tractor' | 'transporter'
+  linkedDailySellId?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -160,7 +162,7 @@ export function TractorPaymentModule() {
     if (!debouncedSearch.trim()) return items
     const q = debouncedSearch.toLowerCase()
     return items.filter((item: any) =>
-      ['date', 'vendorName', 'remarks'].some((f) =>
+      ['date', 'vendorName', 'remarks', 'type'].some((f) =>
         String((item as any)[f] ?? '').toLowerCase().includes(q)
       )
     )
@@ -263,6 +265,18 @@ export function TractorPaymentModule() {
   const grandPaid = items.reduce((sum, i) => sum + (i.paidAmount || 0), 0)
   const grandRemaining = items.reduce((sum, i) => sum + (i.remainingAmount || 0), 0)
 
+  // ── Type-aware breakdown ─────────────────────────────────────────────────
+  // 'tractor'    = classic tractor vendor payment (raw material transport)
+  // 'transporter' = freight charge auto-synced from a Daily Sell entry
+  // We compute separate totals so the user can see at a glance how much is
+  // owed to tractor vendors vs. transporters. Useful for reconciliation.
+  const tractorItems = items.filter((i) => !i.type || i.type === 'tractor')
+  const transporterItems = items.filter((i) => i.type === 'transporter')
+  const tractorTotal = tractorItems.reduce((s, i) => s + (i.totalAmount || 0), 0)
+  const tractorRemaining = tractorItems.reduce((s, i) => s + (i.remainingAmount || 0), 0)
+  const transporterTotal = transporterItems.reduce((s, i) => s + (i.totalAmount || 0), 0)
+  const transporterRemaining = transporterItems.reduce((s, i) => s + (i.remainingAmount || 0), 0)
+
   return (
     <div className="space-y-6">
       {/* Full-screen loading overlay during bulk delete */}
@@ -281,8 +295,8 @@ export function TractorPaymentModule() {
         <div className="flex items-center gap-3">
           <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700"><Truck className="size-5" /></div>
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">Tractor Payment</h2>
-            <p className="text-sm text-muted-foreground">Track tractor vendor payments and dues</p>
+            <h2 className="text-2xl font-bold tracking-tight">Tractor &amp; Transporter Payment</h2>
+            <p className="text-sm text-muted-foreground">Track tractor vendor + transporter freight dues (auto-synced from Daily Sell)</p>
           </div>
         </div>
         <div className="flex flex-col gap-2 w-full sm:hidden">
@@ -329,6 +343,40 @@ export function TractorPaymentModule() {
         <Card className="border-l-4 border-l-rose-500"><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Remaining</p>{loading ? <Skeleton className="h-6 w-32 mt-1" /> : <p className="text-xl font-bold text-rose-700">{formatCurrency(grandRemaining)}</p>}</CardContent></Card>
       </div>
 
+      {/* Type breakdown — Tractor vs Transporter */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Card className="border-l-4 border-l-blue-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Tractor Payments</p>
+              <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-200">{tractorItems.length} entries</Badge>
+            </div>
+            {loading ? <Skeleton className="h-6 w-32 mt-1" /> : (
+              <div className="mt-1 flex items-baseline gap-3">
+                <p className="text-lg font-bold text-blue-700">{formatCurrency(tractorTotal)}</p>
+                <span className="text-xs text-muted-foreground">·</span>
+                <p className="text-sm font-medium text-rose-600">Due: {formatCurrency(tractorRemaining)}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-purple-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Transporter Payments <span className="text-[10px] text-muted-foreground/70">(from Daily Sell)</span></p>
+              <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200">{transporterItems.length} entries</Badge>
+            </div>
+            {loading ? <Skeleton className="h-6 w-32 mt-1" /> : (
+              <div className="mt-1 flex items-baseline gap-3">
+                <p className="text-lg font-bold text-purple-700">{formatCurrency(transporterTotal)}</p>
+                <span className="text-xs text-muted-foreground">·</span>
+                <p className="text-sm font-medium text-rose-600">Due: {formatCurrency(transporterRemaining)}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Search */}
       <Card>
         <CardContent className="pt-6">
@@ -346,18 +394,27 @@ export function TractorPaymentModule() {
 
       {/* Desktop: Table view */}
       <Card className="hidden sm:block">
-        <CardHeader><CardTitle className="flex items-center justify-between"><span>Tractor Payment Records</span><div className="flex items-center gap-2">{selectedIds.size > 0 && <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/30">{selectedIds.size} selected</Badge>}<Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">{filteredItems.length} of {items.length} record{items.length !== 1 ? 's' : ''}</Badge></div></CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center justify-between"><span>Tractor &amp; Transporter Payment Records</span><div className="flex items-center gap-2">{selectedIds.size > 0 && <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/30">{selectedIds.size} selected</Badge>}<Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">{filteredItems.length} of {items.length} record{items.length !== 1 ? 's' : ''}</Badge></div></CardTitle></CardHeader>
         <CardContent>
           <div className="max-h-[60vh] overflow-auto rounded-md border">
             <Table>
-              <TableHeader className="sticky top-0 bg-background z-10"><TableRow><TableHead className="w-10"><Checkbox checked={filteredItems.length > 0 && selectedIds.size === filteredItems.length} onCheckedChange={toggleSelectAll} aria-label="Select all rows" /></TableHead><TableHead>Date</TableHead><TableHead>Vendor Name</TableHead><TableHead className="text-right">Qty (Ton)</TableHead><TableHead className="text-right">Rate</TableHead><TableHead className="text-right">Total (₹)</TableHead><TableHead className="text-right">Paid (₹)</TableHead><TableHead className="text-right">Remaining (₹)</TableHead><TableHead>Remarks</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+              <TableHeader className="sticky top-0 bg-background z-10"><TableRow><TableHead className="w-10"><Checkbox checked={filteredItems.length > 0 && selectedIds.size === filteredItems.length} onCheckedChange={toggleSelectAll} aria-label="Select all rows" /></TableHead><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Vendor Name</TableHead><TableHead className="text-right">Qty (Ton)</TableHead><TableHead className="text-right">Rate</TableHead><TableHead className="text-right">Total (₹)</TableHead><TableHead className="text-right">Paid (₹)</TableHead><TableHead className="text-right">Remaining (₹)</TableHead><TableHead>Remarks</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
               <TableBody>
-                {loading ? Array.from({ length: 5 }).map((_, i) => <TableRow key={i}><TableCell className="w-10"><Skeleton className="h-4 w-4" /></TableCell>{Array.from({ length: 9 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-20" /></TableCell>)}</TableRow>)
-                : filteredItems.length === 0 ? <TableRow><TableCell colSpan={10} className="h-32 text-center text-muted-foreground">No tractor payments yet. Click &quot;Add Payment&quot; to get started.</TableCell></TableRow>
-                : filteredItems.map((item) => (
-                  <TableRow key={item.id} data-state={selectedIds.has(item.id) ? 'selected' : undefined} className={selectedIds.has(item.id) ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}>
+                {loading ? Array.from({ length: 5 }).map((_, i) => <TableRow key={i}><TableCell className="w-10"><Skeleton className="h-4 w-4" /></TableCell>{Array.from({ length: 10 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-20" /></TableCell>)}</TableRow>)
+                : filteredItems.length === 0 ? <TableRow><TableCell colSpan={11} className="h-32 text-center text-muted-foreground">No tractor payments yet. Click &quot;Add Payment&quot; to get started.</TableCell></TableRow>
+                : filteredItems.map((item) => {
+                  const isTransporter = item.type === 'transporter'
+                  return (
+                  <TableRow key={item.id} data-state={selectedIds.has(item.id) ? 'selected' : undefined} className={selectedIds.has(item.id) ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : isTransporter ? 'bg-purple-50/40 dark:bg-purple-900/10' : ''}>
                     <TableCell className="w-10"><Checkbox checked={selectedIds.has(item.id)} onCheckedChange={() => toggleSelect(item.id)} aria-label={`Select row for ${item.vendorName}`} /></TableCell>
                     <TableCell className="font-medium whitespace-nowrap">{formatDate(item.date)}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {isTransporter ? (
+                        <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200">Transporter</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-200">Tractor</Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="font-medium">{item.vendorName}</TableCell>
                     <TableCell className="text-right font-mono">{item.quantityTon}</TableCell>
                     <TableCell className="text-right font-mono">{formatCurrency(item.rate)}</TableCell>
@@ -367,7 +424,8 @@ export function TractorPaymentModule() {
                     <TableCell className="max-w-[120px] truncate text-muted-foreground">{item.remarks || '—'}</TableCell>
                     <TableCell className="text-right"><div className="flex items-center justify-end gap-1"><Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} title="Edit"><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" onClick={() => setDeleteTarget(item)} title="Delete" className="text-destructive hover:text-destructive hover:bg-destructive/10"><Trash2 className="size-4" /></Button></div></TableCell>
                   </TableRow>
-                ))}
+                  )
+                })}
               </TableBody>
             </Table>
           </div>
@@ -390,13 +448,20 @@ export function TractorPaymentModule() {
         {loading ? Array.from({ length: 4 }).map((_, i) => <Card key={i}><CardContent className="p-4 space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-2/3" /></CardContent></Card>)
         : filteredItems.length === 0 ? <Card><CardContent className="p-8 text-center text-muted-foreground">No tractor payments yet. Tap &quot;Add Payment&quot; to get started.</CardContent></Card>
         : filteredItems.map((item) => (
-          <Card key={item.id} data-state={selectedIds.has(item.id) ? 'selected' : undefined} className={selectedIds.has(item.id) ? 'border-destructive/40 bg-destructive/5' : ''}>
+          <Card key={item.id} data-state={selectedIds.has(item.id) ? 'selected' : undefined} className={selectedIds.has(item.id) ? 'border-destructive/40 bg-destructive/5' : item.type === 'transporter' ? 'border-purple-200 bg-purple-50/40 dark:bg-purple-900/10' : ''}>
             <CardContent className="p-4 space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-start gap-2 min-w-0 flex-1">
                   <Checkbox checked={selectedIds.has(item.id)} onCheckedChange={() => toggleSelect(item.id)} aria-label={`Select ${item.vendorName}`} className="mt-1" />
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold truncate">{item.vendorName}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold truncate">{item.vendorName}</p>
+                      {item.type === 'transporter' ? (
+                        <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200 text-[10px]">Transporter</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-200 text-[10px]">Tractor</Badge>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground">{formatDate(item.date)}</p>
                   </div>
                 </div>

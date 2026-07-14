@@ -26,6 +26,10 @@ export async function POST(request: Request) {
     }
     const totalAmount = Number(body.quantityTon) * Number(body.rate)
     const paidAmount = Number(body.paidAmount) || 0
+    // 'type' field: 'tractor' (default, classic vendor payment) or
+    // 'transporter' (auto-synced from Daily Sell). When the user creates
+    // a record through the normal UI it's always 'tractor'.
+    const type = body.type === 'transporter' ? 'transporter' : 'tractor'
     const record = await TractorPayment.create({
       date: body.date,
       vendorName: body.vendorName,
@@ -35,6 +39,8 @@ export async function POST(request: Request) {
       paidAmount,
       remainingAmount: totalAmount - paidAmount,
       remarks: body.remarks || '',
+      type,
+      linkedDailySellId: body.linkedDailySellId || null,
     })
     return NextResponse.json({ tractorPayment: toObject(record) }, { status: 201 })
   } catch (error) {

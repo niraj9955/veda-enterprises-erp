@@ -16,6 +16,8 @@ const FIELDS = [
   'paidAmount',
   'remainingAmount',
   'remarks',
+  'type',
+  'linkedDailySellId',
 ] as const
 
 // GET /api/tractor-payment/[id] — fetch a single tractor-payment entry

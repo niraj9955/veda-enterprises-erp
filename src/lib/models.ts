@@ -118,9 +118,22 @@ const DailySellSchema = new mongoose.Schema({
   pendingAmount: { type: Number, default: 0 },
   remarks: { type: String, default: '' },
   // ── Auto-sync linkage ──────────────────────────────────────────────────
+  // Each DailySell entry mirrors itself into FOUR collections on save:
+  //   1. Customer           (find-or-create by mobile/name)
+  //   2. Order              (one line item = product, qty, rate, amount)
+  //   3. CustomerPayment    (a receivable entry — Finance > Customer Payment)
+  //   4. Payment            (a receivable entry — Management > Payment, with
+  //                          customerId + paymentType so it shows up in the
+  //                          Payments module's outstanding calculation)
+  //   5. TractorPayment     (only when transporterName + transporterFair are
+  //                          present — logs the freight charge as an
+  //                          outstanding transporter payment under Finance >
+  //                          Tractor Payment, type = 'transporter')
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null },
   orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', default: null },
   customerPaymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'CustomerPayment', default: null },
+  paymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Payment', default: null },
+  tractorPaymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'TractorPayment', default: null },
   syncNotes: { type: String, default: '' },
 }, { timestamps: true });
 DailySellSchema.index({ date: -1 });
@@ -149,6 +162,17 @@ LabourPaymentSchema.index({ date: -1 });
 LabourPaymentSchema.index({ name: 1 });
 
 // ─── Tractor Payment ───────────────────────────────────────────────────────
+// Also doubles as a TRANSPORTER PAYMENT ledger — when `type` = 'transporter',
+// the record represents a transporter's outstanding freight charge that was
+// logged automatically from a Daily Sell entry (transporterName + transporterFair).
+// In that case:
+//   • vendorName      = transporter name (from DailySell.transporterName)
+//   • quantityTon     = 0 (no tonnage for freight-only entries)
+//   • rate            = transporterFair (the freight amount)
+//   • totalAmount     = transporterFair
+//   • paidAmount      = 0 (assumed unpaid — user reconciles manually)
+//   • remainingAmount = transporterFair
+//   • linkedDailySellId = the originating DailySell._id (for cleanup on edit/delete)
 const TractorPaymentSchema = new mongoose.Schema({
   date: { type: String, required: true },
   vendorName: { type: String, required: true },
@@ -158,9 +182,16 @@ const TractorPaymentSchema = new mongoose.Schema({
   paidAmount: { type: Number, default: 0 },
   remainingAmount: { type: Number, default: 0 },
   remarks: { type: String, default: '' },
+  // 'tractor' = classic tractor vendor payment (raw material transport)
+  // 'transporter' = freight-only entry auto-synced from Daily Sell
+  type: { type: String, default: 'tractor', enum: ['tractor', 'transporter'] },
+  // When this record was auto-created from a Daily Sell entry, this points
+  // back to the source so PUT/DELETE on the Daily Sell can clean it up.
+  linkedDailySellId: { type: mongoose.Schema.Types.ObjectId, ref: 'DailySell', default: null },
 }, { timestamps: true });
 TractorPaymentSchema.index({ date: -1 });
 TractorPaymentSchema.index({ vendorName: 1 });
+TractorPaymentSchema.index({ type: 1 });
 
 // ─── Dust Purchase ─────────────────────────────────────────────────────────
 const DustPurchaseSchema = new mongoose.Schema({

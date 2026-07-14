@@ -44,6 +44,9 @@ import {
 } from '@/components/ui/select'
 
 // ── Product list (single source of truth — matches Stock Overview items) ──
+// Each product key matches the `name` field returned by /api/stock/summary so
+// we can look up the live available-quantity for each item and show it next
+// to the product name in the dropdown (e.g. "Cement (Avail: 1,234)").
 const PRODUCT_ITEMS: { key: string; label: string }[] = [
   { key: 'Cement', label: 'Cement' },
   { key: 'Zig Zag Grey 80mm', label: 'Zig Zag Grey 80mm' },
@@ -58,6 +61,18 @@ const PRODUCT_ITEMS: { key: string; label: string }[] = [
   { key: 'Dumble Red 80mm', label: 'Dumble Red 80mm' },
   { key: 'Dumble Yellow 80mm', label: 'Dumble Yellow 80mm' },
 ]
+
+// ── Stock summary type ─────────────────────────────────────────────────────
+// Matches the shape returned by /api/stock/summary. Only the fields we use
+// for display are typed — the rest are ignored.
+interface StockSummaryItem {
+  id: string
+  key: string
+  name: string
+  totalProduction: number
+  sellItem: number
+  availableQuantity: number
+}
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -170,6 +185,14 @@ export function DailySellModule() {
   const [debouncedSearch, setDebouncedSearch] = React.useState('')
   const [loading, setLoading] = React.useState(true)
 
+  // ── Stock summary for the product dropdown ──────────────────────────
+  // We fetch /api/stock/summary in parallel with the daily sells so we can
+  // show "(Avail: 1,234)" next to each product name in the dropdown. The
+  // summary is refreshed whenever the user adds/edits a row (since each
+  // save changes the available quantity for that product).
+  const [stockMap, setStockMap] = React.useState<Record<string, StockSummaryItem>>({})
+  const [stockLoading, setStockLoading] = React.useState(true)
+
   // ── Inline "Quick Add" row state ─────────────────────────────────────
   // The form is now an inline row at the top of the table — no popup.
   const [newRow, setNewRow] = React.useState<DailySellFormData>(emptyForm)
@@ -210,6 +233,27 @@ export function DailySellModule() {
     }
   }, [])
 
+  // Fetch stock summary so the product dropdown can show "(Avail: N)" next
+  // to each product name. Called once on mount and again after every save
+  // (since saving a daily sell reduces the available qty for that product).
+  const fetchStock = React.useCallback(async () => {
+    setStockLoading(true)
+    try {
+      const res = await api.getStockSummary()
+      const map: Record<string, StockSummaryItem> = {}
+      for (const item of res.summary) {
+        // Index by name (e.g. "Cement") so we can look up by the product
+        // key used in the dropdown.
+        map[item.name] = item
+      }
+      setStockMap(map)
+    } catch {
+      // Non-blocking — dropdown still works, just without avail-qty labels
+    } finally {
+      setStockLoading(false)
+    }
+  }, [])
+
   // Debounced search
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 250)
@@ -228,7 +272,8 @@ export function DailySellModule() {
 
   React.useEffect(() => {
     fetchData()
-  }, [fetchData])
+    fetchStock()
+  }, [fetchData, fetchStock])
 
   // ── Auto-calc for new row ────────────────────────────────────────────
   const newComputedAmount = React.useMemo(() => {
@@ -323,6 +368,7 @@ export function DailySellModule() {
       })
       setNewRow(emptyForm)
       fetchData()
+      fetchStock()
     } catch (err) {
       toast({
         title: 'Error',
@@ -395,6 +441,7 @@ export function DailySellModule() {
       })
       handleCancelEdit()
       fetchData()
+      fetchStock()
     } catch (err) {
       toast({
         title: 'Error',
@@ -441,6 +488,7 @@ export function DailySellModule() {
       setBulkDeleteOpen(false)
       clearSelection()
       fetchData()
+      fetchStock()
     } catch (err) {
       toast({
         title: 'Error',
@@ -464,6 +512,7 @@ export function DailySellModule() {
       setDeleteAllOpen(false)
       clearSelection()
       fetchData()
+      fetchStock()
     } catch (err) {
       toast({
         title: 'Error',
@@ -483,6 +532,7 @@ export function DailySellModule() {
       toast({ title: 'Success', description: 'Daily sell entry deleted successfully' })
       setDeleteTarget(null)
       fetchData()
+      fetchStock()
     } catch (err) {
       toast({
         title: 'Error',
@@ -498,6 +548,33 @@ export function DailySellModule() {
   const totalAmount = dailySells.reduce((sum, s) => sum + (s.amount || 0), 0)
   const totalReceived = dailySells.reduce((sum, s) => sum + (s.receivedAmount || 0), 0)
   const totalPending = dailySells.reduce((sum, s) => sum + (s.pendingAmount || 0), 0)
+
+  // ── Build product option labels with avail-qty in brackets ─────────
+  // e.g. "Cement (Avail: 1,234)" or "Cement (Avail: 0)" when out of stock.
+  // Memoized so we don't recompute the labels on every keystroke.
+  const productsWithAvail = React.useMemo(() => {
+    return PRODUCT_ITEMS.map((p) => {
+      const stock = stockMap[p.key]
+      const avail = stock?.availableQuantity ?? null
+      return {
+        ...p,
+        avail,
+        // Compact label used inside the SelectItem — keep it short so the
+        // dropdown doesn't get too wide.
+        labelWithAvail:
+          avail == null
+            ? p.label
+            : `${p.label} (Avail: ${avail.toLocaleString('en-IN')})`,
+      }
+    })
+  }, [stockMap])
+
+  // Helper to render the product cell in read-mode with avail-qty tooltip.
+  // Looks up by the product name string stored on the daily sell row.
+  const getProductAvail = (productName: string): number | null => {
+    if (!productName) return null
+    return stockMap[productName]?.availableQuantity ?? null
+  }
 
   const renderSkeletons = () =>
     Array.from({ length: 5 }).map((_, i) => (
@@ -742,16 +819,25 @@ export function DailySellModule() {
                   <TableCell className="min-w-[120px]">
                     <CellInput value={newRow.contactNumber} onChange={(v) => handleNewRowChange('contactNumber', v)} placeholder="Contact" />
                   </TableCell>
-                  <TableCell className="min-w-[160px]">
+                  <TableCell className="min-w-[180px]">
                     <Select value={newRow.product} onValueChange={(v) => handleNewRowChange('product', v)}>
                       <SelectTrigger className="h-8 text-xs px-2">
                         <SelectValue placeholder="Product" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
-                          <SelectLabel>Product Items</SelectLabel>
-                          {PRODUCT_ITEMS.map((p) => (
-                            <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
+                          <SelectLabel>Product Items {stockLoading ? '(loading stock…)' : ''}</SelectLabel>
+                          {productsWithAvail.map((p) => (
+                            <SelectItem key={p.key} value={p.key}>
+                              <span className="flex items-center gap-2">
+                                <span>{p.label}</span>
+                                {p.avail != null && (
+                                  <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${p.avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
+                                    Avail: {p.avail.toLocaleString('en-IN')}
+                                  </span>
+                                )}
+                              </span>
+                            </SelectItem>
                           ))}
                         </SelectGroup>
                       </SelectContent>
@@ -857,16 +943,25 @@ export function DailySellModule() {
                           <TableCell className="min-w-[120px]">
                             <CellInput value={editRow.contactNumber} onChange={(v) => handleEditRowChange('contactNumber', v)} placeholder="Contact" />
                           </TableCell>
-                          <TableCell className="min-w-[160px]">
+                          <TableCell className="min-w-[180px]">
                             <Select value={editRow.product} onValueChange={(v) => handleEditRowChange('product', v)}>
                               <SelectTrigger className="h-8 text-xs px-2">
                                 <SelectValue placeholder="Product" />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectGroup>
-                                  <SelectLabel>Product Items</SelectLabel>
-                                  {PRODUCT_ITEMS.map((p) => (
-                                    <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
+                                  <SelectLabel>Product Items {stockLoading ? '(loading stock…)' : ''}</SelectLabel>
+                                  {productsWithAvail.map((p) => (
+                                    <SelectItem key={p.key} value={p.key}>
+                                      <span className="flex items-center gap-2">
+                                        <span>{p.label}</span>
+                                        {p.avail != null && (
+                                          <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${p.avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
+                                            Avail: {p.avail.toLocaleString('en-IN')}
+                                          </span>
+                                        )}
+                                      </span>
+                                    </SelectItem>
                                   ))}
                                 </SelectGroup>
                               </SelectContent>
@@ -931,7 +1026,27 @@ export function DailySellModule() {
                           <TableCell className="font-medium whitespace-nowrap">{item.customerName}</TableCell>
                           <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.address || '—'}</TableCell>
                           <TableCell className="whitespace-nowrap">{item.contactNumber || '—'}</TableCell>
-                          <TableCell className="max-w-[150px] truncate">{item.product || '—'}</TableCell>
+                          <TableCell className="max-w-[180px] truncate">
+                            {item.product ? (
+                              <span className="flex items-center gap-1.5">
+                                <span className="truncate">{item.product}</span>
+                                {(() => {
+                                  const avail = getProductAvail(item.product)
+                                  if (avail == null) return null
+                                  return (
+                                    <span
+                                      className={`text-[10px] font-medium rounded px-1.5 py-0.5 shrink-0 ${avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}
+                                      title={`Available: ${avail.toLocaleString('en-IN')} units`}
+                                    >
+                                      ({avail.toLocaleString('en-IN')})
+                                    </span>
+                                  )
+                                })()}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">
                             {item.quantity != null ? item.quantity.toLocaleString('en-IN') : '—'}
                           </TableCell>

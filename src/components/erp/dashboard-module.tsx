@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { useAppStore, type ModuleKey } from '@/lib/store'
 import { Card, CardContent } from '@/components/ui/card'
 
@@ -150,6 +151,64 @@ const TILES: Tile[] = [
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
+// Memoized single tile — prevents all 18 tiles from re-rendering when the
+// parent component re-renders (e.g. when the sidebar toggles). The only
+// prop that ever changes is `onClick` (stable from useAppStore), so React.memo
+// skips re-renders entirely after the first paint.
+const DashboardTile = React.memo(function DashboardTile({
+  tile,
+  onClick,
+}: {
+  tile: Tile
+  onClick: () => void
+}) {
+  return (
+    <button
+      key={tile.module}
+      type="button"
+      onClick={onClick}
+      // Use will-change to hint to the browser that this element will
+      // transform on hover, so the compositor can promote it to its own
+      // layer and avoid repaints during the hover animation.
+      className={`group relative overflow-hidden rounded-2xl shadow-lg ${tile.glow} hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-400 cursor-pointer aspect-[4/3] bg-gradient-to-br ${tile.gradient} will-change-transform`}
+      aria-label={`Open ${tile.label} module`}
+    >
+      {/* Real photo as the visual centerpiece.
+          We use loading="lazy" + decoding="async" + fetchPriority="low" so
+          images don't compete with critical-path JS during initial paint.
+          width/height are intrinsic to prevent layout shift. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={tile.image}
+        alt={tile.label}
+        loading="lazy"
+        decoding="async"
+        // @ts-expect-error - fetchPriority is a valid HTML attribute but not yet in the React TS types
+        fetchpriority="low"
+        width={400}
+        height={300}
+        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 group-active:scale-95"
+      />
+
+      {/* Dark gradient overlay for label readability */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+
+      {/* Top-left accent dot (for visual rhythm) */}
+      <div className="absolute top-3 left-3 size-2 rounded-full bg-white/80 shadow-sm" />
+
+      {/* Bottom label bar with gradient tint */}
+      <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t ${tile.gradient} px-4 py-3 flex items-center justify-between backdrop-blur-sm`}>
+        <span className="text-white font-bold text-sm sm:text-base tracking-wide drop-shadow-lg">
+          {tile.label}
+        </span>
+        <span className="text-white/90 text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
+          Open →
+        </span>
+      </div>
+    </button>
+  )
+})
+
 export default function DashboardModule() {
   const { setActiveModule } = useAppStore()
 
@@ -168,38 +227,11 @@ export default function DashboardModule() {
       {/* Tiles grid — bigger cards, real photos, no data */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
         {TILES.map((tile) => (
-          <button
+          <DashboardTile
             key={tile.module}
-            type="button"
+            tile={tile}
             onClick={() => setActiveModule(tile.module)}
-            className={`group relative overflow-hidden rounded-2xl shadow-lg ${tile.glow} hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-400 cursor-pointer aspect-[4/3] bg-gradient-to-br ${tile.gradient}`}
-            aria-label={`Open ${tile.label} module`}
-          >
-            {/* Real photo as the visual centerpiece */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={tile.image}
-              alt={tile.label}
-              loading="lazy"
-              className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 group-active:scale-95"
-            />
-
-            {/* Dark gradient overlay for label readability */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
-
-            {/* Top-left accent dot (for visual rhythm) */}
-            <div className="absolute top-3 left-3 size-2 rounded-full bg-white/80 shadow-sm" />
-
-            {/* Bottom label bar with gradient tint */}
-            <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t ${tile.gradient} px-4 py-3 flex items-center justify-between backdrop-blur-sm`}>
-              <span className="text-white font-bold text-sm sm:text-base tracking-wide drop-shadow-lg">
-                {tile.label}
-              </span>
-              <span className="text-white/90 text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
-                Open →
-              </span>
-            </div>
-          </button>
+          />
         ))}
       </div>
 

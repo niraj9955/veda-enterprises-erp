@@ -44,6 +44,8 @@ export async function POST(request: Request) {
               customerId: r.customerId?.toString(),
               orderId: r.orderId?.toString(),
               customerPaymentId: r.customerPaymentId?.toString(),
+              paymentId: r.paymentId?.toString(),
+              tractorPaymentId: r.tractorPaymentId?.toString(),
             }).catch(() => {})
           )
         )
@@ -79,12 +81,13 @@ export async function POST(request: Request) {
       remarks: body.remarks || '',
     })
 
-    // ── AUTO-SYNC to Customer, Order, Customer Payment, Stock ──────────
+    // ── AUTO-SYNC to Customer, Order, Customer Payment, Payment, Tractor Payment, Stock ──
     // Best-effort: if any sub-sync fails, the DailySell record still
     // exists; the failure is recorded in `syncNotes` so the UI can
     // surface it to the user.
     try {
       const sync = await syncAllFromDailySell({
+        dailySellId: String(record._id),
         date: body.date,
         customerName: body.customerName,
         address: body.address || '',
@@ -102,6 +105,8 @@ export async function POST(request: Request) {
       record.customerId = sync.customerId as any
       record.orderId = sync.orderId as any
       record.customerPaymentId = sync.customerPaymentId as any
+      record.paymentId = sync.paymentId as any
+      record.tractorPaymentId = sync.tractorPaymentId as any
       record.syncNotes = sync.syncNotes
       await record.save()
     } catch (syncErr) {
@@ -148,6 +153,8 @@ export async function DELETE(request: Request) {
               customerId: r.customerId?.toString(),
               orderId: r.orderId?.toString(),
               customerPaymentId: r.customerPaymentId?.toString(),
+              paymentId: r.paymentId?.toString(),
+              tractorPaymentId: r.tractorPaymentId?.toString(),
             }).catch(() => {})
           )
         )

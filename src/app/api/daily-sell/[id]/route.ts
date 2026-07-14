@@ -84,13 +84,16 @@ export async function PUT(
     record.pendingAmount = Math.max(0, amt - rec)
 
     // ── Re-run auto-sync with the new field values ────────────────────
-    // Step 1: clean up the previously-linked Order + CustomerPayment so
-    // we don't leave stale mirrors when the user edits the entry.
+    // Step 1: clean up the previously-linked Order + CustomerPayment +
+    // Payment + TractorPayment so we don't leave stale mirrors when the
+    // user edits the entry.
     try {
       await cleanupDailySellLinks({
         customerId: record.customerId?.toString(),
         orderId: record.orderId?.toString(),
         customerPaymentId: record.customerPaymentId?.toString(),
+        paymentId: (record as any).paymentId?.toString(),
+        tractorPaymentId: (record as any).tractorPaymentId?.toString(),
       })
     } catch (cleanupErr) {
       console.error('[daily-sell PUT] Cleanup error (non-blocking):', cleanupErr)
@@ -99,6 +102,7 @@ export async function PUT(
     // Step 2: re-create the mirrors with the updated field values.
     try {
       const sync = await syncAllFromDailySell({
+        dailySellId: String(record._id),
         date: String(record.date),
         customerName: String(record.customerName),
         address: String(record.address || ''),
@@ -116,6 +120,8 @@ export async function PUT(
       record.customerId = sync.customerId as any
       record.orderId = sync.orderId as any
       record.customerPaymentId = sync.customerPaymentId as any
+      ;(record as any).paymentId = sync.paymentId as any
+      ;(record as any).tractorPaymentId = sync.tractorPaymentId as any
       record.syncNotes = sync.syncNotes
       await record.save()
     } catch (syncErr) {
@@ -123,6 +129,8 @@ export async function PUT(
       record.customerId = null
       record.orderId = null
       record.customerPaymentId = null
+      ;(record as any).paymentId = null
+      ;(record as any).tractorPaymentId = null
       record.syncNotes = 'Auto-sync failed on edit — entry saved but mirrors may be stale'
       await record.save()
     }
@@ -156,6 +164,8 @@ export async function DELETE(
         customerId: (record as any).customerId?.toString(),
         orderId: (record as any).orderId?.toString(),
         customerPaymentId: (record as any).customerPaymentId?.toString(),
+        paymentId: (record as any).paymentId?.toString(),
+        tractorPaymentId: (record as any).tractorPaymentId?.toString(),
       })
     } catch (cleanupErr) {
       console.error('[daily-sell DELETE] Cleanup error (non-blocking):', cleanupErr)
