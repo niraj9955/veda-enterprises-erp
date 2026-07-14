@@ -231,9 +231,16 @@ export function DailySellModule() {
     setLoading(true)
     try {
       const res = await api.getDailySells()
-      const data = (res.dailySells as DailySell[]).sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      )
+      // Sort by date desc; within the same date, the most recently added
+      // record (createdAt) appears first so new entries show at the top.
+      const data = (res.dailySells as DailySell[]).sort((a, b) => {
+        const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime()
+        if (dateDiff !== 0) return dateDiff
+        // Secondary sort: newest createdAt first (fallback to updatedAt)
+        const aCreated = new Date(a.createdAt ?? a.updatedAt ?? 0).getTime()
+        const bCreated = new Date(b.createdAt ?? b.updatedAt ?? 0).getTime()
+        return bCreated - aCreated
+      })
       setDailySells(data)
     } catch (err) {
       toast({
