@@ -1603,3 +1603,29 @@ Stage Summary:
 - All 13 fields visible in one row, horizontally scrollable on smaller screens via ScrollableTable.
 - Auto-sync to Customer, Order, CustomerPayment, and Stock (computed dynamically) remains intact.
 - Modified files: src/lib/models.ts, src/lib/daily-sell-sync.ts, src/app/api/daily-sell/route.ts, src/app/api/daily-sell/[id]/route.ts, src/components/erp/daily-sell-module.tsx
+
+---
+Task ID: back-button-per-section
+Agent: Main Agent
+Task: HAR SECTION ME BACK BUTTON ADD KRO (Add back button to every section)
+
+Work Log:
+- Explored app-shell.tsx and page.tsx to understand the single-shell + module-switching architecture (activeModule in zustand store)
+- Identified that all 20+ modules render inside the same <main> in AppShell, so a single shared back button placed above {children} covers every section without editing 20+ files
+- Created new reusable component: src/components/erp/section-back-button.tsx
+  - Reads activeModule + setActiveModule from useAppStore
+  - Hidden on Dashboard (activeModule === 'dashboard') — there's nothing "back" from home
+  - Shows "Back to Dashboard" button with left arrow icon (ArrowLeft from lucide-react)
+  - Also shows current section name as a small green badge next to the back button (breadcrumb-style hint)
+  - Sticky at top of scroll area so it's always reachable
+  - Supports an optional `fallback` prop so sub-pages (e.g. Customer History) can later point back to their parent module instead of Dashboard
+- Wired SectionBackButton into app-shell.tsx:
+  - Added import on line 45
+  - Inserted <SectionBackButton /> inside the main content div, directly above {children}
+- Verified: TypeScript check passes (no new errors in section-back-button.tsx or app-shell.tsx); `npx next build` compiled successfully in 22.6s
+
+Stage Summary:
+- Back button now appears on every section (Customers, Production, Stock, Orders, Dispatch, Payments, Expenses, Reports, Settings, Users, Admin, Daily Sell, Customer/Labour/Tractor Payment, Dust/Cement Purchase, Hardner, Electricity, Factory Stuff, Billing)
+- Dashboard correctly hides the back button
+- Single shared component = consistent styling and zero risk of any section missing the button
+- Files touched: src/components/erp/section-back-button.tsx (new), src/components/erp/app-shell.tsx (import + 1 JSX line)
