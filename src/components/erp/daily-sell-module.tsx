@@ -28,7 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { ShoppingCart, Plus, Trash2, Pencil, Loader2, Upload, Search, Trash, RefreshCw, CheckCircle2, X, Save, AlertTriangle } from 'lucide-react'
+import { ShoppingCart, Plus, Trash2, Pencil, Loader2, Upload, Search, Trash, RefreshCw, CheckCircle2, X, Save, AlertTriangle, Filter, Calendar, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 import { AiFillButton } from '@/components/ui/ai-fill-button'
 import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
@@ -158,12 +158,14 @@ const CellInput = React.memo(function CellInput({
   placeholder,
   type = 'text',
   min,
+  className,
 }: {
   value: string
   onChange: (v: string) => void
   placeholder?: string
   type?: string
   min?: string
+  className?: string
 }) {
   return (
     <Input
@@ -172,7 +174,7 @@ const CellInput = React.memo(function CellInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="h-8 text-xs px-2 min-w-[80px]"
+      className={className ?? 'h-8 text-xs px-2 min-w-[80px]'}
     />
   )
 })
@@ -184,6 +186,17 @@ export function DailySellModule() {
   const [search, setSearch] = React.useState('')
   const [debouncedSearch, setDebouncedSearch] = React.useState('')
   const [loading, setLoading] = React.useState(true)
+
+  // ── Advanced filter state ───────────────────────────────────────────
+  // Lets the user narrow records by date range, product, customer, payment
+  // status, and sync status — independent of the free-text search box.
+  const [showFilters, setShowFilters] = React.useState(false)
+  const [filterDateFrom, setFilterDateFrom] = React.useState('')
+  const [filterDateTo, setFilterDateTo] = React.useState('')
+  const [filterProduct, setFilterProduct] = React.useState<string>('__all__')
+  const [filterCustomer, setFilterCustomer] = React.useState<string>('__all__')
+  const [filterPaymentStatus, setFilterPaymentStatus] = React.useState<string>('__all__')
+  const [filterSyncStatus, setFilterSyncStatus] = React.useState<string>('__all__')
 
   // ── Stock summary for the product dropdown ──────────────────────────
   // We fetch /api/stock/summary in parallel with the daily sells so we can
@@ -260,15 +273,95 @@ export function DailySellModule() {
     return () => clearTimeout(t)
   }, [search])
 
+  // Derived list of unique customer names for the customer filter dropdown.
+  // Computed once per data refresh — saves React from re-deriving on every render.
+  const uniqueCustomers = React.useMemo(() => {
+    const set = new Set<string>()
+    dailySells.forEach((s) => { if (s.customerName?.trim()) set.add(s.customerName.trim()) })
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'en-IN'))
+  }, [dailySells])
+
+  // Count how many advanced filters are currently active — used to badge
+  // the "Filters" toggle button so the user can see at a glance that filters
+  // are applied even when the panel is collapsed.
+  const activeFilterCount = React.useMemo(() => {
+    let n = 0
+    if (filterDateFrom) n++
+    if (filterDateTo) n++
+    if (filterProduct !== '__all__') n++
+    if (filterCustomer !== '__all__') n++
+    if (filterPaymentStatus !== '__all__') n++
+    if (filterSyncStatus !== '__all__') n++
+    return n
+  }, [filterDateFrom, filterDateTo, filterProduct, filterCustomer, filterPaymentStatus, filterSyncStatus])
+
+  const clearAllFilters = () => {
+    setFilterDateFrom('')
+    setFilterDateTo('')
+    setFilterProduct('__all__')
+    setFilterCustomer('__all__')
+    setFilterPaymentStatus('__all__')
+    setFilterSyncStatus('__all__')
+  }
+
   const filteredDailySells = React.useMemo(() => {
-    if (!debouncedSearch.trim()) return dailySells
-    const q = debouncedSearch.toLowerCase()
-    return dailySells.filter((item: any) =>
-      ['date', 'customerName', 'address', 'contactNumber', 'product', 'remarks'].some((f) =>
-        String((item as any)[f] ?? '').toLowerCase().includes(q)
+    let result = dailySells
+
+    // 1) Free-text search across common fields
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase()
+      result = result.filter((item: any) =>
+        ['date', 'customerName', 'address', 'contactNumber', 'product', 'remarks'].some((f) =>
+          String((item as any)[f] ?? '').toLowerCase().includes(q)
+        )
       )
-    )
-  }, [dailySells, debouncedSearch])
+    }
+
+    // 2) Date range filter (inclusive on both ends; compares YYYY-MM-DD strings)
+    if (filterDateFrom) {
+      result = result.filter((item) => (item.date ?? '') >= filterDateFrom)
+    }
+    if (filterDateTo) {
+      result = result.filter((item) => (item.date ?? '') <= filterDateTo)
+    }
+
+    // 3) Exact product match
+    if (filterProduct !== '__all__') {
+      result = result.filter((item) => item.product === filterProduct)
+    }
+
+    // 4) Exact customer match
+    if (filterCustomer !== '__all__') {
+      result = result.filter((item) => item.customerName === filterCustomer)
+    }
+
+    // 5) Payment status:
+    //    - paid       → receivedAmount >= amount (no pending)
+    //    - partial    → 0 < receivedAmount < amount
+    //    - pending    → receivedAmount == 0 (or undefined)
+    if (filterPaymentStatus !== '__all__') {
+      result = result.filter((item) => {
+        const amt = Number(item.amount) || 0
+        const rec = Number(item.receivedAmount) || 0
+        const pend = Number(item.pendingAmount ?? Math.max(0, amt - rec)) || 0
+        if (filterPaymentStatus === 'paid') return pend <= 0
+        if (filterPaymentStatus === 'partial') return rec > 0 && pend > 0
+        if (filterPaymentStatus === 'pending') return rec <= 0 && amt > 0
+        return true
+      })
+    }
+
+    // 6) Sync status: synced if any of the linked IDs exist
+    if (filterSyncStatus !== '__all__') {
+      const wantSynced = filterSyncStatus === 'synced'
+      result = result.filter((item) => {
+        const isSynced = !!(item.orderId || item.customerPaymentId || item.customerId)
+        return wantSynced ? isSynced : !isSynced
+      })
+    }
+
+    return result
+  }, [dailySells, debouncedSearch, filterDateFrom, filterDateTo, filterProduct, filterCustomer, filterPaymentStatus, filterSyncStatus])
 
   React.useEffect(() => {
     fetchData()
@@ -768,18 +861,198 @@ export function DailySellModule() {
         </Card>
       </div>
 
-      {/* Search */}
+      {/* Search + Filters */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input
-              placeholder="Search across all fields (date, name, remarks, etc.)..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
+        <CardContent className="pt-6 space-y-3">
+          {/* Top row: free-text search + filter toggle */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[260px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                placeholder="Search across all fields (date, name, remarks, etc.)..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Button
+              type="button"
+              variant={showFilters ? 'default' : 'outline'}
+              onClick={() => setShowFilters((v) => !v)}
+              className={`gap-2 ${activeFilterCount > 0 ? 'border-emerald-400 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-950/60' : ''}`}
+              title="Toggle advanced filters"
+            >
+              <Filter className="size-4" />
+              <span>Filters</span>
+              {activeFilterCount > 0 && (
+                <Badge variant="secondary" className="ml-1 bg-emerald-600 text-white hover:bg-emerald-600">
+                  {activeFilterCount}
+                </Badge>
+              )}
+              {showFilters ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+            </Button>
+            {activeFilterCount > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={clearAllFilters}
+                className="gap-1.5 text-muted-foreground hover:text-destructive"
+                title="Clear all filters"
+              >
+                <RotateCcw className="size-3.5" />
+                <span>Clear</span>
+              </Button>
+            )}
           </div>
+
+          {/* Collapsible advanced filter panel */}
+          {showFilters && (
+            <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 p-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {/* Date From */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                    <Calendar className="size-3" /> Date From
+                  </label>
+                  <Input
+                    type="date"
+                    value={filterDateFrom}
+                    onChange={(e) => setFilterDateFrom(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                </div>
+                {/* Date To */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                    <Calendar className="size-3" /> Date To
+                  </label>
+                  <Input
+                    type="date"
+                    value={filterDateTo}
+                    onChange={(e) => setFilterDateTo(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                </div>
+                {/* Product */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Product</label>
+                  <Select value={filterProduct} onValueChange={setFilterProduct}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="All products" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All products</SelectItem>
+                      <SelectGroup>
+                        <SelectLabel>Products</SelectLabel>
+                        {PRODUCT_ITEMS.map((p) => (
+                          <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Customer */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Customer</label>
+                  <Select value={filterCustomer} onValueChange={setFilterCustomer}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="All customers" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All customers</SelectItem>
+                      <SelectGroup>
+                        <SelectLabel>Customers ({uniqueCustomers.length})</SelectLabel>
+                        {uniqueCustomers.map((c) => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Payment status */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Payment Status</label>
+                  <Select value={filterPaymentStatus} onValueChange={setFilterPaymentStatus}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="Any status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All statuses</SelectItem>
+                      <SelectItem value="paid">✓ Fully Paid</SelectItem>
+                      <SelectItem value="partial">⟳ Partially Paid</SelectItem>
+                      <SelectItem value="pending">✗ Pending / Unpaid</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Sync status */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Sync Status</label>
+                  <Select value={filterSyncStatus} onValueChange={setFilterSyncStatus}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="Any sync" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All records</SelectItem>
+                      <SelectItem value="synced">✓ Synced</SelectItem>
+                      <SelectItem value="unsynced">✗ Not synced</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Active filter chips row */}
+              {activeFilterCount > 0 && (
+                <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-800 flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-medium text-muted-foreground">Active filters:</span>
+                  {filterDateFrom && (
+                    <Badge variant="secondary" className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200">
+                      From: {filterDateFrom}
+                      <button onClick={() => setFilterDateFrom('')} className="hover:text-emerald-900"><X className="size-3" /></button>
+                    </Badge>
+                  )}
+                  {filterDateTo && (
+                    <Badge variant="secondary" className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200">
+                      To: {filterDateTo}
+                      <button onClick={() => setFilterDateTo('')} className="hover:text-emerald-900"><X className="size-3" /></button>
+                    </Badge>
+                  )}
+                  {filterProduct !== '__all__' && (
+                    <Badge variant="secondary" className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200">
+                      {filterProduct}
+                      <button onClick={() => setFilterProduct('__all__')} className="hover:text-emerald-900"><X className="size-3" /></button>
+                    </Badge>
+                  )}
+                  {filterCustomer !== '__all__' && (
+                    <Badge variant="secondary" className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200">
+                      {filterCustomer}
+                      <button onClick={() => setFilterCustomer('__all__')} className="hover:text-emerald-900"><X className="size-3" /></button>
+                    </Badge>
+                  )}
+                  {filterPaymentStatus !== '__all__' && (
+                    <Badge variant="secondary" className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200">
+                      {filterPaymentStatus === 'paid' ? 'Fully Paid' : filterPaymentStatus === 'partial' ? 'Partially Paid' : 'Pending'}
+                      <button onClick={() => setFilterPaymentStatus('__all__')} className="hover:text-emerald-900"><X className="size-3" /></button>
+                    </Badge>
+                  )}
+                  {filterSyncStatus !== '__all__' && (
+                    <Badge variant="secondary" className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200">
+                      {filterSyncStatus === 'synced' ? 'Synced' : 'Not synced'}
+                      <button onClick={() => setFilterSyncStatus('__all__')} className="hover:text-emerald-900"><X className="size-3" /></button>
+                    </Badge>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearAllFilters}
+                    className="ml-auto h-7 text-xs text-muted-foreground hover:text-destructive"
+                  >
+                    Clear all
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
