@@ -42,7 +42,7 @@ interface Props {
 }
 
 /**
- * SectionBackButton
+ * SectionBackButton  (build: 2026-07-14 v2)
  *
  * A sticky, compact back button that sits at the top of every non-dashboard
  * section. Clicking it navigates the user back to the Dashboard (or to the
@@ -76,33 +76,34 @@ export function SectionBackButton({ fallback = 'dashboard', className }: Props) 
   return (
     <div
       className={cn(
-        'sticky top-0 z-20 -mx-4 md:-mx-6 mb-3 md:mb-4 px-4 md:px-6 py-2.5',
-        'bg-white/80 dark:bg-zinc-900/80 backdrop-blur supports-[backdrop-filter]:bg-white/60',
-        'border-b border-zinc-200/70 dark:border-zinc-800/70',
+        'sticky top-0 z-30 -mx-4 md:-mx-6 mb-3 md:mb-4 px-4 md:px-6 py-3',
+        'bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-950/40 dark:to-zinc-900',
+        'border-b-2 border-emerald-200 dark:border-emerald-900/60 shadow-sm',
         className,
       )}
     >
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex items-center gap-3 text-sm">
         <button
           type="button"
           onClick={handleBack}
           className={cn(
-            'group inline-flex items-center gap-1.5 rounded-lg',
-            'px-2.5 py-1.5 font-medium',
-            'text-zinc-600 dark:text-zinc-300',
-            'hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white',
-            'transition-colors duration-150',
+            'group inline-flex items-center gap-2 rounded-lg',
+            'px-3 py-2 font-semibold text-sm',
+            'bg-white dark:bg-zinc-800 text-emerald-700 dark:text-emerald-300',
+            'border border-emerald-200 dark:border-emerald-800',
+            'shadow-sm hover:shadow hover:bg-emerald-50 dark:hover:bg-emerald-950/50',
+            'transition-all duration-150',
             'focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40',
           )}
           aria-label={`Back to ${targetLabel}`}
         >
-          <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-0.5" />
-          <span>Back to {targetLabel}</span>
+          <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-1" />
+          <span>← Back to {targetLabel}</span>
         </button>
         {currentLabel && (
           <>
             <span className="text-zinc-300 dark:text-zinc-600 select-none" aria-hidden>·</span>
-            <span className="px-2 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-semibold text-xs uppercase tracking-wide">
+            <span className="px-2.5 py-1.5 rounded-md bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200 font-bold text-xs uppercase tracking-wide shadow-sm">
               {currentLabel}
             </span>
           </>
