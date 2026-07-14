@@ -79,6 +79,7 @@ interface ProfitLossData {
 }
 
 interface OutstandingRow {
+  id: string
   customerId: string
   customer: { id: string; name: string } | null
   totalOrders: number
@@ -838,7 +839,7 @@ function ProfitLossReport() {
   const loadData = React.useCallback(async () => {
     setLoading(true)
     try {
-      const res = (await api.getReport('profit-loss')) as ProfitLossData
+      const res = (await api.getReport('profit-loss')) as unknown as ProfitLossData
       setData(res)
     } catch (err) {
       toast({
@@ -1097,7 +1098,7 @@ function OutstandingReport() {
               </TableRow>
             ) : (
               data.map((row) => (
-                <TableRow key={row.customerId}>
+                <TableRow key={row.id}>
                   <TableCell className="font-medium">{row.customer?.name || '—'}</TableCell>
                   <TableCell className="text-right">{formatCurrency(row.totalOrders)}</TableCell>
                   <TableCell className="text-right">{formatCurrency(row.totalPayments)}</TableCell>
