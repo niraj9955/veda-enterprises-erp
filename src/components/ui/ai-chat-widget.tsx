@@ -7,7 +7,7 @@ import { useAppStore, type ModuleKey } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { VoiceInput } from '@/components/ui/voice-input'
-import { Sparkles, X, Loader2, Mic, Send, Bot, User, Check } from 'lucide-react'
+import { Sparkles, X, Loader2, Mic, Send, Bot, User, Check, Lightbulb, ChevronRight } from 'lucide-react'
 import { useAiConfig } from '@/hooks/use-ai-config'
 import { AI_MODULE_SCHEMAS } from '@/lib/ai-schemas'
 import { cn } from '@/lib/utils'
@@ -64,6 +64,23 @@ const MODULE_KEY_TO_AI_KEY: Partial<Record<ModuleKey, string>> = {
   factoryStuff: 'factoryStuff',
 }
 
+// List of (label, aiKey, storeKey, examplePrompt) tuples — used to render the
+// quick-pick module chips when the user is on a tab without AI mapping
+// (e.g. Dashboard) or when the AI can't detect the module from text.
+const MODULE_CHIPS: { label: string; aiKey: string; storeKey: ModuleKey; example: string }[] = [
+  { label: 'Daily Sell', aiKey: 'dailySell', storeKey: 'dailySell', example: 'aaj Ramesh ne 500 Zig Zag Grey 80mm liya, rate 35, total 17500, 10000 received' },
+  { label: 'Production', aiKey: 'production', storeKey: 'production', example: 'aaj 1000 Zig Zag Grey 80mm banaye, 500 Red 60mm' },
+  { label: 'Customer Payment', aiKey: 'customerPayment', storeKey: 'customerPayment', example: 'Suresh ne 5000 rupee payment diya, UPI se' },
+  { label: 'Labour Payment', aiKey: 'labourPayment', storeKey: 'labourPayment', example: '2 labour the, 800 rupee diye, maze ka kaam' },
+  { label: 'Tractor Payment', aiKey: 'tractorPayment', storeKey: 'tractorPayment', example: 'tractor bhada 1500 rupee diya, maal laane ka' },
+  { label: 'Dust Purchase', aiKey: 'dustPurchase', storeKey: 'dustPurchase', example: '10 ton dust khareeda, 5000 rupee' },
+  { label: 'Cement Purchase', aiKey: 'cementPurchase', storeKey: 'cementPurchase', example: '50 bag cement liya, 380 per bag' },
+  { label: 'Hardner', aiKey: 'hardner', storeKey: 'hardner', example: 'hardner 20 litre liya, 2000 rupee' },
+  { label: 'Electricity', aiKey: 'electricity', storeKey: 'electricity', example: 'bijli ka bill 3500 rupee aaya' },
+  { label: 'Factory Stuff', aiKey: 'factoryStuff', storeKey: 'factoryStuff', example: 'factory samagri 1500 rupee khareedi' },
+  { label: 'Customer', aiKey: 'customer', storeKey: 'customers', example: 'naya customer Suresh, mobile 9876543210, address Muzaffarpur' },
+]
+
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
@@ -78,19 +95,29 @@ export function AiChatWidget() {
   const [messages, setMessages] = React.useState<ChatMessage[]>([
     {
       role: 'assistant',
-      content: 'Namaste! Main AI assistant hoon. Boliye kya entry karni hai?',
+      content: 'Namaste! Main AI assistant hoon. Niche koi module chuno ya seedha type karein — main form fields auto-fill kar dunga.',
     },
   ])
   const [input, setInput] = React.useState('')
   const [interim, setInterim] = React.useState('')
   const [parsing, setParsing] = React.useState(false)
   const [activeModule, setActiveModule] = React.useState<ModuleKey>(useAppStore.getState().activeModule)
+  // Picked module overrides the active-module-derived one when the user
+  // taps a chip — e.g. while sitting on Dashboard the user can still pick
+  // "Daily Sell" to send the prompt to the right parser.
+  const [pickedModule, setPickedModule] = React.useState<string | null>(null)
+  // Show the quick-pick chip row + example prompts when the user hasn't
+  // picked anything yet AND we're not currently parsing.
+  const [showHelp, setShowHelp] = React.useState(true)
 
   // Subscribe to module changes so the chat knows the user's current context
   const currentModule = useAppStore((s) => s.activeModule)
   const setStoreModule = useAppStore((s) => s.setActiveModule)
   React.useEffect(() => {
     setActiveModule(currentModule)
+    // When the user switches module tab, reset the picked override so the
+    // chat falls back to the new active module's mapping.
+    setPickedModule(null)
   }, [currentModule])
 
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
@@ -102,7 +129,10 @@ export function AiChatWidget() {
   if (configLoading) return null
   if (!isEnabled) return null
 
-  const aiModuleKey = MODULE_KEY_TO_AI_KEY[activeModule]
+  // Effective AI module key = picked chip override → active module mapping → null
+  const aiModuleKey = pickedModule || MODULE_KEY_TO_AI_KEY[activeModule] || null
+  // For the chip row highlight + example prompt
+  const activeChip = MODULE_CHIPS.find((c) => c.aiKey === aiModuleKey) || null
 
   const handleSend = async () => {
     const text = input.trim()
@@ -112,8 +142,9 @@ export function AiChatWidget() {
     setMessages((prev) => [...prev, { role: 'user', content: text }])
     setInput('')
     setInterim('')
+    setShowHelp(false)
 
-    // If no AI module mapped for the active tab, ask AI to detect module from text
+    // Determine target module — picked chip → active module → AI-detected → null
     const targetModule = aiModuleKey || detectModuleFromText(text)
     if (!targetModule) {
       setMessages((prev) => [
@@ -121,9 +152,10 @@ export function AiChatWidget() {
         {
           role: 'assistant',
           content:
-            'Mujhe samajh nahi aaya ki kis module ke liye entry karni hai. Pehle koi module select karein (Daily Sell, Production, Customer Payment, etc.) ya input me specify karein.',
+            'Mujhe samajh nahi aaya ki kis module ke liye entry karni hai. Niche koi module chip select karein (Daily Sell, Production, Customer Payment, etc.) ya input me specify karein — jaise "aaj 500 bricks banaye" ya "customer Suresh ne 5000 rupee diya".',
         },
       ])
+      setShowHelp(true)
       return
     }
 
@@ -136,7 +168,7 @@ export function AiChatWidget() {
           {
             role: 'assistant',
             content:
-              'Mujhe kuch extract nahi hua. Thoda aur specific ho sake toh try karein — date, naam, amount, product ka naam etc. mention karein.',
+              'Mujhe kuch extract nahi hua. Thoda aur specific ho sake toh try karein — date, naam, amount, product ka naam etc. mention karein. Example: "aaj Ramesh ne 500 bricks liye, rate 35, total 17500".',
           },
         ])
       } else {
@@ -152,10 +184,25 @@ export function AiChatWidget() {
         ])
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to parse'
+      // Surface the actual server error message — previously we only showed
+      // a generic message which made debugging impossible.
+      let errMsg = err instanceof Error ? err.message : 'Failed to parse'
+      // Add a friendlier hint for the most common failure modes
+      let hint = ''
+      if (/401|Incorrect API key|invalid api key/i.test(errMsg)) {
+        hint = '\n\nYeh API key ka issue lagta hai. Admin Panel → AI Assistant me jakar key check karein ya "Test Connection" button dabayein.'
+      } else if (/404|model.*does not exist|model not found/i.test(errMsg)) {
+        hint = '\n\nYeh model shayad unavailable hai. Admin Panel me jakar koi aur model select karein (jaise gpt-4o-mini ya llama-3.3-70b-versatile).'
+      } else if (/429|rate limit|quota/i.test(errMsg)) {
+        hint = '\n\nRate limit exceed ho gaya. Thodi der baad try karein ya provider dashboard check karein.'
+      } else if (/ENOTFOUND|ECONNREFUSED|fetch failed|network/i.test(errMsg)) {
+        hint = '\n\nNetwork issue lagta hai. Internet connection check karein.'
+      } else if (/disabled|not enabled/i.test(errMsg)) {
+        hint = '\n\nAI abhi disabled hai. Admin Panel me jakar enable karein.'
+      }
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: `Error: ${message}` },
+        { role: 'assistant', content: `Error: ${errMsg}${hint}` },
       ])
     } finally {
       setParsing(false)
@@ -217,7 +264,7 @@ export function AiChatWidget() {
               <div>
                 <p className="font-semibold text-sm">AI Assistant</p>
                 <p className="text-[10px] opacity-90">
-                  Active: {activeModule}
+                  {activeChip ? `Target: ${activeChip.label}` : `Active: ${activeModule}${aiModuleKey ? '' : ' — pick a module'}`}
                 </p>
               </div>
             </div>
@@ -229,6 +276,55 @@ export function AiChatWidget() {
               <X className="size-5" />
             </button>
           </div>
+
+          {/* Module chip row — always visible so user can switch target */}
+          <div className="bg-white dark:bg-zinc-900 border-b border-border px-2 py-2 flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+            {MODULE_CHIPS.map((chip) => (
+              <button
+                key={chip.aiKey}
+                type="button"
+                onClick={() => {
+                  setPickedModule(chip.aiKey)
+                  setShowHelp(true)
+                }}
+                className={cn(
+                  'text-[11px] px-2 py-1 rounded-full border transition-colors',
+                  aiModuleKey === chip.aiKey
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-transparent text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                )}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Example prompt strip (shown when help is visible) */}
+          {showHelp && activeChip && (
+            <div className="bg-emerald-50/50 dark:bg-emerald-900/10 border-b border-emerald-100 dark:border-emerald-800 px-3 py-2">
+              <div className="flex items-start gap-1.5">
+                <Lightbulb className="size-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Example for {activeChip.label}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInput(activeChip.example)
+                      // Focus the textarea by defer
+                      setTimeout(() => {
+                        const ta = document.querySelector<HTMLTextAreaElement>('textarea[placeholder*="Type or speak"]')
+                        ta?.focus()
+                      }, 0)
+                    }}
+                    className="text-xs text-left text-emerald-700 dark:text-emerald-300 hover:underline break-words"
+                  >
+                    <ChevronRight className="inline size-3 mr-0.5" />
+                    {activeChip.example}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-muted/30">

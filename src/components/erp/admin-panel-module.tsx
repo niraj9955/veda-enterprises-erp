@@ -77,6 +77,7 @@ import {
   Eraser,
   Layers,
   Plus,
+  Zap,
 } from 'lucide-react'
 import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
 
@@ -1598,6 +1599,66 @@ function AiConfigSection() {
   const [saving, setSaving] = React.useState(false)
   const [hasExistingKey, setHasExistingKey] = React.useState(false)
   const [resetLoading, setResetLoading] = React.useState(false)
+  const [testing, setTesting] = React.useState(false)
+  const [testResult, setTestResult] = React.useState<
+    | { ok: boolean; message: string; latencyMs?: number; preview?: string }
+    | null
+  >(null)
+
+  // ── Test AI Connection ──────────────────────────────────────────────────
+  // Sends a tiny ping to the configured AI provider using the SAVED key+model.
+  // We intentionally test what's on the server (not the unsaved form state) so
+  // the admin gets an accurate picture of what users will experience.
+  // If they've just typed a new key but haven't saved yet, we warn them.
+  const handleTestConnection = async () => {
+    if (!isAdmin) {
+      toast({ title: 'Permission denied', description: 'Only admins can test AI.', variant: 'destructive' })
+      return
+    }
+    if (apiKey.trim()) {
+      toast({
+        title: 'Save first',
+        description: 'You have an unsaved API key. Click "Save Configuration" before testing so the test uses the new key.',
+        variant: 'destructive',
+      })
+      return
+    }
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await api.testAiConnection()
+      if (res.ok) {
+        setTestResult({
+          ok: true,
+          message: res.message || 'Connection successful',
+          latencyMs: res.latencyMs,
+          preview: res.responsePreview,
+        })
+        toast({
+          title: 'AI connection successful',
+          description: res.message || 'Test passed.',
+        })
+      } else {
+        const errMsg = res.error || 'Test failed — check the error below.'
+        setTestResult({ ok: false, message: errMsg })
+        toast({
+          title: 'AI test failed',
+          description: errMsg,
+          variant: 'destructive',
+        })
+      }
+    } catch (e) {
+      const errMsg = (e as Error).message || 'Network error during test'
+      setTestResult({ ok: false, message: errMsg })
+      toast({
+        title: 'AI test failed',
+        description: errMsg,
+        variant: 'destructive',
+      })
+    } finally {
+      setTesting(false)
+    }
+  }
 
   // ── Reset AI Configuration ──────────────────────────────────────────────
   // Disables the AI assistant and clears the saved API key from the server.
@@ -1940,6 +2001,25 @@ function AiConfigSection() {
             </Button>
             <Button
               variant="outline"
+              onClick={handleTestConnection}
+              disabled={testing || !hasExistingKey}
+              className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+              title={hasExistingKey ? 'Send a tiny ping to verify the saved key + model actually work' : 'Save a key first to enable testing'}
+            >
+              {testing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Testing...
+                </>
+              ) : (
+                <>
+                  <Zap className="mr-2 h-4 w-4" />
+                  Test Connection
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
               onClick={handleResetAi}
               disabled={saving || resetLoading}
               className="text-destructive border-destructive/30 hover:bg-destructive/10"
@@ -1952,6 +2032,60 @@ function AiConfigSection() {
               Reset Configuration
             </Button>
           </div>
+
+          {/* Test Result Card */}
+          {testResult && (
+            <div
+              className={`rounded-lg border p-3 text-sm ${
+                testResult.ok
+                  ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-300'
+                  : 'border-rose-300 bg-rose-50 dark:border-rose-700 dark:bg-rose-900/20 text-rose-800 dark:text-rose-300'
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                {testResult.ok ? (
+                  <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold">
+                    {testResult.ok ? 'Connection Successful' : 'Connection Failed'}
+                  </p>
+                  <p className="text-xs mt-0.5 break-words">{testResult.message}</p>
+                  {testResult.latencyMs !== undefined && (
+                    <p className="text-xs mt-1 opacity-80">Latency: {testResult.latencyMs}ms</p>
+                  )}
+                  {testResult.preview && (
+                    <p className="text-xs mt-1 opacity-80 font-mono break-all">
+                      Response: {testResult.preview}
+                    </p>
+                  )}
+                  {!testResult.ok && (
+                    <p className="text-xs mt-2 opacity-90">
+                      Common fixes:
+                      <br />
+                      • <b>401 / Incorrect key</b> — re-check the key for typos, no extra spaces
+                      <br />
+                      • <b>404 / Model not found</b> — pick a different model (some Groq models are deprecated)
+                      <br />
+                      • <b>429 / Rate limit</b> — free tier exhausted, wait or upgrade
+                      <br />
+                      • <b>Network error</b> — check internet connection / firewall
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTestResult(null)}
+                  className="text-current opacity-60 hover:opacity-100 shrink-0"
+                  aria-label="Dismiss"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -529,4 +529,15 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+  testAiConnection: () =>
+    request<{
+      ok: boolean
+      provider?: string
+      model?: string
+      latencyMs?: number
+      responsePreview?: string
+      parsedOk?: boolean
+      message?: string
+      error?: string
+    }>('/ai/test', { method: 'POST' }),
 }
