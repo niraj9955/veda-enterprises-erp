@@ -1629,3 +1629,27 @@ Stage Summary:
 - Dashboard correctly hides the back button
 - Single shared component = consistent styling and zero risk of any section missing the button
 - Files touched: src/components/erp/section-back-button.tsx (new), src/components/erp/app-shell.tsx (import + 1 JSX line)
+
+---
+Task ID: back-button-fixes-and-low-stock
+Agent: Main Agent
+Task: User reported back button not visible + remove avail qty from records + add low stock warning
+
+Work Log:
+- VLM analysis confirmed back button was missing in screenshot — investigated and found dev server was dead (no next-server process running). Restarted via `bun run dev` — server now serving HTTP 200 on both localhost:3000 and Caddy gateway on :81.
+- Removed avail-qty badge from READ-MODE product cell in daily-sell-module.tsx (lines 1029-1049 → simplified to just product name). Avail qty now ONLY appears in the product dropdown when adding (Quick Add row) or editing.
+- Added low-stock validation in handleSaveNew: if entered qty > available qty, show destructive toast "Low Stock — Cannot Save" with details and abort save. Also added a soft warning when stock is critically low (≤10% of requested qty).
+- Added low-stock validation in handleSaveEdit: same logic but adds back the original row's qty (since editing "returns" the old qty to stock first).
+- Added inline visual warning: qty input turns red (border-rose-500 + bg-rose-50) and shows a small AlertTriangle icon badge when entered qty > available. Works in both Quick Add row and Edit row.
+- Added AlertTriangle to lucide-react imports.
+- Build verified: `npx next build` compiled successfully in 22.6s.
+
+Stage Summary:
+- Back button: server was dead, now restarted. Component already in place from previous task — will appear above every section's content.
+- Avail qty: removed from records table (read mode). Still visible in product dropdown when ADDING or EDITING.
+- Low stock warning:
+  • Visual: qty input turns red + AlertTriangle badge when over available qty (live, before save)
+  • On save (new entry): hard block + destructive toast if qty > avail
+  • On save (edit): hard block + destructive toast if new qty > (avail + original row's qty)
+  • Soft warning when stock critically low but still sufficient
+- Files changed: src/components/erp/daily-sell-module.tsx (imports, save handlers, qty cells, read-mode product cell)

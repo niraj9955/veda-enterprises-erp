@@ -28,7 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { ShoppingCart, Plus, Trash2, Pencil, Loader2, Upload, Search, Trash, RefreshCw, CheckCircle2, X, Save } from 'lucide-react'
+import { ShoppingCart, Plus, Trash2, Pencil, Loader2, Upload, Search, Trash, RefreshCw, CheckCircle2, X, Save, AlertTriangle } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 import { AiFillButton } from '@/components/ui/ai-fill-button'
 import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
@@ -342,6 +342,32 @@ export function DailySellModule() {
       return
     }
 
+    // ── Low-stock validation ──────────────────────────────────────────
+    // If the user selected a product AND we have stock data for it AND
+    // the entered quantity exceeds the available quantity, warn the user
+    // and abort the save. The user must either reduce the quantity or
+    // add production stock first.
+    if (newRow.product && !stockLoading) {
+      const avail = getProductAvail(newRow.product)
+      const qty = Number(newRow.quantity) || 0
+      if (avail != null && qty > avail) {
+        toast({
+          title: 'Low Stock — Cannot Save',
+          description: `Only ${avail.toLocaleString('en-IN')} units of "${newRow.product}" are available, but you entered ${qty.toLocaleString('en-IN')}. Please reduce the quantity or add production first.`,
+          variant: 'destructive',
+        })
+        return
+      }
+      // Also warn (but allow) when stock is critically low (≤10% of qty requested)
+      if (avail != null && avail > 0 && qty > 0 && avail < qty * 1.1 && avail >= qty) {
+        toast({
+          title: 'Low Stock Warning',
+          description: `Only ${avail.toLocaleString('en-IN')} units of "${newRow.product}" left in stock after this sale.`,
+          variant: 'default',
+        })
+      }
+    }
+
     setSavingNew(true)
     try {
       const payload = {
@@ -413,6 +439,28 @@ export function DailySellModule() {
     if (!editRow.customerName.trim()) {
       toast({ title: 'Validation Error', description: 'Customer name is required', variant: 'destructive' })
       return
+    }
+
+    // ── Low-stock validation (edit mode) ──────────────────────────────
+    // Same logic as Quick Add — but we add back the existing row's qty
+    // because editing it means the old qty is "returned" to stock first.
+    if (editRow.product && !stockLoading) {
+      const avail = getProductAvail(editRow.product)
+      const newQty = Number(editRow.quantity) || 0
+      const originalItem = dailySells.find((s) => s.id === editingId)
+      const originalQty =
+        originalItem && originalItem.product === editRow.product
+          ? Number(originalItem.quantity) || 0
+          : 0
+      const effectiveAvail = (avail ?? 0) + originalQty
+      if (avail != null && newQty > effectiveAvail) {
+        toast({
+          title: 'Low Stock — Cannot Save',
+          description: `Only ${effectiveAvail.toLocaleString('en-IN')} units of "${editRow.product}" are available (incl. ${originalQty.toLocaleString('en-IN')} from this entry), but you entered ${newQty.toLocaleString('en-IN')}. Please reduce the quantity or add production first.`,
+          variant: 'destructive',
+        })
+        return
+      }
     }
 
     setSavingEdit(true)
@@ -844,7 +892,31 @@ export function DailySellModule() {
                     </Select>
                   </TableCell>
                   <TableCell className="min-w-[80px]">
-                    <CellInput type="number" min="0" value={newRow.quantity} onChange={(v) => handleNewRowChange('quantity', v)} placeholder="0" />
+                    {(() => {
+                      const enteredQty = Number(newRow.quantity) || 0
+                      const avail = newRow.product ? getProductAvail(newRow.product) : null
+                      const isOver = avail != null && enteredQty > avail
+                      return (
+                        <div className="relative">
+                          <CellInput
+                            type="number"
+                            min="0"
+                            value={newRow.quantity}
+                            onChange={(v) => handleNewRowChange('quantity', v)}
+                            placeholder="0"
+                            className={isOver ? 'border-rose-500 ring-1 ring-rose-400 bg-rose-50 dark:bg-rose-950/30' : ''}
+                          />
+                          {isOver && (
+                            <span
+                              className="absolute -top-1.5 -right-1.5 flex items-center justify-center size-4 rounded-full bg-rose-500 text-white shadow"
+                              title={`Available: ${avail?.toLocaleString('en-IN')}, you entered: ${enteredQty.toLocaleString('en-IN')}`}
+                            >
+                              <AlertTriangle className="size-2.5" />
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </TableCell>
                   <TableCell className="min-w-[90px]">
                     <CellInput type="number" min="0" value={newRow.rate} onChange={(v) => handleNewRowChange('rate', v)} placeholder="0" />
@@ -968,7 +1040,39 @@ export function DailySellModule() {
                             </Select>
                           </TableCell>
                           <TableCell className="min-w-[80px]">
-                            <CellInput type="number" min="0" value={editRow.quantity} onChange={(v) => handleEditRowChange('quantity', v)} placeholder="0" />
+                            {(() => {
+                              const enteredQty = Number(editRow.quantity) || 0
+                              const avail = editRow.product ? getProductAvail(editRow.product) : null
+                              // For edit mode we add back the original qty of this row (if same product)
+                              // because that qty is currently "out of stock" but will be returned on save.
+                              const originalItem = dailySells.find((s) => s.id === editingId)
+                              const originalQty =
+                                originalItem && originalItem.product === editRow.product
+                                  ? Number(originalItem.quantity) || 0
+                                  : 0
+                              const effectiveAvail = (avail ?? 0) + originalQty
+                              const isOver = avail != null && enteredQty > effectiveAvail
+                              return (
+                                <div className="relative">
+                                  <CellInput
+                                    type="number"
+                                    min="0"
+                                    value={editRow.quantity}
+                                    onChange={(v) => handleEditRowChange('quantity', v)}
+                                    placeholder="0"
+                                    className={isOver ? 'border-rose-500 ring-1 ring-rose-400 bg-rose-50 dark:bg-rose-950/30' : ''}
+                                  />
+                                  {isOver && (
+                                    <span
+                                      className="absolute -top-1.5 -right-1.5 flex items-center justify-center size-4 rounded-full bg-rose-500 text-white shadow"
+                                      title={`Available: ${effectiveAvail.toLocaleString('en-IN')} (incl. ${originalQty.toLocaleString('en-IN')} from this entry), you entered: ${enteredQty.toLocaleString('en-IN')}`}
+                                    >
+                                      <AlertTriangle className="size-2.5" />
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })()}
                           </TableCell>
                           <TableCell className="min-w-[90px]">
                             <CellInput type="number" min="0" value={editRow.rate} onChange={(v) => handleEditRowChange('rate', v)} placeholder="0" />
@@ -1028,21 +1132,7 @@ export function DailySellModule() {
                           <TableCell className="whitespace-nowrap">{item.contactNumber || '—'}</TableCell>
                           <TableCell className="max-w-[180px] truncate">
                             {item.product ? (
-                              <span className="flex items-center gap-1.5">
-                                <span className="truncate">{item.product}</span>
-                                {(() => {
-                                  const avail = getProductAvail(item.product)
-                                  if (avail == null) return null
-                                  return (
-                                    <span
-                                      className={`text-[10px] font-medium rounded px-1.5 py-0.5 shrink-0 ${avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}
-                                      title={`Available: ${avail.toLocaleString('en-IN')} units`}
-                                    >
-                                      ({avail.toLocaleString('en-IN')})
-                                    </span>
-                                  )
-                                })()}
-                              </span>
+                              <span className="truncate">{item.product}</span>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
