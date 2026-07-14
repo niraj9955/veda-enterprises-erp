@@ -10,52 +10,68 @@ export async function GET() {
 
     const today = new Date().toISOString().split('T')[0]
     const currentMonth = today.substring(0, 7)
+    // Pre-compute the date range for "this month" queries. Using $gte/$lt
+    // lets Mongo use the `date` index efficiently — much faster than the
+    // old `{ date: { $regex: '^YYYY-MM' } }` which scanned every doc.
+    const monthStart = `${currentMonth}-01`
+    const monthEnd = `${currentMonth}-31` // inclusive upper bound (YYYY-MM-31)
 
-    // Today's production
-    const todayProductions = await Production.find({ date: today })
+    // ── Run all independent queries in parallel ────────────────────────
+    // Previously these ran as 12 sequential awaits — each adding 1 RTT of
+    // latency. Batching them cuts total latency from ~12×RTT to ~1×RTT.
+    const [
+      todayProductions,
+      stocks,
+      todayDispatches,
+      pendingOrders,
+      // Outstanding payments — replaced two full-collection scans with two
+      // $group aggregations that return one row per customer.
+      ordersAgg,
+      paymentsAgg,
+      monthlyDispatches,
+      monthlyExpenses,
+      monthlyProductions,
+      recentProductions,
+      recentDispatchDocs,
+    ] = await Promise.all([
+      Production.find({ date: today }),
+      Stock.find({}),
+      Dispatch.find({ date: today }),
+      Order.countDocuments({ status: 'Pending' }),
+      Order.aggregate([
+        { $group: { _id: '$customerId', total: { $sum: '$amount' } } },
+      ]),
+      Payment.aggregate([
+        { $group: { _id: '$customerId', total: { $sum: '$amount' } } },
+      ]),
+      Dispatch.find({ date: { $gte: monthStart, $lte: monthEnd } }),
+      Expense.find({ date: { $gte: monthStart, $lte: monthEnd } }),
+      Production.find({ date: { $gte: monthStart, $lte: monthEnd } }).sort({ date: 1 }),
+      Production.find({}).sort({ createdAt: -1 }).limit(5),
+      Dispatch.find({}).sort({ createdAt: -1 }).limit(5).populate('customerId'),
+    ])
+
+    // ── Reduce: today's production, total stock, today's dispatch ───────
     const todayProduction = todayProductions.reduce((sum, p) => sum + p.quantityProduced, 0)
-
-    // Total stock
-    const stocks = await Stock.find({})
     const totalStock = stocks.reduce((sum, s) => sum + s.currentStock, 0)
-
-    // Today's dispatch
-    const todayDispatches = await Dispatch.find({ date: today })
     const todayDispatch = todayDispatches.reduce((sum, d) => sum + d.quantity, 0)
 
-    // Pending orders
-    const pendingOrders = await Order.countDocuments({ status: 'Pending' })
-
-    // Outstanding payments
-    const allOrders = await Order.find({})
-    const allPayments = await Payment.find({})
-
+    // ── Outstanding payments — built from the two $group results ───────
     const paymentsByCustomer = new Map<string, number>()
-    for (const payment of allPayments) {
-      const cid = payment.customerId.toString()
-      paymentsByCustomer.set(cid, (paymentsByCustomer.get(cid) || 0) + payment.amount)
+    for (const row of paymentsAgg) {
+      paymentsByCustomer.set(String(row._id), row.total)
     }
-
-    const ordersByCustomer = new Map<string, number>()
-    for (const order of allOrders) {
-      const cid = order.customerId.toString()
-      ordersByCustomer.set(cid, (ordersByCustomer.get(cid) || 0) + order.amount)
-    }
-
     let outstandingPayments = 0
-    for (const [customerId, orderTotal] of ordersByCustomer) {
-      const paidAmount = paymentsByCustomer.get(customerId) || 0
-      const outstanding = orderTotal - paidAmount
+    for (const row of ordersAgg) {
+      const paidAmount = paymentsByCustomer.get(String(row._id)) || 0
+      const outstanding = row.total - paidAmount
       if (outstanding > 0) outstandingPayments += outstanding
     }
 
-    // Monthly sales
-    const monthlyDispatches = await Dispatch.find({ date: { $regex: `^${currentMonth}` } })
-
-    const orderIds = monthlyDispatches.map(d => d.orderId).filter(Boolean)
+    // ── Monthly sales — need rates from referenced orders ──────────────
+    const orderIds = monthlyDispatches.map((d) => d.orderId).filter(Boolean)
     const ordersForRates = orderIds.length > 0 ? await Order.find({ _id: { $in: orderIds } }) : []
-    const orderRateMap = new Map(ordersForRates.map(o => [o._id.toString(), o.rate]))
-
+    const orderRateMap = new Map(ordersForRates.map((o) => [o._id.toString(), o.rate]))
     let monthlySales = 0
     for (const dispatch of monthlyDispatches) {
       if (dispatch.orderId) {
@@ -64,16 +80,12 @@ export async function GET() {
       }
     }
 
-    // Monthly expenses
-    const monthlyExpenses = await Expense.find({ date: { $regex: `^${currentMonth}` } })
+    // ── Monthly expenses / profit ──────────────────────────────────────
     const totalMonthlyExpenses = monthlyExpenses.reduce((sum, e) => sum + e.amount, 0)
     const monthlyProfit = monthlySales - totalMonthlyExpenses
 
-    // Recent productions (last 5)
-    const recentProductions = (await Production.find({}).sort({ createdAt: -1 }).limit(5)).map(toObject)
-
-    // Recent dispatches (last 5) - with customer names
-    const recentDispatchDocs = await Dispatch.find({}).sort({ createdAt: -1 }).limit(5).populate('customerId')
+    // ── Recent items for dashboard lists ───────────────────────────────
+    const recentProductionsObj = recentProductions.map(toObject)
     const recentDispatches = recentDispatchDocs.map((d: any) => {
       const obj = toObject(d)
       const { customer, customerId } = extractCustomer(d)
@@ -83,15 +95,14 @@ export async function GET() {
       return obj
     })
 
-    // Monthly production chart data
-    const monthlyProductions = await Production.find({ date: { $regex: `^${currentMonth}` } }).sort({ date: 1 })
+    // ── Monthly production chart data — single pass ────────────────────
     const monthlyProductionDataMap: Record<string, number> = {}
     for (const p of monthlyProductions) {
       monthlyProductionDataMap[p.date] = (monthlyProductionDataMap[p.date] || 0) + p.quantityProduced
     }
     const monthlyProductionChartData = Object.entries(monthlyProductionDataMap).map(([date, quantity]) => ({ date, quantity }))
 
-    // Monthly expense chart data
+    // ── Monthly expense chart data — single pass over already-fetched expenses ──
     const monthlyExpenseDataMap: Record<string, number> = {}
     for (const e of monthlyExpenses) {
       monthlyExpenseDataMap[e.category] = (monthlyExpenseDataMap[e.category] || 0) + e.amount
@@ -106,7 +117,7 @@ export async function GET() {
       outstandingPayments,
       monthlySales,
       monthlyProfit,
-      recentProductions,
+      recentProductions: recentProductionsObj,
       recentDispatches,
       monthlyProductionData: monthlyProductionChartData,
       monthlyExpenseData: monthlyExpenseChartData,

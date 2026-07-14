@@ -364,15 +364,25 @@ export async function syncTractorPayment(
 export async function syncAllFromDailySell(
   input: DailySellInput
 ): Promise<SyncResult> {
+  // Step 1: Customer must complete first — both Order and Payment depend on
+  // the customer ID.
   const customerRes = await syncCustomer(input)
-  const orderRes = await syncOrder(input, customerRes.customerId)
-  const paymentCpRes = await syncCustomerPayment(input)
+
+  // Step 2: Order, CustomerPayment, and TractorPayment can all run in
+  // parallel — none depends on the others' output. Payment depends on
+  // customerPaymentId so it has to wait for CustomerPayment.
+  const [orderRes, paymentCpRes, tractorRes] = await Promise.all([
+    syncOrder(input, customerRes.customerId),
+    syncCustomerPayment(input),
+    syncTractorPayment(input, input.dailySellId),
+  ])
+
+  // Step 3: Payment needs customerPaymentId from step 2.
   const paymentRes = await syncPayment(
     input,
     customerRes.customerId,
     paymentCpRes.customerPaymentId
   )
-  const tractorRes = await syncTractorPayment(input, input.dailySellId)
 
   const notes: string[] = [
     customerRes.note,
@@ -403,45 +413,48 @@ export async function syncAllFromDailySell(
 export async function cleanupDailySellLinks(links: ExistingLinks): Promise<string> {
   const notes: string[] = []
 
+  // All four deletes are independent — run them in parallel so we don't
+  // pay 4× sequential round-trip latency on every edit/delete of a daily
+  // sell row. Each tracks its own success/failure note.
+  const tasks: { id: string; label: string; promise: Promise<unknown> }[] = []
   if (links.orderId) {
-    try {
-      await Order.findByIdAndDelete(links.orderId)
-      notes.push('Old order removed')
-    } catch (err) {
-      console.error('[daily-sell-sync] Order cleanup failed:', err)
-      notes.push('Old order cleanup failed')
-    }
+    tasks.push({
+      id: 'order',
+      label: 'Old order removed',
+      promise: Order.findByIdAndDelete(links.orderId),
+    })
   }
-
   if (links.customerPaymentId) {
-    try {
-      await CustomerPayment.findByIdAndDelete(links.customerPaymentId)
-      notes.push('Old customer payment removed')
-    } catch (err) {
-      console.error('[daily-sell-sync] CustomerPayment cleanup failed:', err)
-      notes.push('Old customer payment cleanup failed')
-    }
+    tasks.push({
+      id: 'customerPayment',
+      label: 'Old customer payment removed',
+      promise: CustomerPayment.findByIdAndDelete(links.customerPaymentId),
+    })
   }
-
   if (links.paymentId) {
-    try {
-      await Payment.findByIdAndDelete(links.paymentId)
-      notes.push('Old payment removed')
-    } catch (err) {
-      console.error('[daily-sell-sync] Payment cleanup failed:', err)
-      notes.push('Old payment cleanup failed')
-    }
+    tasks.push({
+      id: 'payment',
+      label: 'Old payment removed',
+      promise: Payment.findByIdAndDelete(links.paymentId),
+    })
+  }
+  if (links.tractorPaymentId) {
+    tasks.push({
+      id: 'tractorPayment',
+      label: 'Old transporter payment removed',
+      promise: TractorPayment.findByIdAndDelete(links.tractorPaymentId),
+    })
   }
 
-  if (links.tractorPaymentId) {
-    try {
-      await TractorPayment.findByIdAndDelete(links.tractorPaymentId)
-      notes.push('Old transporter payment removed')
-    } catch (err) {
-      console.error('[daily-sell-sync] TractorPayment cleanup failed:', err)
-      notes.push('Old transporter payment cleanup failed')
+  const results = await Promise.allSettled(tasks.map((t) => t.promise))
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled') {
+      notes.push(tasks[i].label)
+    } else {
+      console.error(`[daily-sell-sync] ${tasks[i].id} cleanup failed:`, r.reason)
+      notes.push(`${tasks[i].label.replace('removed', 'cleanup failed')}`)
     }
-  }
+  })
 
   // Customer is intentionally NOT deleted — they may have other orders,
   // payments, dispatches, or bills linked to them. The user can manually

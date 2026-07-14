@@ -1,21 +1,69 @@
 const BASE = '/api'
 
-// Wrapper around fetch that:
-//  1. Disables Next.js caching for ALL requests (we always want fresh data
-//     after an import / mutation). This fixes the bug where newly imported
-//     rows didn't show up until a hard refresh.
-//  2. Adds a cache-busting query param as an extra safety net so even
-//     browser/proxy caches can't serve stale responses.
-//  3. Reuses the caller-supplied options intact.
+// In-process response cache for read-only GET requests. Mutations
+// (POST/PUT/DELETE) automatically invalidate the affected endpoints.
+// This is intentionally simple — no SWR/React-Query because that would
+// require refactoring every component. Instead, GETs are cached for a
+// short TTL (default 15s) and the cache is wiped on any mutation.
+interface CacheEntry {
+  data: unknown
+  expiresAt: number
+}
+const responseCache = new Map<string, CacheEntry>()
+const DEFAULT_TTL = 15_000 // 15s — short enough that mutations feel live,
+                            // long enough to dedupe rapid identical calls
+                            // (e.g. dashboard + daily-sell both calling
+                            // /api/stock/summary on mount).
+
+// Endpoints where stale data is unacceptable (e.g. login state). For
+// everything else we lean on the cache + mutation invalidation.
+const NO_CACHE_URLS = ['/auth/me', '/auth/init']
+
+function invalidateCache(urlPattern?: string) {
+  if (!urlPattern) {
+    responseCache.clear()
+    return
+  }
+  // Invalidate any cache entry whose URL contains the pattern.
+  for (const key of Array.from(responseCache.keys())) {
+    if (key.includes(urlPattern)) responseCache.delete(key)
+  }
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  // Build a URL with a cache-busting _t param for GET requests
-  let fullUrl = `${BASE}${url}`
+  const fullUrl = `${BASE}${url}`
   const method = (options?.method || 'GET').toUpperCase()
-  if (method === 'GET') {
-    const sep = fullUrl.includes('?') ? '&' : '?'
-    fullUrl = `${fullUrl}${sep}_t=${Date.now()}`
+
+  // 1) Mutation? Bust the cache so the next GET sees fresh data, then
+  //    proceed with the network call.
+  if (method !== 'GET') {
+    // Wildcard invalidation: any mutation likely affects multiple lists.
+    invalidateCache()
   }
 
+  // 2) For GETs, try the in-process cache first (unless explicitly opted
+  //    out). This dedupes parallel calls and speeds up back navigation.
+  if (method === 'GET' && !NO_CACHE_URLS.some((u) => url.includes(u))) {
+    const cached = responseCache.get(fullUrl)
+    const now = Date.now()
+    if (cached && cached.expiresAt > now) {
+      return cached.data as T
+    }
+    const res = await fetch(fullUrl, {
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      credentials: 'same-origin',
+      ...options,
+    })
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Request failed' }))
+      throw new Error(error.error || `HTTP ${res.status}`)
+    }
+    const data = await res.json()
+    responseCache.set(fullUrl, { data, expiresAt: now + DEFAULT_TTL })
+    return data as T
+  }
+
+  // 3) Non-cacheable GETs (auth state) and all mutations — straight to network.
   const res = await fetch(fullUrl, {
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     credentials: 'same-origin',

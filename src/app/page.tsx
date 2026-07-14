@@ -236,34 +236,61 @@ export default function Home() {
   // the user clicks any sidebar item, the chunk is already local → the
   // click feels instant.
   //
-  // We use requestIdleCallback when available (Chrome/Edge/Safari) so we
-  // never compete with user input or animations. We also stagger the
-  // prefetches (one at a time) to avoid saturating a slow connection.
+  // SMARTER PREFETCH (v2): Instead of prefetching all 22 modules eagerly
+  // (which saturates bandwidth and competes with the dashboard's own data
+  // fetches on slow connections), we now:
+  //   1) First prefetch the user's most-recently-visited module (if any).
+  //   2) Then prefetch the most-likely-next modules (dailySell + stock).
+  //   3) Only if the network is fast (4g/wifi), prefetch the rest in the
+  //      background after a longer delay.
   const prefetchStartedRef = useRef(false)
   useEffect(() => {
     if (!isAuthenticated || prefetchStartedRef.current) return
     prefetchStartedRef.current = true
 
-    const keys = Object.keys(modulePrefetchers) as ModuleKey[]
-    let i = 0
+    // Detect effective network type so we don't saturate slow connections.
+    const conn = (navigator as any).connection || (navigator as any).mozConnection
+    const effectiveType = conn?.effectiveType || '4g'
+    const isFastNetwork = effectiveType === '4g' || !conn
 
+    // Recent module from localStorage (if any) — most likely to be revisited.
+    let recentModule: ModuleKey | null = null
+    try {
+      const stored = localStorage.getItem('veda:lastModule')
+      if (stored && stored in modulePrefetchers) recentModule = stored as ModuleKey
+    } catch {}
+
+    // Priority queue: recent → dailySell → stock → (rest if fast network)
+    const priority: ModuleKey[] = []
+    if (recentModule) priority.push(recentModule)
+    if (!priority.includes('dailySell')) priority.push('dailySell')
+    if (!priority.includes('stock')) priority.push('stock')
+
+    let restQueue: ModuleKey[] = []
+    if (isFastNetwork) {
+      restQueue = (Object.keys(modulePrefetchers) as ModuleKey[])
+        .filter((k) => !priority.includes(k))
+    }
+
+    let i = 0
+    const allKeys = [...priority, ...restQueue]
     const prefetchNext = () => {
-      if (i >= keys.length) return
-      const key = keys[i++]
-      // Fire and forget — we don't care about the result, just want the
-      // chunk in the HTTP cache.
+      if (i >= allKeys.length) return
+      const key = allKeys[i++]
       modulePrefetchers[key]().catch(() => {})
-      // Schedule next prefetch on the next idle frame (or 50ms fallback)
+      // Priority modules: prefetch immediately one after another on idle.
+      // Rest (only on fast networks): same pattern but with longer timeout.
       if ('requestIdleCallback' in window) {
-        ;(window as any).requestIdleCallback(prefetchNext, { timeout: 1500 })
+        ;(window as any).requestIdleCallback(prefetchNext, { timeout: 2500 })
       } else {
-        setTimeout(prefetchNext, 50)
+        setTimeout(prefetchNext, 100)
       }
     }
 
     // Start prefetching after a small delay so the dashboard has a head
-    // start on its own data fetching.
-    const startTimer = setTimeout(prefetchNext, 800)
+    // start on its own data fetching. On slow networks we wait longer.
+    const startDelay = isFastNetwork ? 800 : 2000
+    const startTimer = setTimeout(prefetchNext, startDelay)
     return () => clearTimeout(startTimer)
   }, [isAuthenticated])
 

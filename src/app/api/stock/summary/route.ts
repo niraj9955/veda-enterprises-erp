@@ -72,95 +72,80 @@ export async function GET() {
     ])
 
     // ── Determine current year boundary (YYYY-01-01) ───────────────────
-    // Previous Year Stock = sum of Production[field] for entries whose
-    // date string is strictly less than `${currentYear}-01-01`.
     const currentYear = new Date().getFullYear()
     const currentYearStart = `${currentYear}-01-01`
 
-    // ── Pre-normalize DailySell product text once ──────────────────────
-    // Avoids re-lowercasing the same product string 12 times per row.
-    // We now use `quantity` (units sold) for the Sell Item column, NOT `amount`
-    // (rupees) — because the user wants:
-    //   Available Item = Total Production Item − Sell Product Item
-    // where both sides are in UNITS, not rupees.
-    const normalizedSellRows = dailySells.map((d) => ({
-      product: String((d as Record<string, unknown>).product || '').toLowerCase().trim(),
-      quantity: Number((d as Record<string, unknown>).quantity) || 0,
-    }))
+    // ── SINGLE PASS over Production ────────────────────────────────────
+    // Previously the code walked `productions` 4 times per field (total /
+    // prevYear / latest / uniqueDates), giving 48 passes over the array
+    // for 12 product fields. We now walk it ONCE and accumulate per-field
+    // tallies in parallel arrays.
+    const totalProductionByField   = new Array(PRODUCT_FIELDS.length).fill(0)
+    const previousYearByField      = new Array(PRODUCT_FIELDS.length).fill(0)
+    const latestDateByField        = new Array<string>(PRODUCT_FIELDS.length).fill('')
+    const latestQtyByField         = new Array<number>(PRODUCT_FIELDS.length).fill(0)
+    const uniqueDatesByField: Set<string>[] = PRODUCT_FIELDS.map(() => new Set<string>())
 
-    // Build a lookup map: lowercased-product-name → total quantity sold.
-    // This is O(n) instead of O(n × 12) — we walk the sales rows ONCE and
-    // bucket each one under its matching product name.
-    const sellByProductName = new Map<string, number>()
-    for (const row of normalizedSellRows) {
-      if (!row.product) continue
-      sellByProductName.set(
-        row.product,
-        (sellByProductName.get(row.product) || 0) + row.quantity
-      )
+    for (const p of productions) {
+      const dateStr = String((p as Record<string, unknown>).date || '')
+      const isPrevYear = dateStr && dateStr < currentYearStart
+      for (let i = 0; i < PRODUCT_FIELDS.length; i++) {
+        const key = PRODUCT_FIELDS[i].key
+        const v = Number((p as Record<string, unknown>)[key]) || 0
+        if (v <= 0) continue
+        totalProductionByField[i] += v
+        if (isPrevYear) previousYearByField[i] += v
+        // productions is sorted date-desc, so the FIRST non-zero value we
+        // encounter for a field is the latest date for that field.
+        if (!latestDateByField[i]) {
+          latestDateByField[i] = dateStr
+          latestQtyByField[i] = v
+        }
+        if (dateStr) uniqueDatesByField[i].add(dateStr)
+      }
     }
 
-    // ── Build per-item summaries ───────────────────────────────────────
-    const summaries = PRODUCT_FIELDS.map((field) => {
-      // Total Production = sum of this field across EVERY Production record.
-      let totalProduction = 0
-      let previousYearStock = 0
-      for (const p of productions) {
-        const v = Number((p as Record<string, unknown>)[field.key]) || 0
-        totalProduction += v
-        const dateStr = String((p as Record<string, unknown>).date || '')
-        if (dateStr && dateStr < currentYearStart) {
-          previousYearStock += v
+    // ── SINGLE PASS over Stock (for latest date fallback) ──────────────
+    // Stocks are also sorted date-desc. Used only when Production had no
+    // entries for a field (rare edge case).
+    const stockLatestDate  = new Array<string>(PRODUCT_FIELDS.length).fill('')
+    const stockLatestQty   = new Array<number>(PRODUCT_FIELDS.length).fill(0)
+    for (const s of stocks) {
+      const dateStr = String((s as Record<string, unknown>).date || '')
+      for (let i = 0; i < PRODUCT_FIELDS.length; i++) {
+        if (stockLatestDate[i]) continue // already found latest for this field
+        const key = PRODUCT_FIELDS[i].key
+        const v = Number((s as Record<string, unknown>)[key]) || 0
+        if (v > 0) {
+          stockLatestDate[i] = dateStr
+          stockLatestQty[i] = v
         }
       }
+    }
 
-      // Sell Item = sum of DailySell.quantity where product name EXACTLY
-      // matches this item's name (case-insensitive). Because the Daily Sell
-      // form now uses a dropdown populated with these same names, the match
-      // is exact — no more fuzzy-text false positives.
-      const sellItem = sellByProductName.get(field.name.toLowerCase()) || 0
+    // ── SINGLE PASS over DailySell (sell quantity by product name) ─────
+    const sellByProductName = new Map<string, number>()
+    for (const d of dailySells) {
+      const productName = String((d as Record<string, unknown>).product || '').toLowerCase().trim()
+      if (!productName) continue
+      const qty = Number((d as Record<string, unknown>).quantity) || 0
+      sellByProductName.set(productName, (sellByProductName.get(productName) || 0) + qty)
+    }
 
-      // Available Quantity = Total Production − Sell Item
+    // ── Assemble per-field summary rows ────────────────────────────────
+    const summaries = PRODUCT_FIELDS.map((field, i) => {
+      const totalProduction   = totalProductionByField[i]
+      const previousYearStock = previousYearByField[i]
+      const sellItem          = sellByProductName.get(field.name.toLowerCase()) || 0
       const availableQuantity = totalProduction - sellItem
-
-      // Latest production info (unchanged from previous version).
-      let latestDate = ''
-      let latestQuantity = 0
-      for (const s of stocks) {
-        const v = Number((s as Record<string, unknown>)[field.key]) || 0
-        if (v > 0) {
-          latestDate = String((s as Record<string, unknown>).date || '')
-          latestQuantity = v
-          break
-        }
-      }
-
-      // Fallback: walk Production (sorted date-desc) if Stock has nothing.
-      if (!latestDate) {
-        for (const p of productions) {
-          const v = Number((p as Record<string, unknown>)[field.key]) || 0
-          if (v > 0) {
-            latestDate = String((p as Record<string, unknown>).date || '')
-            latestQuantity = v
-            break
-          }
-        }
-      }
-
-      // Production Days = count of UNIQUE dates with non-zero production.
-      const uniqueDates = new Set<string>()
-      for (const p of productions) {
-        const v = Number((p as Record<string, unknown>)[field.key]) || 0
-        if (v > 0) {
-          uniqueDates.add(String((p as Record<string, unknown>).date || ''))
-        }
-      }
-      const productionDays = uniqueDates.size
+      const latestDate        = latestDateByField[i] || stockLatestDate[i]
+      const latestQuantity    = latestDateByField[i] ? latestQtyByField[i] : stockLatestQty[i]
+      const productionDays    = uniqueDatesByField[i].size
 
       return {
-        id: field.key,             // stable React key (same as schema field name)
-        key: field.key,            // schema field name
-        name: field.name,          // human label
+        id: field.key,
+        key: field.key,
+        name: field.name,
         totalProduction,
         sellItem,
         availableQuantity,

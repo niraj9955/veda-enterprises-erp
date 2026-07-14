@@ -693,9 +693,18 @@ export function DailySellModule() {
   }
 
   // ── Summary totals ──────────────────────────────────────────────────
-  const totalAmount = dailySells.reduce((sum, s) => sum + (s.amount || 0), 0)
-  const totalReceived = dailySells.reduce((sum, s) => sum + (s.receivedAmount || 0), 0)
-  const totalPending = dailySells.reduce((sum, s) => sum + (s.pendingAmount || 0), 0)
+  // Memoized — three separate `.reduce()` calls over the full list on every
+  // render (including every keystroke in search/filter inputs) is wasteful.
+  // One pass, only recomputed when `dailySells` actually changes.
+  const { totalAmount, totalReceived, totalPending } = React.useMemo(() => {
+    let amt = 0, rec = 0, pend = 0
+    for (const s of dailySells) {
+      amt += s.amount || 0
+      rec += s.receivedAmount || 0
+      pend += s.pendingAmount ?? Math.max(0, (s.amount || 0) - (s.receivedAmount || 0))
+    }
+    return { totalAmount: amt, totalReceived: rec, totalPending: pend }
+  }, [dailySells])
 
   // ── Build product option labels with avail-qty in brackets ─────────
   // e.g. "Cement (Avail: 1,234)" or "Cement (Avail: 0)" when out of stock.
