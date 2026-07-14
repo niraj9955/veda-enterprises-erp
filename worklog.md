@@ -1653,3 +1653,42 @@ Stage Summary:
   • On save (edit): hard block + destructive toast if new qty > (avail + original row's qty)
   • Soft warning when stock critically low but still sufficient
 - Files changed: src/components/erp/daily-sell-module.tsx (imports, save handlers, qty cells, read-mode product cell)
+
+---
+Task ID: reports-date-filters
+Agent: Main Agent
+Task: Report me filter lagao - kis month ka, custom date ye sab ka (Add month + custom date filters in Reports section)
+
+Work Log:
+- Read full report-module.tsx (1232 lines) and /api/reports/route.ts to map data flow
+- Found that the API already accepts ?month=&from=&to= query params, but the frontend api.getReport() only sent the type — so filters were never reaching the server
+- Updated src/lib/api.ts: getReport() now accepts optional { month?, from?, to? } and builds URLSearchParams accordingly
+- Built a single shared <ReportFilters /> component (in report-module.tsx) with:
+  • Preset chips: All Time / This Month / Last Month / Last 30 Days / This Year / Custom
+  • Active range shown as a Badge ("This Month", "2026-07-01 → 2026-07-31", etc.)
+  • Custom mode expands a 3-input row: From date / To date / Or pick a month
+  • Reset button (appears when filter is dirty) restores 'All Time'
+- resolveFilterApiParams() converts UI state → {month?, from?, to?}:
+  • thisMonth → { month: current YYYY-MM }
+  • lastMonth → { month: previous YYYY-MM }
+  • thisYear → { from: YYYY-01-01, to: YYYY-12-31 }
+  • last30   → { from: today-30d, to: today }
+  • custom   → { from?, to? } or { month? } if only month is set
+  • all      → {} (no filter, all-time)
+- Wired filters into 4 reports:
+  • SalesReport       — defaults to 'All Time'
+  • ProductionReport  — defaults to 'All Time'
+  • ProfitLossReport  — defaults to 'This Month' (matches old API behavior)
+  • OutstandingReport — defaults to 'All Time'
+- StockReport: filters don't apply (stock is a live snapshot of all-time production − sales), so added a blue info note explaining this and pointing users to Production/Sales tabs for period data
+- CustomerLedgerReport: left untouched — it aggregates Orders + Payments collections client-side, no date dimension
+- Fixed TS error: presets array was being widened to `string` instead of `ReportPreset`; split into `allPresets` + `.filter()` with `Set<ReportPreset>`
+- Verified: `npx tsc --noEmit` clean for our two files; `npx next build` compiled successfully in 21.4s
+- Pushed to main → Vercel auto-deploy triggered
+
+Stage Summary:
+- All 4 date-aware reports (Sales / Production / P&L / Outstanding) now have a unified filter bar
+- 6 preset options + full custom date-range + month picker
+- Filter state is per-tab and reactive — changing filter refetches with the new params
+- api.getReport() signature changed from (type) to (type, filters?) — backward compatible, no other callers exist
+- Files changed: src/lib/api.ts, src/components/erp/report-module.tsx
