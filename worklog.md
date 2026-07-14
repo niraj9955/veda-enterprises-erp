@@ -1523,3 +1523,48 @@ Stage Summary:
 - Click any tile → setActiveModule() navigates to that module (same as before)
 - File: /home/z/my-project/src/components/erp/dashboard-module.tsx (was 398 lines, now ~190 lines)
 - Removed dependency on api.getDashboardStats — no more network round-trip on dashboard load
+
+---
+Task ID: daily-sell-auto-sync-all-modules
+Agent: Main Agent
+Task: Auto-sync Daily Sell entry to all related modules (Customer, Order, Stock, Finance) — user makes entry once, every section updates automatically
+
+Work Log:
+- Audited existing DailySell schema + all related module schemas (Customer, Order, CustomerPayment, Stock) and their API routes
+- Discovered Stock availability is already computed dynamically by /api/stock/summary as (Total Production − Total Sold), so no direct Stock collection write is needed — creating a DailySell inherently updates available stock
+- Added 4 new fields to DailySellSchema in src/lib/models.ts: customerId, orderId, customerPaymentId, syncNotes (all optional with sensible defaults — preserves backward compat with existing records)
+- Created new module src/lib/daily-sell-sync.ts with:
+  • syncCustomer(): find-or-create Customer by mobile (preferred) or case-insensitive name match; updates address + mobile if existing record has placeholder
+  • syncOrder(): creates a new Order with one line item matching the sold product, linked to the synced customer
+  • syncCustomerPayment(): creates a CustomerPayment receivable entry with auto-generated remarks
+  • syncAllFromDailySell(): orchestrator that runs all 3 syncs + assembles human-readable syncNotes
+  • cleanupDailySellLinks(): deletes linked Order + CustomerPayment (preserves Customer — may have other transactions)
+- Updated POST /api/daily-sell/route.ts:
+  • After create, runs syncAllFromDailySell and stores linked IDs + syncNotes on the record
+  • Bulk-delete (POST with ids[]) now cleans up linked Order+Payment mirrors before deleteMany
+  • Delete-all (?all=true) now cleans up linked mirrors for every record before deleteMany({})
+- Rewrote PUT /api/daily-sell/[id]/route.ts: after field update, calls cleanupDailySellLinks (delete old mirrors) then syncAllFromDailySell (recreate with new data) — entry stays linked correctly through edits
+- Rewrote DELETE /api/daily-sell/[id]/route.ts: fetches record first, calls cleanupDailySellLinks, then deletes the record
+- Updated src/components/erp/daily-sell-module.tsx UI:
+  • Added RefreshCw + CheckCircle2 icons import
+  • Extended DailySell interface with optional customerId/orderId/customerPaymentId/syncNotes fields
+  • Added green "Auto-sync on save" info banner at top of Add/Edit dialog (tells user that Customer+Order+Payment+Stock will auto-update)
+  • Success toast now includes the syncNotes from the API response (e.g. "Entry created · Auto-synced: Customer created (Ramesh) · Order ORD-0123 created · Payment recorded (₹5000) · Stock auto-updated (Production − Sold)")
+  • Added new "Synced" column to the records table (between Remarks and Actions) — shows green "Synced" badge with checkmark if any of customerId/orderId/customerPaymentId is set, with syncNotes as tooltip; shows "—" for legacy records created before auto-sync
+  • Bumped empty-state colSpan 13 → 14 to match new column count
+  • Updated Delete All confirmation copy to mention that auto-linked Orders and Customer Payment entries will also be cleaned up
+- TypeScript: zero new errors introduced (all errors in npx tsc --noEmit are pre-existing in unrelated files: admin-panel, customer-history, settings, login-page, report-module, user-management)
+- Next.js production build: ✓ Compiled successfully in 21.9s
+- Committed and pushed to origin/main
+
+Stage Summary:
+- Single-entry-multi-update workflow is now live: when user creates/edits a Daily Sell entry, the system automatically:
+  1. Finds or creates a Customer record (matched by mobile or name; address auto-updated if changed)
+  2. Creates a new Order in the Orders module with the sold product as a line item, linked to that customer
+  3. Creates a Customer Payment entry in Finance for the sale amount
+  4. Stock Overview auto-recalculates "available = production − sold" (already happened implicitly, now surfaced in syncNotes)
+- On edit: old linked Order + Payment are deleted and recreated with new data; Customer record is updated if address changed
+- On delete (single/bulk/all): linked Order + Payment are cleaned up; Customer master record preserved
+- New files: src/lib/daily-sell-sync.ts
+- Modified files: src/lib/models.ts, src/app/api/daily-sell/route.ts, src/app/api/daily-sell/[id]/route.ts, src/components/erp/daily-sell-module.tsx
+- User can verify by: (1) creating a Daily Sell entry, (2) checking the green "Synced" badge in the table, (3) navigating to Customers / Orders / Customer Payment modules to see the auto-created records

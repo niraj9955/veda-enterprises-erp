@@ -91,6 +91,14 @@ const StockSchema = new mongoose.Schema({
 StockSchema.index({ date: -1 });
 
 // ─── Daily Sell ────────────────────────────────────────────────────────────
+// Auto-sync linked IDs — populated by /api/daily-sell POST/PUT/DELETE via
+// src/lib/daily-sell-sync.ts. Each DailySell entry mirrors itself into:
+//   • Customer           (find-or-create by mobile/name)
+//   • Order              (one line item = product, qty, rate, amount)
+//   • CustomerPayment    (a receivable entry for the sale amount)
+// Stock is auto-recalculated by /api/stock/summary (Production − Sold),
+// so we don't write to the Stock collection directly — but we record the
+// fact in `syncNotes` so the UI can show the user what was auto-updated.
 const DailySellSchema = new mongoose.Schema({
   date: { type: String, required: true },
   customerName: { type: String, required: true },
@@ -103,6 +111,15 @@ const DailySellSchema = new mongoose.Schema({
   transporterName: { type: String, default: '' },
   transporterFair: { type: Number, default: 0 },
   remarks: { type: String, default: '' },
+  // ── Auto-sync linkage ──────────────────────────────────────────────────
+  // IDs of the records auto-created/updated in other modules when this
+  // DailySell entry was saved. Used by PUT/DELETE to clean up the mirrors.
+  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null },
+  orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', default: null },
+  customerPaymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'CustomerPayment', default: null },
+  // Human-readable summary of what was synced — shown as a badge in the UI.
+  // Example: "Customer ✓ · Order ORD-0123 ✓ · Payment ✓ · Stock auto-updated"
+  syncNotes: { type: String, default: '' },
 }, { timestamps: true });
 DailySellSchema.index({ date: -1 });
 DailySellSchema.index({ customerName: 1 });

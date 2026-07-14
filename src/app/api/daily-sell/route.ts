@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { DailySell } from '@/lib/models'
 import { getSession } from '@/lib/auth'
+import { syncAllFromDailySell } from '@/lib/daily-sell-sync'
 
 // Force dynamic — never cache list responses
 export const dynamic = 'force-dynamic'
@@ -31,6 +32,24 @@ export async function POST(request: Request) {
       if (ids.length === 0) {
         return NextResponse.json({ error: 'No ids provided' }, { status: 400 })
       }
+      // Before deleting, fetch the records so we can clean up their linked
+      // Order + CustomerPayment mirrors. Best-effort — cleanup failures
+      // don't block the parent delete.
+      try {
+        const records = await DailySell.find({ _id: { $in: ids } }).lean()
+        const { cleanupDailySellLinks } = await import('@/lib/daily-sell-sync')
+        await Promise.all(
+          records.map((r: any) =>
+            cleanupDailySellLinks({
+              customerId: r.customerId?.toString(),
+              orderId: r.orderId?.toString(),
+              customerPaymentId: r.customerPaymentId?.toString(),
+            }).catch(() => {})
+          )
+        )
+      } catch (cleanupErr) {
+        console.error('[daily-sell bulk-delete] Cleanup error (non-blocking):', cleanupErr)
+      }
       const result = await DailySell.deleteMany({ _id: { $in: ids } })
       return NextResponse.json({
         message: 'Daily sell entries deleted successfully',
@@ -54,6 +73,36 @@ export async function POST(request: Request) {
       transporterFair: Number(body.transporterFair) || 0,
       remarks: body.remarks || '',
     })
+
+    // ── AUTO-SYNC to Customer, Order, Customer Payment, Stock ──────────
+    // Best-effort: if any sub-sync fails, the DailySell record still
+    // exists; the failure is recorded in `syncNotes` so the UI can
+    // surface it to the user.
+    try {
+      const sync = await syncAllFromDailySell({
+        date: body.date,
+        customerName: body.customerName,
+        address: body.address || '',
+        contactNumber: body.contactNumber || '',
+        product: body.product || '',
+        quantity: Number(body.quantity) || 0,
+        rate: Number(body.rate) || 0,
+        amount: Number(body.amount),
+        transporterName: body.transporterName || '',
+        transporterFair: Number(body.transporterFair) || 0,
+        remarks: body.remarks || '',
+      })
+      record.customerId = sync.customerId as any
+      record.orderId = sync.orderId as any
+      record.customerPaymentId = sync.customerPaymentId as any
+      record.syncNotes = sync.syncNotes
+      await record.save()
+    } catch (syncErr) {
+      console.error('[daily-sell POST] Auto-sync failed (non-blocking):', syncErr)
+      record.syncNotes = 'Auto-sync failed — entry saved but not mirrored to other modules'
+      await record.save()
+    }
+
     return NextResponse.json({ dailySell: toObject(record) }, { status: 201 })
   } catch (error) {
     console.error('Error creating daily sell:', error)
@@ -80,6 +129,24 @@ export async function DELETE(request: Request) {
     const all = searchParams.get('all')
 
     if (all === 'true' || all === '1') {
+      // Before deleting everything, clean up linked Order + CustomerPayment
+      // mirrors for each record. Best-effort — cleanup failures don't block
+      // the parent delete.
+      try {
+        const records = await DailySell.find({}).lean()
+        const { cleanupDailySellLinks } = await import('@/lib/daily-sell-sync')
+        await Promise.all(
+          records.map((r: any) =>
+            cleanupDailySellLinks({
+              customerId: r.customerId?.toString(),
+              orderId: r.orderId?.toString(),
+              customerPaymentId: r.customerPaymentId?.toString(),
+            }).catch(() => {})
+          )
+        )
+      } catch (cleanupErr) {
+        console.error('[daily-sell delete-all] Cleanup error (non-blocking):', cleanupErr)
+      }
       const result = await DailySell.deleteMany({})
       return NextResponse.json({
         message: 'All daily sell entries deleted successfully',

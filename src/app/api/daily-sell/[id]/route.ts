@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { DailySell } from '@/lib/models'
+import { syncAllFromDailySell, cleanupDailySellLinks } from '@/lib/daily-sell-sync'
 
 // Force dynamic — never cache individual daily-sell responses
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 // Whitelist of updatable fields. Must match DailySellSchema in src/lib/models.ts.
+// Note: customerId / orderId / customerPaymentId / syncNotes are managed by the
+// auto-sync engine — NOT user-editable through this route.
 const DAILY_SELL_FIELDS = [
   'date',
   'customerName',
@@ -41,6 +44,11 @@ export async function GET(
 }
 
 // PUT /api/daily-sell/[id] — update a single daily sell entry
+// After updating the user-facing fields, we re-run the auto-sync engine:
+//   1. Delete the previously-linked Order + CustomerPayment (cleanup)
+//   2. Re-create them with the new data
+//   3. Update the linked Customer's address if it changed
+//   4. Refresh syncNotes with the new summary
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -66,6 +74,48 @@ export async function PUT(
       return NextResponse.json({ error: 'Daily sell entry not found' }, { status: 404 })
     }
 
+    // ── Re-run auto-sync with the new field values ────────────────────
+    // Step 1: clean up the previously-linked Order + CustomerPayment so
+    // we don't leave stale mirrors when the user edits the entry.
+    try {
+      await cleanupDailySellLinks({
+        customerId: record.customerId?.toString(),
+        orderId: record.orderId?.toString(),
+        customerPaymentId: record.customerPaymentId?.toString(),
+      })
+    } catch (cleanupErr) {
+      console.error('[daily-sell PUT] Cleanup error (non-blocking):', cleanupErr)
+    }
+
+    // Step 2: re-create the mirrors with the updated field values.
+    try {
+      const sync = await syncAllFromDailySell({
+        date: String(record.date),
+        customerName: String(record.customerName),
+        address: String(record.address || ''),
+        contactNumber: String(record.contactNumber || ''),
+        product: String(record.product || ''),
+        quantity: Number(record.quantity) || 0,
+        rate: Number(record.rate) || 0,
+        amount: Number(record.amount),
+        transporterName: String(record.transporterName || ''),
+        transporterFair: Number(record.transporterFair) || 0,
+        remarks: String(record.remarks || ''),
+      })
+      record.customerId = sync.customerId as any
+      record.orderId = sync.orderId as any
+      record.customerPaymentId = sync.customerPaymentId as any
+      record.syncNotes = sync.syncNotes
+      await record.save()
+    } catch (syncErr) {
+      console.error('[daily-sell PUT] Auto-sync failed (non-blocking):', syncErr)
+      record.customerId = null
+      record.orderId = null
+      record.customerPaymentId = null
+      record.syncNotes = 'Auto-sync failed on edit — entry saved but mirrors may be stale'
+      await record.save()
+    }
+
     return NextResponse.json({ dailySell: toObject(record) })
   } catch (error) {
     console.error('Error updating daily sell entry:', error)
@@ -74,6 +124,8 @@ export async function PUT(
 }
 
 // DELETE /api/daily-sell/[id] — delete a single daily sell entry
+// Before deleting, clean up the linked Order + CustomerPayment mirrors.
+// The Customer record is preserved (may have other transactions).
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -82,10 +134,23 @@ export async function DELETE(
     await connectDB()
     const { id } = await params
 
-    const record = await DailySell.findByIdAndDelete(id)
+    const record = await DailySell.findById(id).lean()
     if (!record) {
       return NextResponse.json({ error: 'Daily sell entry not found' }, { status: 404 })
     }
+
+    // Clean up linked mirrors (best-effort)
+    try {
+      await cleanupDailySellLinks({
+        customerId: (record as any).customerId?.toString(),
+        orderId: (record as any).orderId?.toString(),
+        customerPaymentId: (record as any).customerPaymentId?.toString(),
+      })
+    } catch (cleanupErr) {
+      console.error('[daily-sell DELETE] Cleanup error (non-blocking):', cleanupErr)
+    }
+
+    await DailySell.findByIdAndDelete(id)
 
     return NextResponse.json({ message: 'Daily sell entry deleted successfully' })
   } catch (error) {

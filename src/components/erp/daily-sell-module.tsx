@@ -38,7 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { ShoppingCart, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload, Search, Trash } from 'lucide-react'
+import { ShoppingCart, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload, Search, Trash, RefreshCw, CheckCircle2 } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 import { AiFillButton } from '@/components/ui/ai-fill-button'
 import { FieldVoiceInput } from '@/components/ui/field-voice-input'
@@ -89,6 +89,13 @@ interface DailySell {
   transporterName?: string
   transporterFair?: number
   remarks: string
+  // Auto-sync linkage — populated by /api/daily-sell POST/PUT via
+  // src/lib/daily-sell-sync.ts. Optional for backward-compat with
+  // records created before the auto-sync feature shipped.
+  customerId?: string | null
+  orderId?: string | null
+  customerPaymentId?: string | null
+  syncNotes?: string
   createdAt: string
   updatedAt: string
 }
@@ -361,11 +368,23 @@ export function DailySellModule() {
       }
 
       if (editingItem) {
-        await api.updateDailySell(editingItem.id, payload)
-        toast({ title: 'Success', description: 'Daily sell entry updated successfully' })
+        const res = await api.updateDailySell(editingItem.id, payload)
+        const synced = (res as any)?.dailySell?.syncNotes
+        toast({
+          title: 'Success',
+          description: synced
+            ? `Entry updated · Auto-synced: ${synced}`
+            : 'Daily sell entry updated successfully',
+        })
       } else {
-        await api.createDailySell(payload)
-        toast({ title: 'Success', description: 'Daily sell entry created successfully' })
+        const res = await api.createDailySell(payload)
+        const synced = (res as any)?.dailySell?.syncNotes
+        toast({
+          title: 'Success',
+          description: synced
+            ? `Entry created · Auto-synced: ${synced}`
+            : 'Daily sell entry created successfully',
+        })
       }
 
       setFormOpen(false)
@@ -595,6 +614,7 @@ export function DailySellModule() {
                   <TableHead>Transporter Name</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Transporter Fair (₹)</TableHead>
                   <TableHead>Remarks</TableHead>
+                  <TableHead className="text-center whitespace-nowrap">Synced</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -603,7 +623,7 @@ export function DailySellModule() {
                   renderSkeletons()
                 ) : filteredDailySells.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={13} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={14} className="h-32 text-center text-muted-foreground">
                       No daily sell entries yet. Click &quot;Add Daily Sell&quot; to get started.
                     </TableCell>
                   </TableRow>
@@ -640,6 +660,24 @@ export function DailySellModule() {
                         {item.transporterFair != null ? formatCurrency(item.transporterFair) : '—'}
                       </TableCell>
                       <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.remarks || '—'}</TableCell>
+                      <TableCell className="text-center">
+                        {item.orderId || item.customerPaymentId || item.customerId ? (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300"
+                            title={item.syncNotes || 'Auto-synced'}
+                          >
+                            <CheckCircle2 className="size-3" />
+                            Synced
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-xs text-muted-foreground"
+                            title="This entry was created before auto-sync was enabled"
+                          >
+                            —
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} title="Edit">
@@ -674,6 +712,18 @@ export function DailySellModule() {
               {editingItem ? 'Update the daily sell entry details.' : 'Fill in the details to create a new daily sell entry.'}
             </DialogDescription>
           </DialogHeader>
+
+          {/* Auto-sync info banner — tells the user that saving this entry
+              will auto-mirror the data into Customer, Order, Customer Payment,
+              and Stock Overview modules. */}
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-900/15 px-3 py-2.5 flex items-start gap-2">
+            <RefreshCw className="size-4 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+            <div className="text-xs text-emerald-800 dark:text-emerald-200 leading-relaxed">
+              <span className="font-semibold">Auto-sync on save:</span> Customer record, Order,
+              Customer Payment entry, and Stock availability will be auto-created / updated
+              in their respective modules. No manual entry needed elsewhere.
+            </div>
+          </div>
           {!editingItem && (
             <div className="flex justify-end">
               <AiFillButton
@@ -906,7 +956,8 @@ export function DailySellModule() {
               </span>
               <span className="block text-muted-foreground">
                 All {dailySells.length} record{dailySells.length !== 1 ? 's' : ''} will be removed.
-                Customer, Production, Order, Payment, and Dispatch records are NOT affected.
+                Auto-linked Orders and Customer Payment entries will also be cleaned up.
+                Customer master records are preserved.
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
