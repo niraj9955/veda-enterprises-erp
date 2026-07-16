@@ -101,7 +101,7 @@ interface OrderFormData {
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-// Paper block product types — same 12 fields as Stock/Production schema
+// Paver block product types — same 12 fields as Stock/Production schema
 // (cement, zigZagGrey80, zigZagRed80, zigZagYellow80, zigZagGrey60,
 //  zigZagRed60, zigZagYellow60, chequreTile, curveStone,
 //  dumbleGrey80, dumbleRed80, dumbleYellow80)
@@ -532,7 +532,7 @@ export function OrderModule() {
             </Select>
           </div>
 
-          {/* Items section — multi-line item entry with paper block types */}
+          {/* Items section — multi-line item entry with paver block types */}
           <div className="grid gap-2">
             <div className="flex items-center justify-between">
               <Label>Items <span className="text-muted-foreground text-xs font-normal">(select brick type for each line)</span></Label>
@@ -543,7 +543,7 @@ export function OrderModule() {
             <div className="border rounded-md p-2 space-y-2 bg-muted/20">
               {formData.items.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-2">
-                  No items added. Use "Add Item" to add multiple paper block products, OR skip this section and use brick type + qty + rate above.
+                  No items added. Use "Add Item" to add multiple paver block products, OR skip this section and use brick type + qty + rate above.
                 </p>
               ) : (
                 <>

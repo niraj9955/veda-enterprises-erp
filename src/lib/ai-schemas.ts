@@ -49,7 +49,7 @@ export const AI_MODULE_SCHEMAS: AiModuleSchema[] = [
     key: 'dailySell',
     label: 'Daily Sell',
     description:
-      'Daily sales transactions — when a customer buys paper blocks, cement, or any product. Records customer name, address, contact, product description, and the sale amount in rupees.',
+      'Daily sales transactions — when a customer buys paver blocks, cement, or any product. Records customer name, address, contact, product description, and the sale amount in rupees.',
     fields: [
       { key: 'date', label: 'Date', type: 'date', aliases: ['date', 'din', 'tarikh', 'aaj', 'kal'], required: true },
       { key: 'customerName', label: 'Customer Name', type: 'string', aliases: ['customer', 'name', 'naam', 'graahak', 'party', 'khareedar'], required: true },
@@ -67,7 +67,7 @@ export const AI_MODULE_SCHEMAS: AiModuleSchema[] = [
     key: 'production',
     label: 'Production',
     description:
-      'Daily paper block production entries — how many units of each product type were manufactured on a given date. Products include cement, zig zag (grey/red/yellow, 80mm/60mm), chequre tile, curve stone, and dumble (grey/red/yellow). All quantities are in pieces unless stated otherwise.',
+      'Daily paver block production entries — how many units of each product type were manufactured on a given date. Products include cement, zig zag (grey/red/yellow, 80mm/60mm), chequre tile, curve stone, and dumble (grey/red/yellow). All quantities are in pieces unless stated otherwise.',
     fields: [
       { key: 'date', label: 'Date', type: 'date', aliases: ['date', 'din', 'tarikh', 'aaj', 'kal'], required: true },
       { key: 'cement', label: 'Cement (bags)', type: 'number', unit: 'bags', aliases: ['cement', 'sement', 'cement bags'] },
@@ -299,7 +299,7 @@ export function buildSystemPrompt(schema: AiModuleSchema): string {
     })
     .join('\n')
 
-  return `You are a form-filling assistant for the Veda Enterprises ERP system (a paper block manufacturing business in India).
+  return `You are a form-filling assistant for the Veda Enterprises ERP system (a paver block manufacturing business in India).
 
 MODULE: ${schema.label}
 DESCRIPTION: ${schema.description}

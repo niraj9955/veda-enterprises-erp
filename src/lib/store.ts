@@ -60,7 +60,7 @@ interface AppState {
 const defaultCompany: CompanyInfo = {
   id: '',
   name: 'Veda Enterprises',
-  tagline: 'Paper Block ERP',
+  tagline: 'Paver Block ERP',
   address: 'Purushottampur, Muzaffarpur',
   city: 'Muzaffarpur',
   state: 'Bihar',

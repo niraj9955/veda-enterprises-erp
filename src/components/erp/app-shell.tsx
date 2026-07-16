@@ -150,7 +150,7 @@ const sectionColors: Record<string, {
     headerHover: 'hover:bg-white/10',
     iconBg: 'bg-white/30',
     iconText: 'text-white',
-    activeItem: 'bg-[#00408C]',
+    activeItem: 'bg-[#013D29]',
     activeItemText: 'text-white',
     border: 'border-white/25',
   },
@@ -160,7 +160,7 @@ const sectionColors: Record<string, {
     headerHover: 'hover:bg-white/10',
     iconBg: 'bg-white/30',
     iconText: 'text-white',
-    activeItem: 'bg-[#00408C]',
+    activeItem: 'bg-[#013D29]',
     activeItemText: 'text-white',
     border: 'border-white/25',
   },
@@ -170,7 +170,7 @@ const sectionColors: Record<string, {
     headerHover: 'hover:bg-white/10',
     iconBg: 'bg-white/30',
     iconText: 'text-white',
-    activeItem: 'bg-[#00408C]',
+    activeItem: 'bg-[#013D29]',
     activeItemText: 'text-white',
     border: 'border-white/25',
   },
@@ -180,7 +180,7 @@ const sectionColors: Record<string, {
     headerHover: 'hover:bg-white/10',
     iconBg: 'bg-white/30',
     iconText: 'text-white',
-    activeItem: 'bg-[#00408C]',
+    activeItem: 'bg-[#013D29]',
     activeItemText: 'text-white',
     border: 'border-white/25',
   },
@@ -190,7 +190,7 @@ const sectionColors: Record<string, {
     headerHover: 'hover:bg-white/10',
     iconBg: 'bg-white/30',
     iconText: 'text-white',
-    activeItem: 'bg-[#00408C]',
+    activeItem: 'bg-[#013D29]',
     activeItemText: 'text-white',
     border: 'border-white/25',
   },
@@ -230,7 +230,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
     section.items.some((item) => item.key === activeModule)
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-[#007BFF] via-[#0066D6] to-[#0052B4] text-white relative">
+    <div className="flex flex-col h-full bg-gradient-to-b from-[#02714F] via-[#025C42] to-[#014A36] text-white relative">
       {/* Subtle inner top highlight for 3D depth */}
       <div className="absolute inset-x-0 top-0 h-px bg-white/30 pointer-events-none" />
       {/* Logo / Brand */}
@@ -244,7 +244,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
         )}
         <div className={cn('overflow-hidden transition-all duration-300', sidebarOpen ? 'w-40' : 'w-0')}>
           <h2 className="font-bold text-sm text-white whitespace-nowrap truncate drop-shadow-sm">{companyName || 'Veda Enterprises'}</h2>
-          <p className="text-[11px] text-white/70 whitespace-nowrap truncate">{companyTagline || 'Paper Block ERP'}</p>
+          <p className="text-[11px] text-white/70 whitespace-nowrap truncate">{companyTagline || 'Paver Block ERP'}</p>
         </div>
       </div>
 
@@ -259,7 +259,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                 activeModule === item.key
-                  ? 'bg-[#00408C] text-white shadow-md ring-1 ring-white/30'
+                  ? 'bg-[#013D29] text-white shadow-md ring-1 ring-white/30'
                   : 'text-white/90 hover:bg-white/15 hover:text-white'
               )}
             >
@@ -348,7 +348,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                 activeModule === item.key
-                  ? 'bg-[#00408C] text-white shadow-md ring-1 ring-white/30'
+                  ? 'bg-[#013D29] text-white shadow-md ring-1 ring-white/30'
                   : 'text-white/90 hover:bg-white/15 hover:text-white'
               )}
             >
@@ -394,7 +394,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {sidebarVisible && (
         <aside
           className={cn(
-            'hidden md:flex flex-col border-r border-black/30 bg-gradient-to-b from-[#007BFF] via-[#0066D6] to-[#0052B4] transition-all duration-300 shadow-2xl ring-1 ring-black/20 h-screen',
+            'hidden md:flex flex-col border-r border-black/30 bg-gradient-to-b from-[#02714F] via-[#025C42] to-[#014A36] transition-all duration-300 shadow-2xl ring-1 ring-black/20 h-screen',
             sidebarOpen ? 'w-60' : 'w-16'
           )}
         >
@@ -408,7 +408,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {!sidebarVisible && (
         <button
           onClick={() => setSidebarVisible(true)}
-          className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-30 items-center justify-center w-7 h-20 bg-gradient-to-r from-[#0052B4] to-[#007BFF] text-white rounded-r-xl shadow-2xl ring-1 ring-black/30 hover:w-9 hover:from-[#007BFF] hover:to-[#3395FF] transition-all duration-300 group"
+          className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-30 items-center justify-center w-7 h-20 bg-gradient-to-r from-[#014A36] to-[#02714F] text-white rounded-r-xl shadow-2xl ring-1 ring-black/30 hover:w-9 hover:from-[#02714F] hover:to-[#04A56C] transition-all duration-300 group"
           title="Show sidebar"
           aria-label="Show sidebar"
         >
@@ -420,7 +420,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top header bar */}
-        <header className="relative flex items-center gap-2 px-4 py-2.5 border-b border-black/30 bg-gradient-to-r from-[#007BFF] via-[#0066D6] to-[#007BFF] backdrop-blur-sm sticky top-0 z-10 shrink-0 text-white shadow-lg ring-1 ring-black/20">
+        <header className="relative flex items-center gap-2 px-4 py-2.5 border-b border-black/30 bg-gradient-to-r from-[#02714F] via-[#025C42] to-[#02714F] backdrop-blur-sm sticky top-0 z-10 shrink-0 text-white shadow-lg ring-1 ring-black/20">
           {/* Subtle top highlight for 3D pop */}
           <div className="absolute inset-x-0 top-0 h-px bg-white/30 pointer-events-none" />
           {/* Attractive sidebar toggle button (desktop) — always visible in header */}
@@ -430,8 +430,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               'group relative hidden md:flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300 shrink-0',
               'bg-gradient-to-br shadow-md ring-1',
               sidebarVisible
-                ? 'from-[#007BFF] to-[#0066D6] ring-white/25 hover:from-[#0066D6] hover:to-[#007BFF] shadow-blue-900/30'
-                : 'from-[#007BFF] to-[#0066D6] ring-white/25 hover:from-[#0066D6] hover:to-[#007BFF] shadow-blue-900/30'
+                ? 'from-[#02714F] to-[#025C42] ring-white/25 hover:from-[#025C42] hover:to-[#02714F] shadow-emerald-900/30'
+                : 'from-[#02714F] to-[#025C42] ring-white/25 hover:from-[#025C42] hover:to-[#02714F] shadow-emerald-900/30'
             )}
             title={sidebarVisible ? 'Hide menu' : 'Show menu'}
             aria-label={sidebarVisible ? 'Hide menu' : 'Show menu'}
@@ -449,7 +449,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <Sheet>
             <SheetTrigger asChild>
               <button
-                className="md:hidden group relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-[#007BFF] to-[#0066D6] ring-1 ring-white/25 shadow-md hover:from-[#0066D6] hover:to-[#007BFF] transition-all duration-300 shrink-0"
+                className="md:hidden group relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-[#02714F] to-[#025C42] ring-1 ring-white/25 shadow-md hover:from-[#025C42] hover:to-[#02714F] transition-all duration-300 shrink-0"
                 title="Open menu"
                 aria-label="Open menu"
               >
@@ -469,7 +469,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-1.5">
             <ThemeToggle className="text-white hover:bg-white/15 hover:text-white" />
             <div className="hidden md:flex items-center gap-2 ml-1">
-              <div className="w-8 h-8 bg-gradient-to-br from-[#007BFF] to-[#0066D6] rounded-full flex items-center justify-center text-white font-semibold text-xs shadow-md ring-1 ring-white/30">
+              <div className="w-8 h-8 bg-gradient-to-br from-[#02714F] to-[#025C42] rounded-full flex items-center justify-center text-white font-semibold text-xs shadow-md ring-1 ring-white/30">
                 {user?.name?.charAt(0) || 'U'}
               </div>
               <div className="hidden lg:block">
@@ -510,11 +510,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     )}
                     <div>
                       <h3 className="font-bold text-base text-white tracking-tight">{company?.name || 'Veda Enterprises'}</h3>
-                      <p className="text-[11px] text-slate-400">{company?.tagline || 'Paper Block ERP'}</p>
+                      <p className="text-[11px] text-slate-400">{company?.tagline || 'Paver Block ERP'}</p>
                     </div>
                   </div>
                   <p className="text-xs text-slate-300/80 leading-relaxed pr-4">
-                    Complete enterprise resource planning system for paper block manufacturing — production, sales, payments, purchases, expenses & reports all in one place.
+                    Complete enterprise resource planning system for paver block manufacturing — production, sales, payments, purchases, expenses & reports all in one place.
                   </p>
                   <div className="flex items-center gap-2 pt-1">
                     <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400">

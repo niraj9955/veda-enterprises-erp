@@ -19,7 +19,7 @@ import { getSession } from '@/lib/auth'
 // overwrite them.
 const VEDA_DEFAULTS = {
   name: 'Veda Enterprises',
-  tagline: 'Paper Block ERP',
+  tagline: 'Paver Block ERP',
   address: 'Purushottampur, Muzaffarpur',
   city: 'Muzaffarpur',
   state: 'Bihar',
