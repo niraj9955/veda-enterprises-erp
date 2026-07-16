@@ -1131,7 +1131,7 @@ export function DailySellModule() {
                 <TableRow className="bg-emerald-50/60 dark:bg-emerald-900/15 border-t-2 border-t-emerald-400 hover:bg-emerald-50/60">
                   <TableCell colSpan={16} className="p-2 space-y-1.5">
                     {/* Row 1 — identity + qty/rate */}
-                    <div className="flex flex-wrap items-center gap-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Input
                         type="date"
                         value={newRow.date}
@@ -1192,7 +1192,7 @@ export function DailySellModule() {
                     </div>
 
                     {/* Row 2 — Transporter, T Fair, Received, Remarks + Save */}
-                    <div className="flex flex-wrap items-center gap-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <CellInput value={newRow.transporterName} onChange={(v) => handleNewRowChange('transporterName', v)} placeholder="Transporter" className="h-7 text-xs px-2 w-[160px] shrink-0" />
                       <CellInput type="number" min="0" value={newRow.transporterFair} onChange={(v) => handleNewRowChange('transporterFair', v)} placeholder="T Fair" className="h-7 text-xs px-2 w-[100px] shrink-0" />
                       <CellInput type="number" min="0" value={newRow.receivedAmount} onChange={(v) => handleNewRowChange('receivedAmount', v)} placeholder="Received" className="h-7 text-xs px-2 w-[120px] shrink-0" />
