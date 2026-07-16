@@ -283,20 +283,20 @@ export function HardnerModule() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card className="border-l-4 border-l-emerald-500"><CardContent className="p-2.5"><p className="text-xs text-muted-foreground">Total Amount</p>{loading ? <Skeleton className="h-5 w-32 mt-0.5" /> : <p className="text-base font-bold text-emerald-700">{formatCurrency(totalAmount)}</p>}</CardContent></Card>
-        <Card className="border-l-4 border-l-amber-500"><CardContent className="p-2.5"><p className="text-xs text-muted-foreground">Total Records</p>{loading ? <Skeleton className="h-5 w-16 mt-0.5" /> : <p className="text-base font-bold text-amber-700">{items.length}</p>}</CardContent></Card>
+        <Card className="border-l-4 border-l-emerald-500"><CardContent className="p-2"><p className="text-xs text-muted-foreground">Total Amount</p>{loading ? <Skeleton className="h-5 w-32 mt-0.5" /> : <p className="text-base font-bold text-emerald-700">{formatCurrency(totalAmount)}</p>}</CardContent></Card>
+        <Card className="border-l-4 border-l-amber-500"><CardContent className="p-2"><p className="text-xs text-muted-foreground">Total Records</p>{loading ? <Skeleton className="h-5 w-16 mt-0.5" /> : <p className="text-base font-bold text-amber-700">{items.length}</p>}</CardContent></Card>
       </div>
 
       {/* Search */}
-      <Card>
-        <CardContent className="px-3 py-2">
+      <Card className="py-1">
+        <CardContent className="px-3 py-1.5">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <Input
               placeholder="Search across all fields (date, name, remarks, etc.)..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-8 text-sm"
+              className="pl-8 h-7 text-sm"
             />
           </div>
         </CardContent>

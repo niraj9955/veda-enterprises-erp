@@ -845,9 +845,9 @@ export function DailySellModule() {
 
       {/* Summary cards — 3 cards: Total Sales, Total Received, Total Pending */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border-l-4 border-l-emerald-500">
-          <CardContent className="p-2.5">
-            <p className="text-xs text-muted-foreground">Total Sales</p>
+        <Card className="border-l-4 border-l-emerald-500 py-1">
+          <CardContent className="p-2">
+            <p className="text-[11px] text-muted-foreground">Total Sales</p>
             {loading ? (
               <Skeleton className="h-5 w-32 mt-0.5" />
             ) : (
@@ -855,9 +855,9 @@ export function DailySellModule() {
             )}
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-blue-500">
-          <CardContent className="p-2.5">
-            <p className="text-xs text-muted-foreground">Total Received</p>
+        <Card className="border-l-4 border-l-blue-500 py-1">
+          <CardContent className="p-2">
+            <p className="text-[11px] text-muted-foreground">Total Received</p>
             {loading ? (
               <Skeleton className="h-5 w-32 mt-0.5" />
             ) : (
@@ -865,9 +865,9 @@ export function DailySellModule() {
             )}
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-amber-500">
-          <CardContent className="p-2.5">
-            <p className="text-xs text-muted-foreground">Total Pending</p>
+        <Card className="border-l-4 border-l-amber-500 py-1">
+          <CardContent className="p-2">
+            <p className="text-[11px] text-muted-foreground">Total Pending</p>
             {loading ? (
               <Skeleton className="h-5 w-32 mt-0.5" />
             ) : (
@@ -878,8 +878,8 @@ export function DailySellModule() {
       </div>
 
       {/* Search + Filters */}
-      <Card>
-        <CardContent className="px-3 py-2 space-y-2">
+      <Card className="py-1">
+        <CardContent className="px-3 py-1.5 space-y-1.5">
           {/* Top row: free-text search + filter toggle */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative flex-1 min-w-[260px]">
@@ -888,7 +888,7 @@ export function DailySellModule() {
                 placeholder="Search across all fields (date, name, remarks, etc.)..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 h-8 text-sm"
+                className="pl-8 h-7 text-sm"
               />
             </div>
             <Button
@@ -934,7 +934,7 @@ export function DailySellModule() {
                     type="date"
                     value={filterDateFrom}
                     onChange={(e) => setFilterDateFrom(e.target.value)}
-                    className="h-9 text-sm"
+                    className="h-8 text-sm"
                   />
                 </div>
                 {/* Date To */}
@@ -946,14 +946,14 @@ export function DailySellModule() {
                     type="date"
                     value={filterDateTo}
                     onChange={(e) => setFilterDateTo(e.target.value)}
-                    className="h-9 text-sm"
+                    className="h-8 text-sm"
                   />
                 </div>
                 {/* Product */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-muted-foreground">Product</label>
                   <Select value={filterProduct} onValueChange={setFilterProduct}>
-                    <SelectTrigger className="h-9 text-sm">
+                    <SelectTrigger className="h-8 text-sm">
                       <SelectValue placeholder="All products" />
                     </SelectTrigger>
                     <SelectContent>
@@ -971,7 +971,7 @@ export function DailySellModule() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-muted-foreground">Customer</label>
                   <Select value={filterCustomer} onValueChange={setFilterCustomer}>
-                    <SelectTrigger className="h-9 text-sm">
+                    <SelectTrigger className="h-8 text-sm">
                       <SelectValue placeholder="All customers" />
                     </SelectTrigger>
                     <SelectContent>
@@ -989,7 +989,7 @@ export function DailySellModule() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-muted-foreground">Payment Status</label>
                   <Select value={filterPaymentStatus} onValueChange={setFilterPaymentStatus}>
-                    <SelectTrigger className="h-9 text-sm">
+                    <SelectTrigger className="h-8 text-sm">
                       <SelectValue placeholder="Any status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1004,7 +1004,7 @@ export function DailySellModule() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-muted-foreground">Sync Status</label>
                   <Select value={filterSyncStatus} onValueChange={setFilterSyncStatus}>
-                    <SelectTrigger className="h-9 text-sm">
+                    <SelectTrigger className="h-8 text-sm">
                       <SelectValue placeholder="Any sync" />
                     </SelectTrigger>
                     <SelectContent>

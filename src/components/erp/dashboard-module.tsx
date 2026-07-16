@@ -3,8 +3,6 @@
 import React from 'react'
 import { useAppStore, type ModuleKey } from '@/lib/store'
 import { Card, CardContent } from '@/components/ui/card'
-import { useAiConfig } from '@/hooks/use-ai-config'
-import { Sparkles, Mic, MessageSquare, ArrowRight } from 'lucide-react'
 
 // ─── Tile configuration ──────────────────────────────────────────────────────
 // Each tile carries: real image URL, label, target module, accent gradient
@@ -213,32 +211,6 @@ const DashboardTile = React.memo(function DashboardTile({
 
 export default function DashboardModule() {
   const { setActiveModule } = useAppStore()
-  const { isEnabled, loading: aiLoading } = useAiConfig()
-
-  // Persist dismissal in localStorage so the banner does NOT reappear when
-  // the user navigates to another section and comes back to the dashboard.
-  // The dismissal is stored per-browser (per-user on a shared device would
-  // need a user-scoped key, but for this ERP every device is effectively
-  // single-user). Bumping the storage key resets the banner for everyone
-  // (e.g. if we ship a new AI feature and want to re-announce it).
-  const AI_BANNER_STORAGE_KEY = 'veda:aiBannerDismissed:v1'
-  const [aiBannerDismissed, setAiBannerDismissed] = React.useState<boolean>(() => {
-    if (typeof window === 'undefined') return false
-    try {
-      return window.localStorage.getItem(AI_BANNER_STORAGE_KEY) === '1'
-    } catch {
-      return false
-    }
-  })
-
-  const dismissAiBanner = React.useCallback(() => {
-    setAiBannerDismissed(true)
-    try {
-      window.localStorage.setItem(AI_BANNER_STORAGE_KEY, '1')
-    } catch {
-      // ignore storage errors (private mode / quota)
-    }
-  }, [])
 
   return (
     <div className="space-y-6">
@@ -251,76 +223,6 @@ export default function DashboardModule() {
           Tap any tile below to jump straight to that module.
         </p>
       </div>
-
-      {/* AI Assistant banner — only shown when AI is enabled and not dismissed */}
-      {isEnabled && !aiLoading && !aiBannerDismissed && (
-        <Card className="border-emerald-300 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-amber-50 dark:from-emerald-900/20 dark:to-amber-900/10 overflow-hidden">
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-bold text-base text-emerald-800 dark:text-emerald-300">
-                    AI Assistant is ON
-                  </h3>
-                  <span className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200">
-                    Active
-                  </span>
-                </div>
-                <p className="text-xs sm:text-sm text-emerald-700 dark:text-emerald-300 mt-1 leading-relaxed">
-                  Form bharna ab aur aasaan. Bottom-right corner me green button dabaiye, <b>Hindi/English me boliye ya type karein</b> — AI form fields auto-fill kar dega.
-                </p>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-300 bg-white/60 dark:bg-zinc-900/40 px-2 py-1 rounded">
-                    <Mic className="h-3 w-3" /> Voice input
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-300 bg-white/60 dark:bg-zinc-900/40 px-2 py-1 rounded">
-                    <MessageSquare className="h-3 w-3" /> Chat interface
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setActiveModule('dailySell')}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200 px-2 py-1 rounded hover:bg-white/80 dark:hover:bg-zinc-900/60"
-                  >
-                    Try on Daily Sell <ArrowRight className="h-3 w-3" />
-                  </button>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={dismissAiBanner}
-                className="text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100 text-xs shrink-0"
-                aria-label="Dismiss"
-              >
-                Dismiss
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* When AI is disabled, show a subtle hint to admins to enable it */}
-      {!aiLoading && !isEnabled && (
-        <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10">
-          <CardContent className="p-3 sm:p-4 text-xs sm:text-sm flex items-start gap-2.5">
-            <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-amber-800 dark:text-amber-300">
-                <b>AI Assistant</b> abhi disabled hai. Admin Panel → AI Assistant me jakar Groq (free) ya OpenAI key daalein, fir Hindi/English me bol kar ya type kar ke forms auto-fill kar sakte hain.
-              </p>
-              <button
-                type="button"
-                onClick={() => setActiveModule('admin')}
-                className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:underline"
-              >
-                Open Admin Panel <ArrowRight className="h-3 w-3" />
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Tiles grid — bigger cards, real photos, no data */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">

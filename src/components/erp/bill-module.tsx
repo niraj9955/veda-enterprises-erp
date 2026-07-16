@@ -287,20 +287,20 @@ export default function BillModule() {
       {/* Summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <Card>
-          <CardContent className="p-2.5">
+          <CardContent className="p-2">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Billed</p>
             <p className="text-base font-bold text-emerald-700 dark:text-emerald-400 mt-0.5">₹{totalAmount.toLocaleString('en-IN')}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{filteredBills.length} bills</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-2.5">
+          <CardContent className="p-2">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Received</p>
             <p className="text-base font-bold text-blue-600 dark:text-blue-400 mt-0.5">₹{totalPaid.toLocaleString('en-IN')}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-2.5">
+          <CardContent className="p-2">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Outstanding</p>
             <p className="text-base font-bold text-amber-600 dark:text-amber-400 mt-0.5">₹{totalDue.toLocaleString('en-IN')}</p>
           </CardContent>
@@ -315,7 +315,7 @@ export default function BillModule() {
             placeholder="Search by bill number or party name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 h-8 text-sm"
+            className="pl-8 h-7 text-sm"
           />
         </div>
         <Select value={filterType} onValueChange={setFilterType}>

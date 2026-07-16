@@ -491,7 +491,7 @@ export default function ExpenseModule() {
             placeholder="Search by category, description, date..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 h-8 text-sm"
+            className="pl-8 h-7 text-sm"
           />
         </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>

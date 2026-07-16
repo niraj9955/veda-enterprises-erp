@@ -797,15 +797,15 @@ export function CustomerModule() {
       </div>
 
       {/* Search — compact height, full width */}
-      <Card>
-        <CardContent className="px-3 py-2">
+      <Card className="py-1">
+        <CardContent className="px-3 py-1.5">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <Input
               placeholder="Search customers by name or mobile..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-8 text-sm"
+              className="pl-8 h-7 text-sm"
             />
           </div>
         </CardContent>
