@@ -1130,7 +1130,7 @@ export function DailySellModule() {
                 */}
                 <TableRow className="bg-emerald-50/60 dark:bg-emerald-900/15 border-t-2 border-t-emerald-400 hover:bg-emerald-50/60">
                   <TableCell colSpan={16} className="p-2">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
                       {/* Row 1 — 5 fields, Product spans 2 cols to fill 6-col row */}
                       <Input
                         type="date"
@@ -1142,7 +1142,7 @@ export function DailySellModule() {
                       <CellInput value={newRow.address} onChange={(v) => handleNewRowChange('address', v)} placeholder="Address" className="h-7 text-xs px-2 min-w-0 w-full" />
                       <CellInput value={newRow.contactNumber} onChange={(v) => handleNewRowChange('contactNumber', v)} placeholder="Contact" className="h-7 text-xs px-2 min-w-0 w-full" />
                       <Select value={newRow.product} onValueChange={(v) => handleNewRowChange('product', v)}>
-                        <SelectTrigger className="h-7 text-xs px-2 min-w-0 w-full md:col-span-2">
+                        <SelectTrigger className="h-7 text-xs px-2 min-w-0 w-full">
                           <SelectValue placeholder="Product" />
                         </SelectTrigger>
                         <SelectContent>
