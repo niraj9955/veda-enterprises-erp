@@ -423,41 +423,55 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <header className="relative flex items-center gap-2 px-4 py-2.5 border-b border-black/30 bg-gradient-to-r from-[#02714F] via-[#025C42] to-[#02714F] backdrop-blur-sm sticky top-0 z-10 shrink-0 text-white shadow-lg ring-1 ring-black/20">
           {/* Subtle top highlight for 3D pop */}
           <div className="absolute inset-x-0 top-0 h-px bg-white/30 pointer-events-none" />
-          {/* Attractive sidebar toggle button (desktop) — always visible in header */}
+          {/* Sidebar toggle button (desktop) — animated hamburger ↔ X */}
           <button
             onClick={() => setSidebarVisible(!sidebarVisible)}
             className={cn(
               'group relative hidden md:flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300 shrink-0',
-              'bg-gradient-to-br shadow-md ring-1',
-              sidebarVisible
-                ? 'from-[#02714F] to-[#025C42] ring-white/25 hover:from-[#025C42] hover:to-[#02714F] shadow-emerald-900/30'
-                : 'from-[#02714F] to-[#025C42] ring-white/25 hover:from-[#025C42] hover:to-[#02714F] shadow-emerald-900/30'
+              'bg-gradient-to-br from-[#02714F] to-[#025C42] ring-1 ring-white/25 shadow-md',
+              'hover:from-[#025C42] hover:to-[#02714F] hover:shadow-emerald-900/40',
+              'active:scale-90'
             )}
             title={sidebarVisible ? 'Hide menu' : 'Show menu'}
             aria-label={sidebarVisible ? 'Hide menu' : 'Show menu'}
           >
             {/* Subtle inner top highlight */}
             <span className="absolute inset-x-1 top-0.5 h-px bg-white/30 rounded-full pointer-events-none" />
-            {/* Single horizontal line that animates into 3 lines when hidden, single line when visible */}
-            <span className="relative flex flex-col gap-[5px] items-center justify-center">
-              <span className={cn('block h-0.5 bg-white rounded-full transition-all duration-300', sidebarVisible ? 'w-5' : 'w-4 opacity-100')} />
-              <span className={cn('block h-0.5 bg-white rounded-full transition-all duration-300', sidebarVisible ? 'w-0 opacity-0' : 'w-4 opacity-100')} />
-              <span className={cn('block h-0.5 bg-white rounded-full transition-all duration-300', sidebarVisible ? 'w-0 opacity-0' : 'w-4 opacity-100')} />
+            {/* Animated hamburger ↔ X — 3 lines transform into an X when sidebar is visible */}
+            <span className="relative w-5 h-5 flex flex-col items-center justify-center gap-[5px]">
+              <span
+                className={cn(
+                  'block h-[2.5px] w-5 bg-white rounded-full origin-center transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
+                  sidebarVisible ? 'translate-y-[7.5px] rotate-45' : 'translate-y-0 rotate-0'
+                )}
+              />
+              <span
+                className={cn(
+                  'block h-[2.5px] w-5 bg-white rounded-full transition-all duration-200 ease-out',
+                  sidebarVisible ? 'opacity-0 scale-x-0' : 'opacity-100 scale-x-100'
+                )}
+              />
+              <span
+                className={cn(
+                  'block h-[2.5px] w-5 bg-white rounded-full origin-center transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
+                  sidebarVisible ? '-translate-y-[7.5px] -rotate-45' : 'translate-y-0 rotate-0'
+                )}
+              />
             </span>
           </button>
-          {/* Mobile menu — attractive toggle button */}
+          {/* Mobile menu — animated hamburger toggle (opens Sheet drawer) */}
           <Sheet>
             <SheetTrigger asChild>
               <button
-                className="md:hidden group relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-[#02714F] to-[#025C42] ring-1 ring-white/25 shadow-md hover:from-[#025C42] hover:to-[#02714F] transition-all duration-300 shrink-0"
+                className="md:hidden group relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-[#02714F] to-[#025C42] ring-1 ring-white/25 shadow-md hover:from-[#025C42] hover:to-[#02714F] active:scale-90 transition-all duration-300 shrink-0"
                 title="Open menu"
                 aria-label="Open menu"
               >
                 <span className="absolute inset-x-1 top-0.5 h-px bg-white/30 rounded-full pointer-events-none" />
-                <span className="relative flex flex-col gap-[5px] items-center justify-center">
-                  <span className="block h-0.5 w-4 bg-white rounded-full" />
-                  <span className="block h-0.5 w-4 bg-white rounded-full" />
-                  <span className="block h-0.5 w-4 bg-white rounded-full" />
+                <span className="relative w-5 h-5 flex flex-col items-center justify-center gap-[5px]">
+                  <span className="block h-[2.5px] w-5 bg-white rounded-full" />
+                  <span className="block h-[2.5px] w-5 bg-white rounded-full" />
+                  <span className="block h-[2.5px] w-5 bg-white rounded-full" />
                 </span>
               </button>
             </SheetTrigger>
