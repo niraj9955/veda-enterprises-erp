@@ -76,7 +76,7 @@ export function SectionBackButton({ fallback = 'dashboard', className }: Props) 
   return (
     <div
       className={cn(
-        'sticky top-0 z-30 -mx-4 md:-mx-6 mb-3 md:mb-4 px-4 md:px-6 py-3',
+        'sticky top-0 z-30 -mx-4 md:-mx-6 -mt-4 md:-mt-6 mb-3 md:mb-4 px-4 md:px-6 py-3',
         'bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-950/40 dark:to-zinc-900',
         'border-b-2 border-emerald-200 dark:border-emerald-900/60 shadow-sm',
         className,
