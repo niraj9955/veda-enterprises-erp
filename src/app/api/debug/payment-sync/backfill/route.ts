@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/db'
 import { Payment, CustomerPayment, Customer } from '@/lib/models'
+import { requireAdmin } from '@/lib/auth'
 
 // Force dynamic — never cache
 export const dynamic = 'force-dynamic'
@@ -14,8 +15,13 @@ export const revalidate = 0
 //
 // This handles the case where Payments were created BEFORE the cross-module
 // sync feature was deployed, so they never got their mirror record.
+//
+// Admin-only — mutates data.
 export async function POST() {
   try {
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+
     await connectDB()
 
     const unlinked = await Payment.find({

@@ -5,6 +5,7 @@ import {
   TractorPayment, DustPurchase, CementPurchase, Hardner,
   Electricity, FactoryStuff,
 } from '@/lib/models'
+import { requireSession } from '@/lib/auth'
 
 // Force dynamic — stats change after every mutation.
 export const dynamic = 'force-dynamic'
@@ -17,6 +18,9 @@ export const revalidate = 0
 // only returns the numbers we actually need.
 export async function GET() {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
 
     const today = new Date().toISOString().split('T')[0]

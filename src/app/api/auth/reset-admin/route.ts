@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/db'
 import { User } from '@/lib/models'
 import bcrypt from 'bcryptjs'
+import { timingSafeEqualStr } from '@/lib/auth'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EMERGENCY ADMIN PASSWORD RESET
@@ -9,8 +10,8 @@ import bcrypt from 'bcryptjs'
 // WHY THIS EXISTS:
 //   The backup-export route strips User.password for security. When a backup
 //   is restored, the sanitizeRow() helper replaces missing passwords with a
-//   random placeholder (`veda-reset-<random>`). The user cannot know this
-//   random password, so they get locked out of their own ERP after a restore.
+//   random placeholder. The user cannot know this random password, so they
+//   get locked out of their own ERP after a restore.
 //
 // WHAT THIS DOES:
 //   - Resets the password of the admin@veda.com user (or the first admin
@@ -19,34 +20,44 @@ import bcrypt from 'bcryptjs'
 //   - Returns enough info for the user to log back in.
 //
 // SECURITY:
-//   This endpoint is unauthenticated BY DESIGN — it is meant for the
-//   "locked out of my own ERP" scenario. To prevent abuse, it ONLY resets
-//   accounts whose role is 'admin'. Operator/Accountant accounts are never
-//   touched. Once the user is back in, they should change the password via
-//   User Management → Edit User.
+//   This endpoint REQUIRES the env var EMERGENCY_RESET_KEY to be set, and
+//   the caller must supply it via the X-Emergency-Reset-Key header (or
+//   ?key=... query param). Comparison is timing-safe.
 //
-//   For an extra layer of protection, if the env var EMERGENCY_RESET_KEY is
-//   set, the caller must supply it via the X-Emergency-Reset-Key header
-//   (or ?key=... query param). If the env var is not set, the endpoint is
-//   open. This lets the user disable the endpoint by setting a random
-//   EMERGENCY_RESET_KEY in Vercel env vars once they no longer need it.
+//   If EMERGENCY_RESET_KEY is NOT set in the environment, the endpoint
+//   refuses to run — returning 503. This is the inverse of the previous
+//   behaviour (which was "open by default"), and prevents anonymous
+//   attackers from resetting the admin password to a known value.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function POST(request: Request) {
   try {
     await connectDB()
 
-    // Optional env-var gate
+    // Require env-var gate — refuse to run if not set
     const expectedKey = process.env.EMERGENCY_RESET_KEY
-    if (expectedKey) {
-      const url = new URL(request.url)
-      const headerKey = request.headers.get('x-emergency-reset-key')
-      const queryKey = url.searchParams.get('key')
-      if (headerKey !== expectedKey && queryKey !== expectedKey) {
-        return NextResponse.json(
-          { error: 'Unauthorized — emergency reset key required' },
-          { status: 403 }
-        )
-      }
+    if (!expectedKey || expectedKey.length < 8) {
+      return NextResponse.json(
+        {
+          error:
+            'Emergency reset is disabled. Set the EMERGENCY_RESET_KEY environment variable (>=8 chars) to enable this endpoint.',
+        },
+        { status: 503 }
+      )
+    }
+
+    const url = new URL(request.url)
+    const headerKey = request.headers.get('x-emergency-reset-key') || ''
+    const queryKey = url.searchParams.get('key') || ''
+
+    // Timing-safe comparison — both header and query are checked, but a
+    // passing match on EITHER is enough. Both must fail to reject.
+    const headerOk = headerKey.length > 0 && timingSafeEqualStr(headerKey, expectedKey)
+    const queryOk = queryKey.length > 0 && timingSafeEqualStr(queryKey, expectedKey)
+    if (!headerOk && !queryOk) {
+      return NextResponse.json(
+        { error: 'Unauthorized — emergency reset key required' },
+        { status: 403 }
+      )
     }
 
     // Find admin@veda.com first; fall back to any admin user
@@ -59,7 +70,7 @@ export async function POST(request: Request) {
 
     if (!admin) {
       // No admin user exists — create one with default credentials
-      const hashedPassword = await bcrypt.hash('admin123', 10)
+      const hashedPassword = await bcrypt.hash('admin123', 12)
       const newAdmin = await User.create({
         name: 'Admin',
         email: 'admin@veda.com',
@@ -76,7 +87,7 @@ export async function POST(request: Request) {
     }
 
     // Reset password and re-activate
-    const hashedPassword = await bcrypt.hash('admin123', 10)
+    const hashedPassword = await bcrypt.hash('admin123', 12)
     admin.password = hashedPassword
     admin.active = true
     await admin.save()

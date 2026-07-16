@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/db'
 import { Production, Stock } from '@/lib/models'
 import { syncStockForDate } from '@/lib/sync-stock'
+import { requireAdmin } from '@/lib/auth'
 
 // Force dynamic — never cache
 export const dynamic = 'force-dynamic'
@@ -9,6 +10,7 @@ export const revalidate = 0
 
 // GET /api/debug/sync?date=YYYY-MM-DD
 // Runs the stock sync for the given date and returns detailed debug info.
+// Admin-only — mutates data (syncStockForDate writes Stock documents).
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const date = searchParams.get('date')
@@ -20,18 +22,30 @@ export async function GET(request: Request) {
     )
   }
 
+  // Validate date format to prevent injection / weird Mongo queries
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return NextResponse.json(
+      { error: 'Invalid date format — expected YYYY-MM-DD' },
+      { status: 400 }
+    )
+  }
+
+  const steps: Array<Record<string, unknown>> = []
   const debug: Record<string, unknown> = {
     input_date: date,
-    steps: [],
+    steps,
   }
 
   try {
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+
     await connectDB()
-    debug.steps.push({ step: 'connectDB', ok: true })
+    steps.push({ step: 'connectDB', ok: true })
 
     // 1. Find productions for this date
     const productions = await Production.find({ date }).lean()
-    debug.steps.push({
+    steps.push({
       step: 'findProductions',
       ok: true,
       count: productions.length,
@@ -40,7 +54,7 @@ export async function GET(request: Request) {
 
     // 2. Find existing stock for this date
     const existingStock = await Stock.findOne({ date }).lean()
-    debug.steps.push({
+    steps.push({
       step: 'findExistingStock',
       ok: true,
       found: !!existingStock,
@@ -49,7 +63,7 @@ export async function GET(request: Request) {
 
     // 3. Run the sync
     const syncResult = await syncStockForDate(date)
-    debug.steps.push({
+    steps.push({
       step: 'syncStockForDate',
       ok: true,
       result: syncResult
@@ -65,7 +79,7 @@ export async function GET(request: Request) {
 
     // 4. Re-fetch stock to confirm
     const afterStock = await Stock.findOne({ date }).lean()
-    debug.steps.push({
+    steps.push({
       step: 'verifyAfterSync',
       ok: true,
       stock: afterStock,

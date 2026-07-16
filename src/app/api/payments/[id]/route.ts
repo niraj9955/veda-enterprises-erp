@@ -3,9 +3,13 @@ import { connectDB, toObject, extractCustomer } from '@/lib/db'
 import { Payment } from '@/lib/models'
 import { resyncBillPaidAmount } from '../route'
 import { syncUpdateCustomerPayment, syncDeleteCustomerPayment } from '@/lib/payment-customer-sync'
+import { requireSession, requireRole } from '@/lib/auth'
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const { id } = await params
     const payment = await Payment.findById(id).populate('customerId')
@@ -40,6 +44,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 // ─────────────────────────────────────────────────────────────────────────────
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const session = await requireRole(['admin', 'accountant'])
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const { id } = await params
     const body = await request.json()
@@ -132,6 +139,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 // ─────────────────────────────────────────────────────────────────────────────
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const session = await requireRole(['admin', 'accountant'])
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const { id } = await params
 

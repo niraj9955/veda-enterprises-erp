@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { Bill, Payment } from '@/lib/models'
-import { getSession } from '@/lib/auth'
+import { requireSession, requireAdmin } from '@/lib/auth'
 
 // GET single bill
 export async function GET(
@@ -9,11 +9,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     const { id } = await params
     const bill = await Bill.findById(id).lean()
@@ -32,11 +31,10 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     const { id } = await params
     const body = await request.json()
@@ -149,17 +147,16 @@ export async function PUT(
   }
 }
 
-// DELETE bill
+// DELETE bill — admin-only (per canPerform map, only admin can delete bills)
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+
     await connectDB()
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     const { id } = await params
     const deleted = await Bill.findByIdAndDelete(id)

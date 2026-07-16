@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/db'
 import { Stock, Production, DailySell } from '@/lib/models'
+import { requireSession } from '@/lib/auth'
 
 // Force dynamic — never cache summary responses
 export const dynamic = 'force-dynamic'
@@ -60,6 +61,9 @@ const PRODUCT_FIELDS: ProductField[] = [
 
 export async function GET() {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
 
     // ── Fetch all source data in parallel ──────────────────────────────

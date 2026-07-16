@@ -9,7 +9,7 @@ interface User {
   role: string
 }
 
-interface CompanyInfo {
+export interface CompanyInfo {
   id: string
   name: string
   tagline: string

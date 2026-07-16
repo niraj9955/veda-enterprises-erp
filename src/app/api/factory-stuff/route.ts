@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { FactoryStuff } from '@/lib/models'
+import { requireSession, requireRole } from '@/lib/auth'
 
 // Force dynamic — never cache list responses
 export const dynamic = 'force-dynamic'
@@ -8,6 +9,9 @@ export const revalidate = 0
 
 export async function GET() {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const records = await FactoryStuff.find({}).sort({ date: -1 }).lean()
     return NextResponse.json({ factoryStuffs: records.map(toObject) })
@@ -19,6 +23,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const session = await requireRole(['admin', 'operator', 'accountant'])
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const body = await request.json()
     if (!body.date || !body.itemName || !body.amount) {

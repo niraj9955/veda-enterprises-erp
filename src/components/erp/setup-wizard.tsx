@@ -206,7 +206,7 @@ export default function SetupWizard() {
         setupComplete: true,
       })
 
-      setCompany(result.company as Parameters<typeof setCompany>[0])
+      setCompany(result.company as unknown as Parameters<typeof setCompany>[0])
       toast({ title: 'Setup Complete!', description: 'Your ERP system is ready to use.' })
     } catch (err) {
       toast({

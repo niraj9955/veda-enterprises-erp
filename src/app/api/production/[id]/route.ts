@@ -2,9 +2,13 @@ import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { Production } from '@/lib/models'
 import { syncStockForDate } from '@/lib/sync-stock'
+import { requireSession, requireRole } from '@/lib/auth'
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const { id } = await params
     const production = await Production.findById(id)
@@ -20,6 +24,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const session = await requireRole(['admin', 'operator'])
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const { id } = await params
     const body = await request.json()
@@ -69,6 +76,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const session = await requireRole(['admin', 'operator'])
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const { id } = await params
 

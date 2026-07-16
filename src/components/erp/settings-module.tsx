@@ -169,7 +169,7 @@ export default function SettingsModule() {
       if (updated && company) {
         setCompany({
           ...company,
-          ...(updated as typeof company),
+          ...(updated as unknown as typeof company),
         })
       }
       toast({ title: 'Success', description: 'Company profile saved successfully' })
@@ -193,7 +193,7 @@ export default function SettingsModule() {
       if (updated && company) {
         setCompany({
           ...company,
-          ...(updated as typeof company),
+          ...(updated as unknown as typeof company),
         })
       }
       toast({ title: 'Success', description: 'Branding settings saved successfully' })

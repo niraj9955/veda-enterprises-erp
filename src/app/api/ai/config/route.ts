@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/db'
 import { AiConfig } from '@/lib/models'
-import { getSession } from '@/lib/auth'
+import { requireSession, requireAdmin } from '@/lib/auth'
 
 // Force dynamic
 export const dynamic = 'force-dynamic'
@@ -14,6 +14,9 @@ export const revalidate = 0
 // enabled to show/hide the AI buttons in the UI.
 export async function GET() {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const config = await AiConfig.findOne().lean()
 
@@ -56,14 +59,10 @@ export async function GET() {
 // Body: { provider?: 'openai'|'groq', openaiApiKey?: string, enabled?: boolean, model?: string }
 export async function PUT(request: Request) {
   try {
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+
     await connectDB()
-    const session = await getSession()
-    if (!session || session.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Unauthorized — only admins can configure AI settings' },
-        { status: 403 }
-      )
-    }
 
     const body = await request.json()
     const update: Record<string, unknown> = {}

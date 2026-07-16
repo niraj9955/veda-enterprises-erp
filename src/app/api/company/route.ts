@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { Company } from '@/lib/models'
-import { getSession } from '@/lib/auth'
+import { requireSession, requireAdmin } from '@/lib/auth'
 
 // ─── Default contact info for Veda Enterprises ───────────────────────────────
 //
@@ -46,8 +46,10 @@ const LEGACY_MIGRATIONS: Array<{ field: keyof typeof VEDA_DEFAULTS; from: string
 
 export async function GET() {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
-    const session = await getSession()
 
     let company = await Company.findOne({})
     if (!company) {
@@ -93,7 +95,7 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ company: toObject(company), session })
+    return NextResponse.json({ company: toObject(company) })
   } catch (error) {
     console.error('Error fetching company:', error)
     return NextResponse.json(
@@ -105,8 +107,10 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+
     await connectDB()
-    const session = await getSession()
     const body = await request.json()
 
     let company = await Company.findOne({})
@@ -144,7 +148,7 @@ export async function PUT(request: Request) {
 
     const updated = await Company.findByIdAndUpdate(company._id, updateData, { new: true })
 
-    return NextResponse.json({ company: toObject(updated), session })
+    return NextResponse.json({ company: toObject(updated) })
   } catch (error) {
     console.error('Error updating company:', error)
     return NextResponse.json(

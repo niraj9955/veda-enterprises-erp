@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { Customer } from '@/lib/models'
+import { requireSession, requireRole } from '@/lib/auth'
 
 // Force dynamic rendering — never cache customer list responses.
 // This ensures that after an Excel import the GET /api/customers
@@ -10,6 +11,9 @@ export const revalidate = 0
 
 export async function GET(request: Request) {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
@@ -21,9 +25,11 @@ export async function GET(request: Request) {
 
     const filter: any = {}
     if (search) {
+      // Escape regex metacharacters to prevent ReDoS / wildcard surprises
+      const safe = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { mobile: { $regex: search, $options: 'i' } },
+        { name: { $regex: safe, $options: 'i' } },
+        { mobile: { $regex: safe, $options: 'i' } },
       ]
     }
 
@@ -56,6 +62,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const session = await requireRole(['admin', 'operator'])
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const body = await request.json()
 

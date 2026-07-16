@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
-import { getSession } from '@/lib/auth'
+import { requireAdmin } from '@/lib/auth'
 import {
   Company,
   User,
@@ -99,11 +99,10 @@ function toBackupObject(doc: any): any {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function GET(request: Request) {
   try {
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+
     await connectDB()
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     // Fetch all collections in parallel
     const findResults = await Promise.all(
@@ -178,11 +177,10 @@ export async function GET(request: Request) {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function PUT(request: Request) {
   try {
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+
     await connectDB()
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     const body = await request.json()
     console.log('[restore] received body top-level keys:', Object.keys(body || {}))
@@ -378,11 +376,10 @@ function sanitizeRow(row: any, collectionKey: string): any {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function DELETE(request: Request) {
   try {
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+
     await connectDB()
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     const cleared: Record<string, number> = {}
     const toClear = COLLECTIONS.filter((c) => !c.preservedOnClear)

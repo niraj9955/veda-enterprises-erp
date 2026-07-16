@@ -6,9 +6,13 @@ import {
   DustPurchase, CementPurchase, Hardner, Electricity, FactoryStuff,
 } from '@/lib/models'
 import { syncStockForDates } from '@/lib/sync-stock'
+import { requireRole } from '@/lib/auth'
 
 // Force dynamic — this route must never be cached/previewed as a static asset.
 export const dynamic = 'force-dynamic'
+
+// Max rows per import call — prevents abuse / OOM on huge files
+const MAX_IMPORT_ROWS = 5000
 
 // ─── Server-side date normalization ─────────────────────────────────────────
 //
@@ -310,12 +314,24 @@ async function buildExistingKeys(module: string, data: Record<string, unknown>[]
 
 export async function POST(request: Request) {
   try {
+    // Admin/operator only — bulk import is a privileged write operation
+    const session = await requireRole(['admin', 'operator'])
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const body = await request.json()
     const { module, data } = body
 
     if (!module || !data || !Array.isArray(data)) {
       return NextResponse.json({ error: 'Module and data array are required' }, { status: 400 })
+    }
+
+    // Cap import size to prevent abuse / OOM
+    if (data.length > MAX_IMPORT_ROWS) {
+      return NextResponse.json(
+        { error: `Too many rows (${data.length}). Maximum ${MAX_IMPORT_ROWS} rows per import. Split your file and try again.` },
+        { status: 413 }
+      )
     }
 
     // ── Pre-fetch existing keys (1 DB query for the whole batch) ──────────

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/db'
 import { Production } from '@/lib/models'
 import { syncStockForDates } from '@/lib/sync-stock'
+import { requireAdmin } from '@/lib/auth'
 
 // Force dynamic — never cache
 export const dynamic = 'force-dynamic'
@@ -14,12 +15,16 @@ export const revalidate = 0
 //
 // Returns a summary: how many dates were processed, how many succeeded,
 // how many failed, and the per-date results.
+// Admin-only — triggers full-table scans.
 export async function GET() {
   const result: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
   }
 
   try {
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+
     await connectDB()
 
     // Get all distinct production dates

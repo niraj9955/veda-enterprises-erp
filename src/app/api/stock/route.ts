@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { Stock } from '@/lib/models'
+import { requireSession, requireAdmin } from '@/lib/auth'
 
 // Force dynamic — never cache list responses
 export const dynamic = 'force-dynamic'
@@ -8,6 +9,9 @@ export const revalidate = 0
 
 export async function GET() {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const stocks = await Stock.find({}).sort({ date: -1 }).lean()
     return NextResponse.json({ stocks: stocks.map(toObject) })
@@ -19,6 +23,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    // All POST routes (bulk-delete AND create) require admin session
+    const session = await requireAdmin()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const body = await request.json()
 
@@ -63,9 +71,12 @@ export async function POST(request: Request) {
 }
 
 // DELETE /api/stock?all=true — delete every stock entry (Delete All button).
-// Mirrors the production delete-all API so the same client-side pattern works.
+// Admin-only — destructive bulk operation.
 export async function DELETE(request: Request) {
   try {
+    const session = await requireAdmin()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const { searchParams } = new URL(request.url)
     const all = searchParams.get('all')

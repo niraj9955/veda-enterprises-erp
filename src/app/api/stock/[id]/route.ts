@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { Stock } from '@/lib/models'
+import { requireSession, requireRole } from '@/lib/auth'
 
 // Force dynamic — never cache individual stock responses
 export const dynamic = 'force-dynamic'
@@ -12,6 +13,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const { id } = await params
     const stock = await Stock.findById(id).lean()
@@ -53,6 +57,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireRole(['admin', 'operator'])
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const { id } = await params
     const body = await request.json()
@@ -91,6 +98,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireRole(['admin', 'operator'])
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const { id } = await params
 

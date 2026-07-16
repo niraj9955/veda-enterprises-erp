@@ -106,7 +106,7 @@ export const api = {
       body: JSON.stringify({ ids }),
     }),
   getCustomerHistory: (id: string) =>
-    request<{ customer: Record<string, unknown>; summary: Record<string, number>; orders: unknown[]; dispatches: unknown[]; payments: unknown[]; customerPayments: unknown[]; timeline: unknown[] }>(`/customers/${id}/history`),
+    request<{ customer: Record<string, unknown>; summary: Record<string, number>; orders: unknown[]; dispatches: unknown[]; payments: unknown[]; customerPayments: unknown[]; timeline: unknown[]; productionTotals?: unknown; dailySells?: unknown[]; productions?: unknown[] }>(`/customers/${id}/history`),
   // Bill-specific history — production + dispatches + previous bills, used
   // by the new full-screen Create Bill page to populate the items table
   // from past production records.
@@ -470,11 +470,11 @@ export const api = {
     request<{ company: Record<string, unknown> }>('/company', { method: 'PUT', body: JSON.stringify(data) }),
 
   // User Management
-  getUsers: () => request<{ users: Record<string, unknown>[] }>('/users'),
+  getUsers: () => request<{ users: Array<{ id: string; name: string; email: string; role: string; active: boolean; createdAt?: string }> }>('/users'),
   createUser: (data: Record<string, unknown>) =>
-    request<{ user: Record<string, unknown> }>('/users', { method: 'POST', body: JSON.stringify(data) }),
+    request<{ user: { id: string; name: string; email: string; role: string; active: boolean } }>('/users', { method: 'POST', body: JSON.stringify(data) }),
   updateUser: (id: string, data: Record<string, unknown>) =>
-    request<{ user: Record<string, unknown> }>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    request<{ user: { id: string; name: string; email: string; role: string; active: boolean } }>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteUser: (id: string) =>
     request<{ message: string }>(`/users/${id}`, { method: 'DELETE' }),
   bulkDeleteUsers: (ids: string[]) =>

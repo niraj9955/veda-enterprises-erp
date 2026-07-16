@@ -20,8 +20,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     api.getCompany().then((data) => {
-      if (data.company?.name) setCompanyName(data.company.name)
-      if (data.company?.logoUrl) setLogoUrl(data.company.logoUrl as string)
+      const c = data.company as { name?: string; logoUrl?: string } | undefined
+      if (c?.name) setCompanyName(c.name)
+      if (c?.logoUrl) setLogoUrl(c.logoUrl)
     }).catch(() => {})
   }, [])
 

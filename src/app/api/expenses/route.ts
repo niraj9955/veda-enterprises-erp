@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { Expense } from '@/lib/models'
+import { requireSession, requireRole } from '@/lib/auth'
 
 // Force dynamic — never cache list responses
 export const dynamic = 'force-dynamic'
@@ -8,6 +9,9 @@ export const revalidate = 0
 
 export async function GET(request: Request) {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')
@@ -35,6 +39,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const session = await requireRole(['admin', 'accountant'])
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const body = await request.json()
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/db'
 import { Production, DailySell, Expense, Customer, TractorPayment } from '@/lib/models'
-import { getSession } from '@/lib/auth'
+import { requireSession } from '@/lib/auth'
 
 // ── Product fields (single source of truth — must match /api/stock/summary) ─
 const PRODUCT_FIELDS: { key: string; name: string }[] = [
@@ -21,11 +21,10 @@ const PRODUCT_FIELDS: { key: string; name: string }[] = [
 
 export async function GET(request: Request) {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type') || 'sales'

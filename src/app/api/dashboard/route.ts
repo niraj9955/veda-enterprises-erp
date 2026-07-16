@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject, extractCustomer } from '@/lib/db'
 import { Production, Stock, Dispatch, Order, Payment, Expense, Customer } from '@/lib/models'
-import { getSession } from '@/lib/auth'
+import { requireSession } from '@/lib/auth'
 
 export async function GET() {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
-    const session = await getSession()
 
     const today = new Date().toISOString().split('T')[0]
     const currentMonth = today.substring(0, 7)
@@ -121,7 +123,6 @@ export async function GET() {
       recentDispatches,
       monthlyProductionData: monthlyProductionChartData,
       monthlyExpenseData: monthlyExpenseChartData,
-      session,
     })
   } catch (error) {
     console.error('Error fetching dashboard stats:', error)

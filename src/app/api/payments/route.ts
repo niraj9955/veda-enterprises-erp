@@ -6,6 +6,7 @@ import {
   syncUpdateCustomerPayment,
   syncDeleteCustomerPayment,
 } from '@/lib/payment-customer-sync'
+import { requireSession, requireRole } from '@/lib/auth'
 
 // Force dynamic — never cache list responses
 export const dynamic = 'force-dynamic'
@@ -13,6 +14,9 @@ export const revalidate = 0
 
 export async function GET() {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const payments = await Payment.find({}).populate('customerId').sort({ createdAt: -1 })
 
@@ -52,6 +56,9 @@ export async function GET() {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function POST(request: Request) {
   try {
+    const session = await requireRole(['admin', 'accountant'])
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const body = await request.json()
 

@@ -320,7 +320,7 @@ export default function AdminPanelModule() {
       const resetForm: CompanyForm = { ...emptyCompanyForm, logoUrl: keptLogo }
       setCompanyForm(resetForm)
       const result = await api.updateCompany({ ...resetForm, setupComplete: true })
-      setCompany(result.company as Parameters<typeof setCompany>[0])
+      setCompany(result.company as unknown as Parameters<typeof setCompany>[0])
       toast({ title: 'Reset to defaults', description: 'All company settings have been cleared' })
     } catch (err) {
       toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed', variant: 'destructive' })
@@ -402,7 +402,7 @@ export default function AdminPanelModule() {
     setLoadingUsers(true)
     try {
       const res = await api.getUsers()
-      setUsers(res.users as UserItem[])
+      setUsers(res.users as unknown as UserItem[])
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to fetch users', variant: 'destructive' })
     } finally {
@@ -434,7 +434,7 @@ export default function AdminPanelModule() {
         ...companyForm,
         setupComplete: true,
       })
-      setCompany(result.company as Parameters<typeof setCompany>[0])
+      setCompany(result.company as unknown as Parameters<typeof setCompany>[0])
       toast({ title: 'Success', description: 'Company settings saved successfully' })
     } catch (err) {
       toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to save', variant: 'destructive' })
@@ -466,7 +466,7 @@ export default function AdminPanelModule() {
       reader.onload = async () => {
         const base64 = reader.result as string
         const result = await api.updateCompany({ logoUrl: base64, setupComplete: true })
-        setCompany(result.company as Parameters<typeof setCompany>[0])
+        setCompany(result.company as unknown as Parameters<typeof setCompany>[0])
         setCompanyForm((prev) => ({ ...prev, logoUrl: base64 }))
         toast({ title: 'Logo updated', description: 'Company logo has been updated' })
         setUploadingLogo(false)
@@ -481,7 +481,7 @@ export default function AdminPanelModule() {
   const handleRemoveLogo = async () => {
     try {
       const result = await api.updateCompany({ logoUrl: '', setupComplete: true })
-      setCompany(result.company as Parameters<typeof setCompany>[0])
+      setCompany(result.company as unknown as Parameters<typeof setCompany>[0])
       setCompanyForm((prev) => ({ ...prev, logoUrl: '' }))
       toast({ title: 'Logo removed', description: 'Company logo has been removed' })
     } catch (err) {
@@ -496,7 +496,7 @@ export default function AdminPanelModule() {
       const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none"><rect width="200" height="200" rx="40" fill="#059669"/><path d="M100 30L40 75v15h20v55h30v-35h20v35h30V90h20V75L100 30z" fill="white" opacity="0.95"/><rect x="85" y="95" width="30" height="20" rx="2" fill="white" opacity="0.6"/><path d="M35 155h130v10a10 10 0 01-10 10H45a10 10 0 01-10-10v-10z" fill="white" opacity="0.8"/><text x="100" y="192" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" opacity="0.9">VEDA</text></svg>`
       const dataUrl = `data:image/svg+xml;base64,${btoa(svgContent)}`
       const result = await api.updateCompany({ logoUrl: dataUrl, setupComplete: true })
-      setCompany(result.company as Parameters<typeof setCompany>[0])
+      setCompany(result.company as unknown as Parameters<typeof setCompany>[0])
       setCompanyForm((prev) => ({ ...prev, logoUrl: dataUrl }))
       toast({ title: 'Veda logo applied', description: 'Default Veda Enterprises logo has been set' })
     } catch (err) {

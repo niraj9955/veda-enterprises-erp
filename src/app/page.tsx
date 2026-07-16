@@ -224,7 +224,7 @@ export default function Home() {
   useEffect(() => {
     if (isAuthenticated) {
       api.getCompany().then((data) => {
-        setCompany(data.company as Parameters<typeof setCompany>[0])
+        setCompany(data.company as unknown as Parameters<typeof setCompany>[0])
       }).catch(() => {})
     }
   }, [isAuthenticated, setCompany])

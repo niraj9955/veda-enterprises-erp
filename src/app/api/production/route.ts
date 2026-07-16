@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { Production, Stock } from '@/lib/models'
-import { getSession } from '@/lib/auth'
 import { syncStockForDate } from '@/lib/sync-stock'
+import { requireSession, requireRole, requireAdmin } from '@/lib/auth'
 
 // Force dynamic — never cache list responses
 export const dynamic = 'force-dynamic'
@@ -10,6 +10,9 @@ export const revalidate = 0
 
 export async function GET(request: Request) {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const { searchParams } = new URL(request.url)
     const date = searchParams.get('date')
@@ -25,6 +28,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const session = await requireRole(['admin', 'operator'])
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const body = await request.json()
     if (!body.date) {
@@ -69,14 +75,10 @@ export async function POST(request: Request) {
 // can perform bulk destructive operations.
 export async function DELETE(request: Request) {
   try {
+    const session = await requireAdmin()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
-    const session = await getSession()
-    if (!session || session.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Unauthorized — only admins can delete all production entries' },
-        { status: 403 }
-      )
-    }
 
     const { searchParams } = new URL(request.url)
     const all = searchParams.get('all')

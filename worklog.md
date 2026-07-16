@@ -1744,3 +1744,82 @@ Stage Summary:
   • MODIFIED: src/components/erp/admin-panel-module.tsx (Test Connection button + result card)
   • MODIFIED: src/components/ui/ai-chat-widget.tsx (module chips + example prompts + better errors)
   • MODIFIED: src/components/erp/dashboard-module.tsx (AI enabled/disabled banners)
+
+---
+Task ID: security-audit-and-fixes
+Agent: Main Agent
+Task: Veda ERP ka comprehensive security + bug audit aur sab fixes
+
+Work Log:
+- Pura security audit kiya — 75 API routes + auth.ts + api.ts reviewed
+- 12 CRITICAL, 11 HIGH, 18 MEDIUM issues identify kiye
+- 0 NoSQL injection, 0 plaintext passwords, 0 password leaks (already good)
+
+CRITICAL fixes:
+- auth.ts: Hardcoded JWT secret fallback ('veda-enterprises-erp-secret-key-2024') removed. Now warns FATAL in production if JWT_SECRET env var missing. Added 4 helper functions: requireSession(), requireAdmin(), requireRole(roles[]), timingSafeEqualStr() — used across all routes.
+- /api/users (route.ts + [id]/route.ts): Added requireAdmin() on all 5 handlers (GET/POST/GET-id/PUT/DELETE). Whitelisted roles to ['admin','operator','accountant']. Password min length 6. Email format validated. bcrypt rounds 10→12. Self-delete blocked. Last-admin-delete blocked.
+- /api/auth/reset-admin: Removed "open by default" behaviour. Now REQUIRES EMERGENCY_RESET_KEY env var (≥8 chars) to be set, AND caller must supply matching key via header/query. Timing-safe comparison (crypto.timingSafeEqual). Returns 503 if env var missing — refuses to run.
+- /api/stock: requireSession on GET, requireAdmin on POST (bulk-delete AND create), requireAdmin on DELETE ?all=true. Was 100% open before.
+- /api/daily-sell: requireRole(['admin','operator','accountant']) on GET+POST+PUT+DELETE. Admin-only check on bulk-delete branch (POST with ids[]).
+- /api/database: requireAdmin() on ALL 3 handlers (GET export, PUT restore, DELETE clear). Was session-only (any logged-in user could wipe DB).
+- /api/admin/fix-indexes: requireAdmin() added (drops indexes — was 100% open).
+- /api/admin/sync-all-stock: requireAdmin() added (triggers full-table scans — was open).
+- /api/debug/sync: requireAdmin() added + date format validation (YYYY-MM-DD regex). Was open + accepted any date string.
+- /api/debug/payment-sync: requireAdmin() added (exposes financial PII). Was open.
+- /api/debug/payment-sync/backfill: requireAdmin() added (mutates data). Was open.
+- /api/import: requireRole(['admin','operator']) added + MAX_IMPORT_ROWS=5000 cap (413 response if exceeded). Was 100% open — attacker could flood DB.
+- /api/auth/init: Added optional FIRST_RUN_KEY env-var gate (header or ?key=). Still works without env var for fresh installs, but deployments can lock it down.
+
+HIGH fixes:
+- /api/dashboard GET: getSession() was called but result never checked. Now uses requireSession() and early-returns 401.
+- /api/company GET: same fix — getSession result was ignored. Now requireSession().
+- /api/company PUT: requireAdmin() — was open. Anyone could edit GST/bank/branding.
+- /api/ai/config GET: requireSession() — was open (returned provider+model+masked key to anyone).
+- /api/bills DELETE: requireAdmin() — per canPerform() permission map, only admin can delete bills.
+- /api/auth/login: 3 fixes — (1) dummy bcrypt hash run on user-not-found to prevent timing enumeration, (2) input length capped at 256 chars, (3) cookie secure flag now defaults to true in production regardless of x-forwarded-proto.
+- ReDoS protection: customer search route + bills search route now escape regex metacharacters (.*+?^${}()|[]\) before passing user input to $regex.
+
+MEDIUM fixes:
+- next.config.ts: Added security headers — X-Frame-Options: SAMEORIGIN, X-Content-Type-Options: nosniff, Referrer-Policy: strict-origin-when-cross-origin, Permissions-Policy (camera/mic/geo disabled), Strict-Transport-Security (2yr + preload).
+- Removed `session` from dashboard and company response bodies (was leaking JWT payload to client).
+
+BULK PATCH (16 modules × 2 routes = 32 files):
+- customers, production, stock, orders, dispatch, payments, expenses, customer-payment, labour-payment, tractor-payment, dust-purchase, cement-purchase, hardner, electricity, factory-stuff, daily-sell
+- Each /api/<module>/route.ts: requireSession() on GET, requireRole([...]) on POST.
+- Each /api/<module>/[id]/route.ts: requireSession() on GET, requireRole([...]) on PUT/DELETE.
+- Role matrix: customers/production/stock/orders/dispatch → admin+operator. payments/expenses → admin+accountant. daily-sell/customer-payment/labour-payment/tractor-payment/dust-purchase/cement-purchase/hardner/electricity/factory-stuff → admin+operator+accountant.
+- Used a Python script (scripts/patch_auth.py) to apply the patches consistently. Manually cleaned up duplicate imports/sessions in stock + payments routes where the script overlapped with existing patterns.
+
+TypeScript fixes:
+- src/lib/auth.ts: crypto.timingSafeEqual import fixed (was using global crypto which TS doesn't expose).
+- src/app/api/admin/fix-indexes/route.ts: TS errors on idx.name (string|undefined) fixed with `|| ''`. Result type narrowed with explicit interface.
+- src/app/api/debug/sync/route.ts: 'debug.steps' unknown → split into `steps` array variable + merged into debug object.
+- src/app/api/payments/route.ts: broken multi-line import (script inserted import inside an existing import block) — manually fixed.
+- src/components/erp/login-page.tsx: data.company?.name (unknown → string) — cast to typed shape before setState.
+- src/components/erp/admin-panel-module.tsx: 5 × `as CompanyInfo` → `as unknown as CompanyInfo` (Record<string,unknown> doesn't overlap with CompanyInfo directly).
+- src/components/erp/settings-module.tsx: 2 × `as typeof company` → `as unknown as typeof company`.
+- src/components/erp/setup-wizard.tsx: 1 × same cast fix.
+- src/components/erp/user-management-module.tsx: 1 × `as User[]` → `as unknown as User[]`.
+- src/components/erp/customer-history-modal.tsx: getCustomerHistory return type extended with optional productionTotals/dailySells/productions fields (the response shape was richer than the declared type).
+- src/lib/api.ts: getUsers/createUser/updateUser return types tightened to typed shapes (was Record<string,unknown>).
+- src/lib/store.ts: CompanyInfo interface exported (was interface-only) so api.ts can reference it.
+- src/app/page.tsx: setCompany cast fixed with `as unknown as`.
+
+Build verification:
+- npx tsc --noEmit: zero errors (was ~30 before)
+- npx next build: ✓ Compiled successfully in 15.3s, all routes generated
+- All 75 API routes audited; 70 have auth checks; 5 intentionally don't (health check + 3 auth-setup endpoints with env-key gates + login)
+
+Stage Summary:
+- 0 routes left unprotected that should be protected
+- Hardcoded JWT secret fallback eliminated — auth cannot be bypassed via known string
+- /api/users no longer allows anonymous admin account creation
+- /api/auth/reset-admin no longer allows anonymous admin password reset (now env-key gated)
+- /api/database DELETE no longer allows any logged-in user to wipe the DB (admin-only)
+- /api/import no longer allows anonymous DB flooding (admin/operator + 5000-row cap)
+- All 16 main module routes now enforce session + role-based access
+- Search inputs protected against ReDoS via regex metacharacter escaping
+- Security headers added to every response
+- Login hardened against user-enumeration via timing attack (dummy bcrypt)
+- Cookie secure flag defaults to true in production
+- All TS errors fixed — build is clean

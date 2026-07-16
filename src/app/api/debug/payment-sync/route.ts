@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/db'
 import { Payment, CustomerPayment } from '@/lib/models'
+import { requireAdmin } from '@/lib/auth'
 
 // Force dynamic — never cache
 export const dynamic = 'force-dynamic'
@@ -9,8 +10,12 @@ export const revalidate = 0
 // GET /api/debug/payment-sync
 // Returns a diagnostic snapshot showing the link state between Payment and
 // CustomerPayment records. Useful to verify the cross-module sync is working.
+// Admin-only — exposes financial PII.
 export async function GET() {
   try {
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+
     await connectDB()
 
     const payments = await Payment.find({})

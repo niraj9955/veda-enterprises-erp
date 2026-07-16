@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { User } from '@/lib/models'
+import { requireAdmin } from '@/lib/auth'
+
+const VALID_ROLES = new Set(['admin', 'operator', 'accountant'])
 
 export async function GET() {
   try {
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+
     await connectDB()
-    const users = await User.find({}).sort({ createdAt: -1 })
+    const users = await User.find({}).sort({ createdAt: -1 }).lean()
 
     // Don't return passwords
     const result = users.map((u: any) => {
@@ -23,12 +29,27 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+
     await connectDB()
     const bcrypt = await import('bcryptjs')
     const body = await request.json()
 
     if (!body.name || !body.email || !body.password || !body.role) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+    if (!VALID_ROLES.has(body.role)) {
+      return NextResponse.json(
+        { error: `Invalid role. Must be one of: ${Array.from(VALID_ROLES).join(', ')}` },
+        { status: 400 }
+      )
+    }
+    if (typeof body.password !== 'string' || body.password.length < 6) {
+      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 })
+    }
+    if (typeof body.email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
+      return NextResponse.json({ error: 'Invalid email format' }, { status: 400 })
     }
 
     // Check if email already exists
@@ -37,7 +58,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Email already exists' }, { status: 400 })
     }
 
-    const hashedPassword = await bcrypt.default.hash(body.password, 10)
+    const hashedPassword = await bcrypt.default.hash(body.password, 12)
     const user = await User.create({
       name: body.name,
       email: body.email,

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { Bill, Company, Payment } from '@/lib/models'
-import { getSession } from '@/lib/auth'
+import { requireSession } from '@/lib/auth'
 
 // Force dynamic — never cache bill list responses
 export const dynamic = 'force-dynamic'
@@ -10,11 +10,10 @@ export const revalidate = 0
 // GET — list all bills (with optional filter by type/status/search)
 export async function GET(request: Request) {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     const { searchParams } = new URL(request.url)
     const billType = searchParams.get('billType')
@@ -27,10 +26,12 @@ export async function GET(request: Request) {
     if (billType) query.billType = billType
     if (status) query.status = status
     if (search) {
+      // Escape regex metacharacters to prevent ReDoS
+      const safe = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       query.$or = [
-        { billNumber: { $regex: search, $options: 'i' } },
-        { toName: { $regex: search, $options: 'i' } },
-        { toPhone: { $regex: search, $options: 'i' } },
+        { billNumber: { $regex: safe, $options: 'i' } },
+        { toName: { $regex: safe, $options: 'i' } },
+        { toPhone: { $regex: safe, $options: 'i' } },
       ]
     }
 
@@ -52,11 +53,10 @@ export async function GET(request: Request) {
 // POST — create new bill
 export async function POST(request: Request) {
   try {
+    const session = await requireSession()
+    if (session instanceof NextResponse) return session
+
     await connectDB()
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     const body = await request.json()
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/db'
 import { Stock, Production } from '@/lib/models'
 import mongoose from 'mongoose'
+import { requireAdmin } from '@/lib/auth'
 
 // Force dynamic — never cache
 export const dynamic = 'force-dynamic'
@@ -14,13 +15,18 @@ export const revalidate = 0
 //   - any other indexes not in the current schema
 //
 // Safe to call multiple times. Returns before/after index lists for audit.
+// Admin-only — mutates database structure.
 export async function GET() {
-  const result: Record<string, unknown> = {
-    collections: {},
+  const collections: Record<string, unknown> = {}
+  const result: { collections: Record<string, unknown>; timestamp: string; error?: unknown } = {
+    collections,
     timestamp: new Date().toISOString(),
   }
 
   try {
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+
     await connectDB()
 
     // ── Stock collection ────────────────────────────────────────────────
@@ -31,17 +37,17 @@ export async function GET() {
     // Current StockSchema indexes: _id_, date_-1
     const stockValidIndexes = new Set(['_id_', 'date_-1'])
     const stockStaleIndexes = stockIndexesBefore.filter(
-      (idx) => !stockValidIndexes.has(idx.name)
+      (idx) => !stockValidIndexes.has(idx.name || '')
     )
 
     const stockDropped: string[] = []
     for (const idx of stockStaleIndexes) {
       try {
-        await stockCollection.dropIndex(idx.name)
-        stockDropped.push(idx.name)
+        await stockCollection.dropIndex(idx.name || '')
+        stockDropped.push(idx.name || '')
       } catch (err) {
         // Index may already be gone — log and continue
-        stockDropped.push(`${idx.name} (drop failed: ${(err as Error).message})`)
+        stockDropped.push(`${idx.name || ''} (drop failed: ${(err as Error).message})`)
       }
     }
 
@@ -56,10 +62,10 @@ export async function GET() {
     const stockIndexesAfter = await stockCollection.indexes()
 
     result.collections.stocks = {
-      indexesBefore: stockIndexesBefore.map((i) => i.name),
-      stale: stockStaleIndexes.map((i) => i.name),
+      indexesBefore: stockIndexesBefore.map((i) => i.name || ''),
+      stale: stockStaleIndexes.map((i) => i.name || ''),
       dropped: stockDropped,
-      indexesAfter: stockIndexesAfter.map((i) => i.name),
+      indexesAfter: stockIndexesAfter.map((i) => i.name || ''),
     }
 
     // ── Production collection (defensive) ───────────────────────────────
@@ -70,26 +76,26 @@ export async function GET() {
     // (e.g. customerName_1, address_1 if those were ever indexed)
     const prodValidIndexes = new Set(['_id_', 'date_-1', 'customerId_1'])
     const prodStaleIndexes = prodIndexesBefore.filter(
-      (idx) => !prodValidIndexes.has(idx.name)
+      (idx) => !prodValidIndexes.has(idx.name || '')
     )
 
     const prodDropped: string[] = []
     for (const idx of prodStaleIndexes) {
       try {
-        await prodCollection.dropIndex(idx.name)
-        prodDropped.push(idx.name)
+        await prodCollection.dropIndex(idx.name || '')
+        prodDropped.push(idx.name || '')
       } catch (err) {
-        prodDropped.push(`${idx.name} (drop failed: ${(err as Error).message})`)
+        prodDropped.push(`${idx.name || ''} (drop failed: ${(err as Error).message})`)
       }
     }
 
     const prodIndexesAfter = await prodCollection.indexes()
 
     result.collections.productions = {
-      indexesBefore: prodIndexesBefore.map((i) => i.name),
-      stale: prodStaleIndexes.map((i) => i.name),
+      indexesBefore: prodIndexesBefore.map((i) => i.name || ''),
+      stale: prodStaleIndexes.map((i) => i.name || ''),
       dropped: prodDropped,
-      indexesAfter: prodIndexesAfter.map((i) => i.name),
+      indexesAfter: prodIndexesAfter.map((i) => i.name || ''),
     }
 
     return NextResponse.json(result)

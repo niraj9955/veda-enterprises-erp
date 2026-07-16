@@ -131,7 +131,7 @@ export function UserManagementModule() {
     setLoading(true)
     try {
       const res = await api.getUsers()
-      setUsers(res.users as User[])
+      setUsers(res.users as unknown as User[])
     } catch (err) {
       toast({
         title: 'Error',

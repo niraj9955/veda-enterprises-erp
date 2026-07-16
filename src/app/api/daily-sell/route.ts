@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { DailySell } from '@/lib/models'
-import { getSession } from '@/lib/auth'
+import { requireRole } from '@/lib/auth'
 import { syncAllFromDailySell } from '@/lib/daily-sell-sync'
 
 // Force dynamic — never cache list responses
@@ -10,6 +10,9 @@ export const revalidate = 0
 
 export async function GET() {
   try {
+    const session = await requireRole(['admin', 'operator', 'accountant'])
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const records = await DailySell.find({}).sort({ date: -1 }).lean()
     return NextResponse.json({ dailySells: records.map(toObject) })
@@ -21,13 +24,22 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const session = await requireRole(['admin', 'operator', 'accountant'])
+    if (session instanceof NextResponse) return session
+
     await connectDB()
     const body = await request.json()
 
     // ── Bulk delete: POST /api/daily-sell with { ids: [...] } ──────────
-    // Mirrors the production bulk-delete API so the same client-side
-    // multi-select pattern works for both modules.
+    // Admin/operator only — destructive bulk op.
     if (body && Array.isArray(body.ids)) {
+      // Only admins can bulk-delete via this branch — operators/accountants must use the dedicated bulk-delete route
+      if (session && typeof session === 'object' && 'role' in session && session.role !== 'admin') {
+        return NextResponse.json(
+          { error: 'Forbidden — only admins can bulk-delete via POST' },
+          { status: 403 }
+        )
+      }
       const ids = body.ids.filter((id: unknown) => typeof id === 'string' && id.length > 0)
       if (ids.length === 0) {
         return NextResponse.json({ error: 'No ids provided' }, { status: 400 })
@@ -128,14 +140,10 @@ export async function POST(request: Request) {
 // perform bulk destructive operations.
 export async function DELETE(request: Request) {
   try {
+    const session = await requireRole(['admin'])
+    if (session instanceof NextResponse) return session
+
     await connectDB()
-    const session = await getSession()
-    if (!session || session.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Unauthorized — only admins can delete all daily sell entries' },
-        { status: 403 }
-      )
-    }
 
     const { searchParams } = new URL(request.url)
     const all = searchParams.get('all')
