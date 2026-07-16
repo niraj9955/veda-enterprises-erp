@@ -435,8 +435,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             title={sidebarVisible ? 'Hide menu' : 'Show menu'}
             aria-label={sidebarVisible ? 'Hide menu' : 'Show menu'}
           >
-            {/* Subtle inner top highlight */}
-            <span className="absolute inset-x-1 top-0.5 h-px bg-white/30 rounded-full pointer-events-none" />
             {/* Arrow: ← when sidebar is visible (click to slide it away), → when hidden (click to bring it back) */}
             <span className="relative w-5 h-5 flex items-center justify-center">
               <ChevronLeft
@@ -465,7 +463,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 title="Open menu"
                 aria-label="Open menu"
               >
-                <span className="absolute inset-x-1 top-0.5 h-px bg-white/30 rounded-full pointer-events-none" />
                 <span className="relative w-5 h-5 flex flex-col items-center justify-center gap-[5px]">
                   <span className="block h-[2.5px] w-5 bg-white rounded-full" />
                   <span className="block h-[2.5px] w-5 bg-white rounded-full" />

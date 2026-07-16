@@ -98,7 +98,7 @@ export function SectionBackButton({ fallback = 'dashboard', className }: Props) 
           aria-label={`Back to ${targetLabel}`}
         >
           <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-1" />
-          <span>← Back to {targetLabel}</span>
+          <span>Back to {targetLabel}</span>
         </button>
         {currentLabel && (
           <>
