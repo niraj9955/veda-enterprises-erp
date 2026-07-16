@@ -1124,117 +1124,99 @@ export function DailySellModule() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {/* ───────────── Quick Add row (always visible at top) ───────────── */}
+                {/* ───────────── Quick Add row — 2-row grid, no horizontal scroll ─────────────
+                    Row 1: Date, Customer, Address, Contact, Product, Save
+                    Row 2: Qty, Rate, Transporter, T Fair, Received, Remarks
+                    All inputs are h-7 (compact) and equal-width via 6-col grid.
+                */}
                 <TableRow className="bg-emerald-50/60 dark:bg-emerald-900/15 border-t-2 border-t-emerald-400 hover:bg-emerald-50/60">
-                  <TableCell className="sticky left-0 bg-emerald-50/60 dark:bg-emerald-900/15 z-10">
-                    <span className="text-emerald-600 text-base font-bold">+</span>
-                  </TableCell>
-                  <TableCell className="sticky left-10 bg-emerald-50/60 dark:bg-emerald-900/15 z-10 min-w-[130px]">
-                    <Input
-                      type="date"
-                      value={newRow.date}
-                      onChange={(e) => handleNewRowChange('date', e.target.value)}
-                      className="h-8 text-xs px-2"
-                    />
-                  </TableCell>
-                  <TableCell className="min-w-[140px]">
-                    <CellInput value={newRow.customerName} onChange={(v) => handleNewRowChange('customerName', v)} placeholder="Customer" />
-                  </TableCell>
-                  <TableCell className="min-w-[140px]">
-                    <CellInput value={newRow.address} onChange={(v) => handleNewRowChange('address', v)} placeholder="Address" />
-                  </TableCell>
-                  <TableCell className="min-w-[120px]">
-                    <CellInput value={newRow.contactNumber} onChange={(v) => handleNewRowChange('contactNumber', v)} placeholder="Contact" />
-                  </TableCell>
-                  <TableCell className="min-w-[180px]">
-                    <Select value={newRow.product} onValueChange={(v) => handleNewRowChange('product', v)}>
-                      <SelectTrigger className="h-8 text-xs px-2">
-                        <SelectValue placeholder="Product" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectLabel>Product Items {stockLoading ? '(loading stock…)' : ''}</SelectLabel>
-                          {productsWithAvail.map((p) => (
-                            <SelectItem key={p.key} value={p.key}>
-                              <span className="flex items-center gap-2">
-                                <span>{p.label}</span>
-                                {p.avail != null && (
-                                  <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${p.avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
-                                    Avail: {p.avail.toLocaleString('en-IN')}
-                                  </span>
-                                )}
+                  <TableCell colSpan={16} className="p-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                      {/* Row 1 */}
+                      <Input
+                        type="date"
+                        value={newRow.date}
+                        onChange={(e) => handleNewRowChange('date', e.target.value)}
+                        className="h-7 text-xs px-2 min-w-0"
+                      />
+                      <CellInput value={newRow.customerName} onChange={(v) => handleNewRowChange('customerName', v)} placeholder="Customer" className="h-7 text-xs px-2 min-w-0" />
+                      <CellInput value={newRow.address} onChange={(v) => handleNewRowChange('address', v)} placeholder="Address" className="h-7 text-xs px-2 min-w-0" />
+                      <CellInput value={newRow.contactNumber} onChange={(v) => handleNewRowChange('contactNumber', v)} placeholder="Contact" className="h-7 text-xs px-2 min-w-0" />
+                      <Select value={newRow.product} onValueChange={(v) => handleNewRowChange('product', v)}>
+                        <SelectTrigger className="h-7 text-xs px-2 min-w-0">
+                          <SelectValue placeholder="Product" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectLabel>Product Items {stockLoading ? '(loading stock…)' : ''}</SelectLabel>
+                            {productsWithAvail.map((p) => (
+                              <SelectItem key={p.key} value={p.key}>
+                                <span className="flex items-center gap-2">
+                                  <span>{p.label}</span>
+                                  {p.avail != null && (
+                                    <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${p.avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
+                                      Avail: {p.avail.toLocaleString('en-IN')}
+                                    </span>
+                                  )}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveNew}
+                        disabled={savingNew}
+                        className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+                      >
+                        {savingNew ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            <Plus className="size-3.5 mr-1" />
+                            Save
+                          </>
+                        )}
+                      </Button>
+
+                      {/* Row 2 */}
+                      {(() => {
+                        const enteredQty = Number(newRow.quantity) || 0
+                        const avail = newRow.product ? getProductAvail(newRow.product) : null
+                        const isOver = avail != null && enteredQty > avail
+                        return (
+                          <div className="relative">
+                            <CellInput
+                              type="number"
+                              min="0"
+                              value={newRow.quantity}
+                              onChange={(v) => handleNewRowChange('quantity', v)}
+                              placeholder="Qty"
+                              className={`h-7 text-xs px-2 min-w-0 ${isOver ? 'border-rose-500 ring-1 ring-rose-400 bg-rose-50 dark:bg-rose-950/30' : ''}`}
+                            />
+                            {isOver && (
+                              <span
+                                className="absolute -top-1.5 -right-1.5 flex items-center justify-center size-4 rounded-full bg-rose-500 text-white shadow"
+                                title={`Available: ${avail?.toLocaleString('en-IN')}, you entered: ${enteredQty.toLocaleString('en-IN')}`}
+                              >
+                                <AlertTriangle className="size-2.5" />
                               </span>
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell className="min-w-[80px]">
-                    {(() => {
-                      const enteredQty = Number(newRow.quantity) || 0
-                      const avail = newRow.product ? getProductAvail(newRow.product) : null
-                      const isOver = avail != null && enteredQty > avail
-                      return (
-                        <div className="relative">
-                          <CellInput
-                            type="number"
-                            min="0"
-                            value={newRow.quantity}
-                            onChange={(v) => handleNewRowChange('quantity', v)}
-                            placeholder="0"
-                            className={isOver ? 'border-rose-500 ring-1 ring-rose-400 bg-rose-50 dark:bg-rose-950/30' : ''}
-                          />
-                          {isOver && (
-                            <span
-                              className="absolute -top-1.5 -right-1.5 flex items-center justify-center size-4 rounded-full bg-rose-500 text-white shadow"
-                              title={`Available: ${avail?.toLocaleString('en-IN')}, you entered: ${enteredQty.toLocaleString('en-IN')}`}
-                            >
-                              <AlertTriangle className="size-2.5" />
-                            </span>
-                          )}
-                        </div>
-                      )
-                    })()}
-                  </TableCell>
-                  <TableCell className="min-w-[90px]">
-                    <CellInput type="number" min="0" value={newRow.rate} onChange={(v) => handleNewRowChange('rate', v)} placeholder="0" />
-                  </TableCell>
-                  <TableCell className="text-right font-semibold whitespace-nowrap tabular-nums text-emerald-700 dark:text-emerald-300">
-                    {formatCurrency(newComputedAmount)}
-                  </TableCell>
-                  <TableCell className="min-w-[130px]">
-                    <CellInput value={newRow.transporterName} onChange={(v) => handleNewRowChange('transporterName', v)} placeholder="Transporter" />
-                  </TableCell>
-                  <TableCell className="min-w-[90px]">
-                    <CellInput type="number" min="0" value={newRow.transporterFair} onChange={(v) => handleNewRowChange('transporterFair', v)} placeholder="0" />
-                  </TableCell>
-                  <TableCell className="min-w-[100px]">
-                    <CellInput type="number" min="0" value={newRow.receivedAmount} onChange={(v) => handleNewRowChange('receivedAmount', v)} placeholder="0" />
-                  </TableCell>
-                  <TableCell className="text-right font-semibold whitespace-nowrap tabular-nums text-amber-700 dark:text-amber-300">
-                    {formatCurrency(newComputedPending)}
-                  </TableCell>
-                  <TableCell className="min-w-[140px]">
-                    <CellInput value={newRow.remarks} onChange={(v) => handleNewRowChange('remarks', v)} placeholder="Remarks" />
-                  </TableCell>
-                  <TableCell className="text-center text-xs text-muted-foreground">—</TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      onClick={handleSaveNew}
-                      disabled={savingNew}
-                      className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white"
-                    >
-                      {savingNew ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <>
-                          <Plus className="size-3.5 mr-1" />
-                          Save
-                        </>
-                      )}
-                    </Button>
+                            )}
+                          </div>
+                        )
+                      })()}
+                      <CellInput type="number" min="0" value={newRow.rate} onChange={(v) => handleNewRowChange('rate', v)} placeholder="Rate" className="h-7 text-xs px-2 min-w-0" />
+                      <CellInput value={newRow.transporterName} onChange={(v) => handleNewRowChange('transporterName', v)} placeholder="Transporter" className="h-7 text-xs px-2 min-w-0" />
+                      <CellInput type="number" min="0" value={newRow.transporterFair} onChange={(v) => handleNewRowChange('transporterFair', v)} placeholder="T Fair" className="h-7 text-xs px-2 min-w-0" />
+                      <CellInput type="number" min="0" value={newRow.receivedAmount} onChange={(v) => handleNewRowChange('receivedAmount', v)} placeholder="Received" className="h-7 text-xs px-2 min-w-0" />
+                      <CellInput value={newRow.remarks} onChange={(v) => handleNewRowChange('remarks', v)} placeholder="Remarks" className="h-7 text-xs px-2 min-w-0" />
+                    </div>
+                    {/* Computed Amount / Pending — shown as a small hint below the grid */}
+                    <div className="mt-1.5 flex items-center gap-3 text-[11px] text-muted-foreground">
+                      <span>Amount: <b className="text-emerald-700 dark:text-emerald-300">{formatCurrency(newComputedAmount)}</b></span>
+                      <span>Pending: <b className="text-amber-700 dark:text-amber-300">{formatCurrency(newComputedPending)}</b></span>
+                    </div>
                   </TableCell>
                 </TableRow>
 
