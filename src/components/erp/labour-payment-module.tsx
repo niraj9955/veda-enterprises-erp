@@ -295,8 +295,8 @@ export function LabourPaymentModule() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card className="border-l-4 border-l-emerald-500"><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Labour Payments</p>{loading ? <Skeleton className="h-6 w-32 mt-1" /> : <p className="text-xl font-bold text-emerald-700">{formatCurrency(totalAmount)}</p>}</CardContent></Card>
-        <Card className="border-l-4 border-l-amber-500"><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Records</p>{loading ? <Skeleton className="h-6 w-16 mt-1" /> : <p className="text-xl font-bold text-amber-700">{items.length}</p>}</CardContent></Card>
+        <Card className="border-l-4 border-l-emerald-500"><CardContent className="p-2.5"><p className="text-xs text-muted-foreground">Total Labour Payments</p>{loading ? <Skeleton className="h-5 w-32 mt-0.5" /> : <p className="text-base font-bold text-emerald-700">{formatCurrency(totalAmount)}</p>}</CardContent></Card>
+        <Card className="border-l-4 border-l-amber-500"><CardContent className="p-2.5"><p className="text-xs text-muted-foreground">Total Records</p>{loading ? <Skeleton className="h-5 w-16 mt-0.5" /> : <p className="text-base font-bold text-amber-700">{items.length}</p>}</CardContent></Card>
       </div>
 
       {/* Search */}

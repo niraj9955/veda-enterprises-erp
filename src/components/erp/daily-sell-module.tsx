@@ -846,32 +846,32 @@ export function DailySellModule() {
       {/* Summary cards — 3 cards: Total Sales, Total Received, Total Pending */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="border-l-4 border-l-emerald-500">
-          <CardContent className="p-4">
+          <CardContent className="p-2.5">
             <p className="text-xs text-muted-foreground">Total Sales</p>
             {loading ? (
-              <Skeleton className="h-6 w-32 mt-1" />
+              <Skeleton className="h-5 w-32 mt-0.5" />
             ) : (
-              <p className="text-xl font-bold text-emerald-700">{formatCurrency(totalAmount)}</p>
+              <p className="text-base font-bold text-emerald-700">{formatCurrency(totalAmount)}</p>
             )}
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-blue-500">
-          <CardContent className="p-4">
+          <CardContent className="p-2.5">
             <p className="text-xs text-muted-foreground">Total Received</p>
             {loading ? (
-              <Skeleton className="h-6 w-32 mt-1" />
+              <Skeleton className="h-5 w-32 mt-0.5" />
             ) : (
-              <p className="text-xl font-bold text-blue-700">{formatCurrency(totalReceived)}</p>
+              <p className="text-base font-bold text-blue-700">{formatCurrency(totalReceived)}</p>
             )}
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-amber-500">
-          <CardContent className="p-4">
+          <CardContent className="p-2.5">
             <p className="text-xs text-muted-foreground">Total Pending</p>
             {loading ? (
-              <Skeleton className="h-6 w-32 mt-1" />
+              <Skeleton className="h-5 w-32 mt-0.5" />
             ) : (
-              <p className="text-xl font-bold text-amber-700">{formatCurrency(totalPending)}</p>
+              <p className="text-base font-bold text-amber-700">{formatCurrency(totalPending)}</p>
             )}
           </CardContent>
         </Card>
@@ -1071,16 +1071,6 @@ export function DailySellModule() {
           )}
         </CardContent>
       </Card>
-
-      {/* Auto-sync info banner — compact, above table */}
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-900/15 px-3 py-2 flex items-center gap-2 text-xs text-emerald-800 dark:text-emerald-200">
-        <RefreshCw className="size-3.5 shrink-0" />
-        <span>
-          <strong>Auto-sync on save:</strong> Customer, Order, Customer Payment (received amount),
-          and Stock auto-update from each entry. Fill the green row below and click Save — no popup.
-        </span>
-      </div>
-
       {/* Table card — inline editable */}
       <Card>
         <CardHeader>

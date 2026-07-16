@@ -338,20 +338,20 @@ export function TractorPaymentModule() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border-l-4 border-l-emerald-500"><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Amount</p>{loading ? <Skeleton className="h-6 w-32 mt-1" /> : <p className="text-xl font-bold text-emerald-700">{formatCurrency(grandTotal)}</p>}</CardContent></Card>
-        <Card className="border-l-4 border-l-amber-500"><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Paid</p>{loading ? <Skeleton className="h-6 w-32 mt-1" /> : <p className="text-xl font-bold text-amber-700">{formatCurrency(grandPaid)}</p>}</CardContent></Card>
-        <Card className="border-l-4 border-l-rose-500"><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Remaining</p>{loading ? <Skeleton className="h-6 w-32 mt-1" /> : <p className="text-xl font-bold text-rose-700">{formatCurrency(grandRemaining)}</p>}</CardContent></Card>
+        <Card className="border-l-4 border-l-emerald-500"><CardContent className="p-2.5"><p className="text-xs text-muted-foreground">Total Amount</p>{loading ? <Skeleton className="h-5 w-32 mt-0.5" /> : <p className="text-base font-bold text-emerald-700">{formatCurrency(grandTotal)}</p>}</CardContent></Card>
+        <Card className="border-l-4 border-l-amber-500"><CardContent className="p-2.5"><p className="text-xs text-muted-foreground">Total Paid</p>{loading ? <Skeleton className="h-5 w-32 mt-0.5" /> : <p className="text-base font-bold text-amber-700">{formatCurrency(grandPaid)}</p>}</CardContent></Card>
+        <Card className="border-l-4 border-l-rose-500"><CardContent className="p-2.5"><p className="text-xs text-muted-foreground">Total Remaining</p>{loading ? <Skeleton className="h-5 w-32 mt-0.5" /> : <p className="text-base font-bold text-rose-700">{formatCurrency(grandRemaining)}</p>}</CardContent></Card>
       </div>
 
       {/* Type breakdown — Tractor vs Transporter */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card className="border-l-4 border-l-blue-500">
-          <CardContent className="p-4">
+          <CardContent className="p-2.5">
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">Tractor Payments</p>
               <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-200">{tractorItems.length} entries</Badge>
             </div>
-            {loading ? <Skeleton className="h-6 w-32 mt-1" /> : (
+            {loading ? <Skeleton className="h-5 w-32 mt-0.5" /> : (
               <div className="mt-1 flex items-baseline gap-3">
                 <p className="text-lg font-bold text-blue-700">{formatCurrency(tractorTotal)}</p>
                 <span className="text-xs text-muted-foreground">·</span>
@@ -361,12 +361,12 @@ export function TractorPaymentModule() {
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-purple-500">
-          <CardContent className="p-4">
+          <CardContent className="p-2.5">
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">Transporter Payments <span className="text-[10px] text-muted-foreground/70">(from Daily Sell)</span></p>
               <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200">{transporterItems.length} entries</Badge>
             </div>
-            {loading ? <Skeleton className="h-6 w-32 mt-1" /> : (
+            {loading ? <Skeleton className="h-5 w-32 mt-0.5" /> : (
               <div className="mt-1 flex items-baseline gap-3">
                 <p className="text-lg font-bold text-purple-700">{formatCurrency(transporterTotal)}</p>
                 <span className="text-xs text-muted-foreground">·</span>

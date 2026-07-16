@@ -287,22 +287,22 @@ export default function BillModule() {
       {/* Summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-2.5">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Billed</p>
-            <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">₹{totalAmount.toLocaleString('en-IN')}</p>
-            <p className="text-xs text-muted-foreground mt-1">{filteredBills.length} bills</p>
+            <p className="text-base font-bold text-emerald-700 dark:text-emerald-400 mt-0.5">₹{totalAmount.toLocaleString('en-IN')}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{filteredBills.length} bills</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-2.5">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Received</p>
-            <p className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">₹{totalPaid.toLocaleString('en-IN')}</p>
+            <p className="text-base font-bold text-blue-600 dark:text-blue-400 mt-0.5">₹{totalPaid.toLocaleString('en-IN')}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-2.5">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Outstanding</p>
-            <p className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">₹{totalDue.toLocaleString('en-IN')}</p>
+            <p className="text-base font-bold text-amber-600 dark:text-amber-400 mt-0.5">₹{totalDue.toLocaleString('en-IN')}</p>
           </CardContent>
         </Card>
       </div>
