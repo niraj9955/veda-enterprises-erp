@@ -1124,25 +1124,25 @@ export function DailySellModule() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {/* ───────────── Quick Add row — 2 proper flex rows, sized per placeholder ─────────────
-                    Row 1: Date, Customer, Address, Contact, Product  (wider — name/address fields)
-                    Row 2: Qty, Rate, Transporter, T Fair, Received, Remarks, Save  (compact numbers)
+                {/* ───────────── Quick Add row — 2 proper flex rows, tight gap ─────────────
+                    Row 1: Date, Customer, Address, Contact, Product, Qty, Rate, Transporter
+                    Row 2: T Fair, Received, Remarks, Save
                 */}
                 <TableRow className="bg-emerald-50/60 dark:bg-emerald-900/15 border-t-2 border-t-emerald-400 hover:bg-emerald-50/60">
-                  <TableCell colSpan={16} className="p-2 space-y-2">
-                    {/* Row 1 — identity fields, wider */}
-                    <div className="flex flex-wrap items-center gap-1.5">
+                  <TableCell colSpan={16} className="p-2 space-y-1.5">
+                    {/* Row 1 — identity + qty/rate/transporter */}
+                    <div className="flex flex-wrap items-center gap-1">
                       <Input
                         type="date"
                         value={newRow.date}
                         onChange={(e) => handleNewRowChange('date', e.target.value)}
-                        className="h-7 text-xs px-1.5 w-[160px] shrink-0"
+                        className="h-7 text-xs px-1.5 w-[130px] shrink-0"
                       />
-                      <CellInput value={newRow.customerName} onChange={(v) => handleNewRowChange('customerName', v)} placeholder="Customer Name" className="h-7 text-xs px-2 w-[180px] shrink-0" />
-                      <CellInput value={newRow.address} onChange={(v) => handleNewRowChange('address', v)} placeholder="Address" className="h-7 text-xs px-2 w-[200px] shrink-0" />
-                      <CellInput value={newRow.contactNumber} onChange={(v) => handleNewRowChange('contactNumber', v)} placeholder="Contact" className="h-7 text-xs px-2 w-[120px] shrink-0" />
+                      <CellInput value={newRow.customerName} onChange={(v) => handleNewRowChange('customerName', v)} placeholder="Customer Name" className="h-7 text-xs px-2 w-[150px] shrink-0" />
+                      <CellInput value={newRow.address} onChange={(v) => handleNewRowChange('address', v)} placeholder="Address" className="h-7 text-xs px-2 w-[160px] shrink-0" />
+                      <CellInput value={newRow.contactNumber} onChange={(v) => handleNewRowChange('contactNumber', v)} placeholder="Contact" className="h-7 text-xs px-2 w-[100px] shrink-0" />
                       <Select value={newRow.product} onValueChange={(v) => handleNewRowChange('product', v)}>
-                        <SelectTrigger className="h-7 text-xs px-2 w-[180px] shrink-0">
+                        <SelectTrigger className="h-7 text-xs px-2 w-[150px] shrink-0">
                           <SelectValue placeholder="Product" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1163,16 +1163,12 @@ export function DailySellModule() {
                           </SelectGroup>
                         </SelectContent>
                       </Select>
-                    </div>
-
-                    {/* Row 2 — numeric / transaction fields + Save */}
-                    <div className="flex flex-wrap items-center gap-1.5">
                       {(() => {
                         const enteredQty = Number(newRow.quantity) || 0
                         const avail = newRow.product ? getProductAvail(newRow.product) : null
                         const isOver = avail != null && enteredQty > avail
                         return (
-                          <div className="relative w-[80px] shrink-0">
+                          <div className="relative w-[70px] shrink-0">
                             <CellInput
                               type="number"
                               min="0"
@@ -1192,10 +1188,14 @@ export function DailySellModule() {
                           </div>
                         )
                       })()}
-                      <CellInput type="number" min="0" value={newRow.rate} onChange={(v) => handleNewRowChange('rate', v)} placeholder="Rate" className="h-7 text-xs px-2 w-[80px] shrink-0" />
-                      <CellInput value={newRow.transporterName} onChange={(v) => handleNewRowChange('transporterName', v)} placeholder="Transporter" className="h-7 text-xs px-2 w-[140px] shrink-0" />
-                      <CellInput type="number" min="0" value={newRow.transporterFair} onChange={(v) => handleNewRowChange('transporterFair', v)} placeholder="T Fair" className="h-7 text-xs px-2 w-[90px] shrink-0" />
-                      <CellInput type="number" min="0" value={newRow.receivedAmount} onChange={(v) => handleNewRowChange('receivedAmount', v)} placeholder="Received" className="h-7 text-xs px-2 w-[110px] shrink-0" />
+                      <CellInput type="number" min="0" value={newRow.rate} onChange={(v) => handleNewRowChange('rate', v)} placeholder="Rate" className="h-7 text-xs px-2 w-[70px] shrink-0" />
+                      <CellInput value={newRow.transporterName} onChange={(v) => handleNewRowChange('transporterName', v)} placeholder="Transporter" className="h-7 text-xs px-2 w-[120px] shrink-0" />
+                    </div>
+
+                    {/* Row 2 — T Fair, Received, Remarks + Save */}
+                    <div className="flex flex-wrap items-center gap-1">
+                      <CellInput type="number" min="0" value={newRow.transporterFair} onChange={(v) => handleNewRowChange('transporterFair', v)} placeholder="T Fair" className="h-7 text-xs px-2 w-[80px] shrink-0" />
+                      <CellInput type="number" min="0" value={newRow.receivedAmount} onChange={(v) => handleNewRowChange('receivedAmount', v)} placeholder="Received" className="h-7 text-xs px-2 w-[100px] shrink-0" />
                       <CellInput value={newRow.remarks} onChange={(v) => handleNewRowChange('remarks', v)} placeholder="Remarks" className="h-7 text-xs px-2 w-[130px] shrink-0" />
                       <Button
                         size="sm"
