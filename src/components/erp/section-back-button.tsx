@@ -87,8 +87,8 @@ export function SectionBackButton({ fallback = 'dashboard', className }: Props) 
           type="button"
           onClick={handleBack}
           className={cn(
-            'group inline-flex items-center gap-2 rounded-lg',
-            'px-3 py-2 font-semibold text-sm',
+            'group inline-flex items-center justify-center rounded-lg',
+            'p-2 font-semibold text-sm',
             'bg-white dark:bg-zinc-800 text-emerald-700 dark:text-emerald-300',
             'border border-emerald-200 dark:border-emerald-800',
             'shadow-sm hover:shadow hover:bg-emerald-50 dark:hover:bg-emerald-950/50',
@@ -98,7 +98,6 @@ export function SectionBackButton({ fallback = 'dashboard', className }: Props) 
           aria-label={`Back to ${targetLabel}`}
         >
           <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-1" />
-          <span>Back to {targetLabel}</span>
         </button>
         {currentLabel && (
           <>
