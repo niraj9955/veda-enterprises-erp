@@ -359,9 +359,6 @@ export function StockModule() {
           </div>
           <div>
             <h2 className="text-2xl font-bold tracking-tight">Stock Overview</h2>
-            <p className="text-sm text-muted-foreground">
-              Available = Total Production − Sell Item • Previous Year Stock = production before this year
-            </p>
           </div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto flex-wrap">
