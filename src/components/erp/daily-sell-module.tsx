@@ -28,7 +28,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { ShoppingCart, Plus, Trash2, Pencil, Loader2, Upload, Search, Trash, RefreshCw, CheckCircle2, X, Save, AlertTriangle, Filter, Calendar, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { FieldVoiceInput } from '@/components/ui/field-voice-input'
+import { ShoppingCart, Plus, Trash2, Pencil, Loader2, Upload, Search, Trash, RefreshCw, CheckCircle2, X, Save, AlertTriangle, Filter, Calendar, ChevronDown, ChevronUp, RotateCcw, IndianRupee } from 'lucide-react'
 import ExcelImport from '@/components/erp/excel-import'
 import { AiFillButton } from '@/components/ui/ai-fill-button'
 import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
@@ -206,10 +217,19 @@ export function DailySellModule() {
   const [stockMap, setStockMap] = React.useState<Record<string, StockSummaryItem>>({})
   const [stockLoading, setStockLoading] = React.useState(true)
 
-  // ── Inline "Quick Add" row state ─────────────────────────────────────
-  // The form is now an inline row at the top of the table — no popup.
+  // ── Add Sale dialog state ───────────────────────────────────────────
+  // The form lives inside a popup Dialog (opened by the "Add Sale" button).
+  // On submit, the record is saved, auto-synced to Customer / Order /
+  // Customer Payment / Payment / Tractor Payment / Stock, and then the
+  // dialog closes — the new row appears at the top of the table.
   const [newRow, setNewRow] = React.useState<DailySellFormData>(emptyForm)
   const [savingNew, setSavingNew] = React.useState(false)
+  const [formOpen, setFormOpen] = React.useState(false)
+
+  const openAddDialog = () => {
+    setNewRow(emptyForm)
+    setFormOpen(true)
+  }
 
   // ── Inline edit mode for an existing row ─────────────────────────────
   // When editingId is set, that row becomes editable in place.
@@ -493,6 +513,7 @@ export function DailySellModule() {
           : 'Daily sell entry created successfully',
       })
       setNewRow(emptyForm)
+      setFormOpen(false)
       fetchData()
       fetchStock()
     } catch (err) {
@@ -808,6 +829,10 @@ export function DailySellModule() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          <Button onClick={openAddDialog} className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Plus className="size-4 mr-2" />
+            Add Sale
+          </Button>
           <Button variant="outline" onClick={() => setImportOpen(true)} className="w-full sm:w-auto">
             <Upload className="size-4 mr-2" />
             Import Excel
@@ -1076,8 +1101,7 @@ export function DailySellModule() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
-              <span>Daily Sell Records — Inline Editable</span>
-              <AiFillButton module="dailySell" onApply={applyAiToNewRow} />
+              <span>Daily Sell Records</span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               {selectedIds.size > 0 && (
@@ -1124,104 +1148,6 @@ export function DailySellModule() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {/* ───────────── Quick Add row — 2 proper flex rows, tight gap ─────────────
-                    Row 1: Date, Customer, Address, Contact, Product, Qty, Rate
-                    Row 2: Transporter, T Fair, Received, Remarks, Save
-                */}
-                <TableRow className="bg-emerald-50/60 dark:bg-emerald-900/15 border-t-2 border-t-emerald-400 hover:bg-emerald-50/60">
-                  <TableCell colSpan={16} className="p-2 space-y-1.5">
-                    {/* Row 1 — identity + qty/rate */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Input
-                        type="date"
-                        value={newRow.date}
-                        onChange={(e) => handleNewRowChange('date', e.target.value)}
-                        className="h-7 text-xs px-1.5 w-[150px] shrink-0"
-                      />
-                      <CellInput value={newRow.customerName} onChange={(v) => handleNewRowChange('customerName', v)} placeholder="Customer Name" className="h-7 text-xs px-2 w-[180px] shrink-0" />
-                      <CellInput value={newRow.address} onChange={(v) => handleNewRowChange('address', v)} placeholder="Address" className="h-7 text-xs px-2 w-[200px] shrink-0" />
-                      <CellInput value={newRow.contactNumber} onChange={(v) => handleNewRowChange('contactNumber', v)} placeholder="Contact" className="h-7 text-xs px-2 w-[130px] shrink-0" />
-                      <Select value={newRow.product} onValueChange={(v) => handleNewRowChange('product', v)}>
-                        <SelectTrigger className="h-7 text-xs px-2 w-[180px] shrink-0">
-                          <SelectValue placeholder="Product" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            <SelectLabel>Product Items {stockLoading ? '(loading stock…)' : ''}</SelectLabel>
-                            {productsWithAvail.map((p) => (
-                              <SelectItem key={p.key} value={p.key}>
-                                <span className="flex items-center gap-2">
-                                  <span>{p.label}</span>
-                                  {p.avail != null && (
-                                    <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${p.avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
-                                      Avail: {p.avail.toLocaleString('en-IN')}
-                                    </span>
-                                  )}
-                                </span>
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      {(() => {
-                        const enteredQty = Number(newRow.quantity) || 0
-                        const avail = newRow.product ? getProductAvail(newRow.product) : null
-                        const isOver = avail != null && enteredQty > avail
-                        return (
-                          <div className="relative w-[120px] shrink-0">
-                            <CellInput
-                              type="number"
-                              min="0"
-                              value={newRow.quantity}
-                              onChange={(v) => handleNewRowChange('quantity', v)}
-                              placeholder="Qty"
-                              className={`h-7 text-xs px-2 w-full ${isOver ? 'border-rose-500 ring-1 ring-rose-400 bg-rose-50 dark:bg-rose-950/30' : ''}`}
-                            />
-                            {isOver && (
-                              <span
-                                className="absolute -top-1.5 -right-1.5 flex items-center justify-center size-4 rounded-full bg-rose-500 text-white shadow"
-                                title={`Available: ${avail?.toLocaleString('en-IN')}, you entered: ${enteredQty.toLocaleString('en-IN')}`}
-                              >
-                                <AlertTriangle className="size-2.5" />
-                              </span>
-                            )}
-                          </div>
-                        )
-                      })()}
-                      <CellInput type="number" min="0" value={newRow.rate} onChange={(v) => handleNewRowChange('rate', v)} placeholder="Rate" className="h-7 text-xs px-2 w-[120px] shrink-0" />
-                    </div>
-
-                    {/* Row 2 — Transporter, T Fair, Received, Remarks + Save */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <CellInput value={newRow.transporterName} onChange={(v) => handleNewRowChange('transporterName', v)} placeholder="Transporter" className="h-7 text-xs px-2 w-[160px] shrink-0" />
-                      <CellInput type="number" min="0" value={newRow.transporterFair} onChange={(v) => handleNewRowChange('transporterFair', v)} placeholder="T Fair" className="h-7 text-xs px-2 w-[100px] shrink-0" />
-                      <CellInput type="number" min="0" value={newRow.receivedAmount} onChange={(v) => handleNewRowChange('receivedAmount', v)} placeholder="Received" className="h-7 text-xs px-2 w-[120px] shrink-0" />
-                      <CellInput value={newRow.remarks} onChange={(v) => handleNewRowChange('remarks', v)} placeholder="Remarks" className="h-7 text-xs px-2 w-[160px] shrink-0" />
-                      <Button
-                        size="sm"
-                        onClick={handleSaveNew}
-                        disabled={savingNew}
-                        className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white text-xs w-[90px] shrink-0 px-2"
-                      >
-                        {savingNew ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <>
-                            <Plus className="size-3.5 mr-1" />
-                            Save
-                          </>
-                        )}
-                      </Button>
-                    </div>
-
-                    {/* Computed Amount / Pending — shown as a small hint below the grid */}
-                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                      <span>Amount: <b className="text-emerald-700 dark:text-emerald-300">{formatCurrency(newComputedAmount)}</b></span>
-                      <span>Pending: <b className="text-amber-700 dark:text-amber-300">{formatCurrency(newComputedPending)}</b></span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-
                 {/* Loading skeletons */}
                 {loading && renderSkeletons()}
 
@@ -1229,7 +1155,7 @@ export function DailySellModule() {
                 {!loading && filteredDailySells.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={16} className="h-32 text-center text-muted-foreground">
-                      No daily sell entries yet. Fill the green row above and click Save to add your first entry.
+                      No daily sell entries yet. Click the <span className="font-semibold text-emerald-700">Add Sale</span> button above to create your first entry.
                     </TableCell>
                   </TableRow>
                 )}
@@ -1558,6 +1484,246 @@ export function DailySellModule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Add Sale Dialog — popup form */}
+      <Dialog open={formOpen} onOpenChange={(open) => {
+        if (!savingNew) setFormOpen(open)
+      }}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Daily Sale</DialogTitle>
+            <DialogDescription>
+              Fill in the details to create a new daily sell entry. The record will auto-sync to Customer, Order, Payment &amp; Stock.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Auto-sync info banner */}
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-900/15 px-3 py-2.5 flex items-start gap-2">
+            <RefreshCw className="size-4 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+            <div className="text-xs text-emerald-800 dark:text-emerald-200 leading-relaxed">
+              <span className="font-semibold">Auto-sync on save:</span> Customer record, Order,
+              Customer Payment, Tractor Payment and Stock availability will be auto-created / updated
+              in their respective modules.
+            </div>
+          </div>
+
+          {/* AI fill button */}
+          <div className="flex justify-end">
+            <AiFillButton module="dailySell" onApply={applyAiToNewRow} />
+          </div>
+
+          <div className="grid gap-3 py-1">
+            {/* Date + Customer (2 col) */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="ds-date">Date <span className="text-destructive">*</span></Label>
+                <Input id="ds-date" type="date" value={newRow.date} onChange={(e) => handleNewRowChange('date', e.target.value)} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="ds-customer">Customer Name <span className="text-destructive">*</span></Label>
+                <div className="relative">
+                  <Input id="ds-customer" placeholder="Enter customer name" value={newRow.customerName} onChange={(e) => handleNewRowChange('customerName', e.target.value)} className="pr-9" />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                    <FieldVoiceInput fieldLabel="customer name" onChange={(text) => handleNewRowChange('customerName', text)} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Address */}
+            <div className="grid gap-1.5">
+              <Label htmlFor="ds-address">Address</Label>
+              <div className="relative">
+                <Input id="ds-address" placeholder="Enter address" value={newRow.address} onChange={(e) => handleNewRowChange('address', e.target.value)} className="pr-9" />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <FieldVoiceInput fieldLabel="address" onChange={(text) => handleNewRowChange('address', text)} />
+                </div>
+              </div>
+            </div>
+
+            {/* Contact + Product (2 col) */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="ds-contact">Contact Number</Label>
+                <div className="relative">
+                  <Input id="ds-contact" placeholder="Enter contact number" value={newRow.contactNumber} onChange={(e) => handleNewRowChange('contactNumber', e.target.value)} className="pr-9" />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                    <FieldVoiceInput fieldLabel="contact number" onChange={(text) => handleNewRowChange('contactNumber', text.replace(/[^0-9+\-\s]/g, '').trim())} />
+                  </div>
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="ds-product">Product</Label>
+                <Select value={newRow.product} onValueChange={(v) => handleNewRowChange('product', v)}>
+                  <SelectTrigger id="ds-product" className="w-full">
+                    <SelectValue placeholder="Select product item" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectLabel>Product Items {stockLoading ? '(loading stock…)' : ''}</SelectLabel>
+                      {productsWithAvail.map((p) => (
+                        <SelectItem key={p.key} value={p.key}>
+                          <span className="flex items-center gap-2">
+                            <span>{p.label}</span>
+                            {p.avail != null && (
+                              <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${p.avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
+                                Avail: {p.avail.toLocaleString('en-IN')}
+                              </span>
+                            )}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Qty + Rate (2 col) */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="ds-quantity">Quantity</Label>
+                <div className="relative">
+                  <Input
+                    id="ds-quantity"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={newRow.quantity}
+                    onChange={(e) => handleNewRowChange('quantity', e.target.value)}
+                    className={`pr-9 ${(() => {
+                      const enteredQty = Number(newRow.quantity) || 0
+                      const avail = newRow.product ? getProductAvail(newRow.product) : null
+                      return avail != null && enteredQty > avail ? 'border-rose-500 ring-1 ring-rose-400 bg-rose-50 dark:bg-rose-950/30' : ''
+                    })()}`}
+                  />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                    <FieldVoiceInput fieldLabel="quantity" onChange={(text) => handleNewRowChange('quantity', text.replace(/[^0-9.]/g, ''))} />
+                  </div>
+                </div>
+                {(() => {
+                  const enteredQty = Number(newRow.quantity) || 0
+                  const avail = newRow.product ? getProductAvail(newRow.product) : null
+                  if (avail != null && enteredQty > avail) {
+                    return (
+                      <p className="text-xs text-rose-600 flex items-center gap-1">
+                        <AlertTriangle className="size-3" />
+                        Only {avail.toLocaleString('en-IN')} available in stock
+                      </p>
+                    )
+                  }
+                  return null
+                })()}
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="ds-rate">Rate (₹)</Label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                  <Input
+                    id="ds-rate"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    className="pl-9 pr-9"
+                    value={newRow.rate}
+                    onChange={(e) => handleNewRowChange('rate', e.target.value)}
+                  />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                    <FieldVoiceInput fieldLabel="rate" onChange={(text) => handleNewRowChange('rate', text.replace(/[^0-9.]/g, ''))} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Amount + Pending (auto-calc display, 2 col) */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label>Amount <span className="text-muted-foreground text-xs font-normal">(auto)</span></Label>
+                <div className="flex h-9 items-center rounded-md border bg-emerald-50 dark:bg-emerald-900/20 px-3 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                  {formatCurrency(newComputedAmount)}
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Pending <span className="text-muted-foreground text-xs font-normal">(auto)</span></Label>
+                <div className="flex h-9 items-center rounded-md border bg-amber-50 dark:bg-amber-900/20 px-3 text-sm font-semibold text-amber-700 dark:text-amber-300">
+                  {formatCurrency(newComputedPending)}
+                </div>
+              </div>
+            </div>
+
+            {/* Transporter Name + T Fair (2 col) */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="ds-transporter">Transporter Name</Label>
+                <div className="relative">
+                  <Input id="ds-transporter" placeholder="e.g. Ramesh Transport" value={newRow.transporterName} onChange={(e) => handleNewRowChange('transporterName', e.target.value)} className="pr-9" />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                    <FieldVoiceInput fieldLabel="transporter name" onChange={(text) => handleNewRowChange('transporterName', text)} />
+                  </div>
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="ds-tfair">Transporter Fair (₹)</Label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                  <Input
+                    id="ds-tfair"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    className="pl-9 pr-9"
+                    value={newRow.transporterFair}
+                    onChange={(e) => handleNewRowChange('transporterFair', e.target.value)}
+                  />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                    <FieldVoiceInput fieldLabel="transporter fair" onChange={(text) => handleNewRowChange('transporterFair', text.replace(/[^0-9.]/g, ''))} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Received Amount */}
+            <div className="grid gap-1.5">
+              <Label htmlFor="ds-received">Received Amount (₹)</Label>
+              <div className="relative">
+                <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                <Input
+                  id="ds-received"
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  className="pl-9 pr-9"
+                  value={newRow.receivedAmount}
+                  onChange={(e) => handleNewRowChange('receivedAmount', e.target.value)}
+                />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                  <FieldVoiceInput fieldLabel="received amount" onChange={(text) => handleNewRowChange('receivedAmount', text.replace(/[^0-9.]/g, ''))} />
+                </div>
+              </div>
+            </div>
+
+            {/* Remarks */}
+            <div className="grid gap-1.5">
+              <Label htmlFor="ds-remarks">Remarks</Label>
+              <div className="relative">
+                <Textarea id="ds-remarks" placeholder="Optional remarks..." value={newRow.remarks} onChange={(e) => handleNewRowChange('remarks', e.target.value)} className="min-h-[70px] pr-9" />
+                <div className="absolute right-1.5 top-2">
+                  <FieldVoiceInput fieldLabel="remarks" onChange={(text) => handleNewRowChange('remarks', text)} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFormOpen(false)} disabled={savingNew}>Cancel</Button>
+            <Button onClick={handleSaveNew} disabled={savingNew} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              {savingNew && <Loader2 className="mr-2 size-4 animate-spin" />}
+              <Plus className="size-4 mr-1" />
+              Create Entry
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ExcelImport module="dailySell" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchData} />
     </div>
