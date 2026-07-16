@@ -423,7 +423,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <header className="relative flex items-center gap-2 px-4 py-2.5 border-b border-black/30 bg-gradient-to-r from-[#02714F] via-[#025C42] to-[#02714F] backdrop-blur-sm sticky top-0 z-10 shrink-0 text-white shadow-lg ring-1 ring-black/20">
           {/* Subtle top highlight for 3D pop */}
           <div className="absolute inset-x-0 top-0 h-px bg-white/30 pointer-events-none" />
-          {/* Sidebar toggle button (desktop) — animated hamburger ↔ X */}
+          {/* Sidebar toggle button (desktop) — arrow that points in the direction the sidebar will move */}
           <button
             onClick={() => setSidebarVisible(!sidebarVisible)}
             className={cn(
@@ -437,24 +437,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           >
             {/* Subtle inner top highlight */}
             <span className="absolute inset-x-1 top-0.5 h-px bg-white/30 rounded-full pointer-events-none" />
-            {/* Animated hamburger ↔ X — 3 lines transform into an X when sidebar is visible */}
-            <span className="relative w-5 h-5 flex flex-col items-center justify-center gap-[5px]">
-              <span
+            {/* Arrow: ← when sidebar is visible (click to slide it away), → when hidden (click to bring it back) */}
+            <span className="relative w-5 h-5 flex items-center justify-center">
+              <ChevronLeft
                 className={cn(
-                  'block h-[2.5px] w-5 bg-white rounded-full origin-center transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
-                  sidebarVisible ? 'translate-y-[7.5px] rotate-45' : 'translate-y-0 rotate-0'
+                  'absolute h-5 w-5 text-white transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
+                  sidebarVisible
+                    ? 'opacity-100 translate-x-0 rotate-0'
+                    : 'opacity-0 -translate-x-1 rotate-0'
                 )}
               />
-              <span
+              <ChevronRight
                 className={cn(
-                  'block h-[2.5px] w-5 bg-white rounded-full transition-all duration-200 ease-out',
-                  sidebarVisible ? 'opacity-0 scale-x-0' : 'opacity-100 scale-x-100'
-                )}
-              />
-              <span
-                className={cn(
-                  'block h-[2.5px] w-5 bg-white rounded-full origin-center transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
-                  sidebarVisible ? '-translate-y-[7.5px] -rotate-45' : 'translate-y-0 rotate-0'
+                  'absolute h-5 w-5 text-white transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
+                  sidebarVisible
+                    ? 'opacity-0 translate-x-1'
+                    : 'opacity-100 translate-x-0'
                 )}
               />
             </span>

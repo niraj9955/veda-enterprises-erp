@@ -214,7 +214,31 @@ const DashboardTile = React.memo(function DashboardTile({
 export default function DashboardModule() {
   const { setActiveModule } = useAppStore()
   const { isEnabled, loading: aiLoading } = useAiConfig()
-  const [aiBannerDismissed, setAiBannerDismissed] = React.useState(false)
+
+  // Persist dismissal in localStorage so the banner does NOT reappear when
+  // the user navigates to another section and comes back to the dashboard.
+  // The dismissal is stored per-browser (per-user on a shared device would
+  // need a user-scoped key, but for this ERP every device is effectively
+  // single-user). Bumping the storage key resets the banner for everyone
+  // (e.g. if we ship a new AI feature and want to re-announce it).
+  const AI_BANNER_STORAGE_KEY = 'veda:aiBannerDismissed:v1'
+  const [aiBannerDismissed, setAiBannerDismissed] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      return window.localStorage.getItem(AI_BANNER_STORAGE_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+
+  const dismissAiBanner = React.useCallback(() => {
+    setAiBannerDismissed(true)
+    try {
+      window.localStorage.setItem(AI_BANNER_STORAGE_KEY, '1')
+    } catch {
+      // ignore storage errors (private mode / quota)
+    }
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -266,7 +290,7 @@ export default function DashboardModule() {
               </div>
               <button
                 type="button"
-                onClick={() => setAiBannerDismissed(true)}
+                onClick={dismissAiBanner}
                 className="text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100 text-xs shrink-0"
                 aria-label="Dismiss"
               >
