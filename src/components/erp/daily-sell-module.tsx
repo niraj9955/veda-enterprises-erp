@@ -1125,25 +1125,24 @@ export function DailySellModule() {
               </TableHeader>
               <TableBody>
                 {/* ───────────── Quick Add row — 2-row grid, no horizontal scroll ─────────────
-                    Row 1: Date, Customer, Address, Contact, Product, Save
-                    Row 2: Qty, Rate, Transporter, T Fair, Received, Remarks
-                    All inputs are h-7 (compact) and equal-width via 6-col grid.
+                    Row 1: Date, Customer, Address, Contact, Product (spans 2 cols)
+                    Row 2: Qty, Rate, Transporter, T Fair, Received, Remarks, Save
                 */}
                 <TableRow className="bg-emerald-50/60 dark:bg-emerald-900/15 border-t-2 border-t-emerald-400 hover:bg-emerald-50/60">
                   <TableCell colSpan={16} className="p-2">
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-                      {/* Row 1 */}
+                      {/* Row 1 — 5 fields, Product spans 2 cols to fill 6-col row */}
                       <Input
                         type="date"
                         value={newRow.date}
                         onChange={(e) => handleNewRowChange('date', e.target.value)}
-                        className="h-7 text-xs px-2 min-w-0"
+                        className="h-7 text-xs px-2 min-w-0 w-full"
                       />
-                      <CellInput value={newRow.customerName} onChange={(v) => handleNewRowChange('customerName', v)} placeholder="Customer" className="h-7 text-xs px-2 min-w-0" />
-                      <CellInput value={newRow.address} onChange={(v) => handleNewRowChange('address', v)} placeholder="Address" className="h-7 text-xs px-2 min-w-0" />
-                      <CellInput value={newRow.contactNumber} onChange={(v) => handleNewRowChange('contactNumber', v)} placeholder="Contact" className="h-7 text-xs px-2 min-w-0" />
+                      <CellInput value={newRow.customerName} onChange={(v) => handleNewRowChange('customerName', v)} placeholder="Customer" className="h-7 text-xs px-2 min-w-0 w-full" />
+                      <CellInput value={newRow.address} onChange={(v) => handleNewRowChange('address', v)} placeholder="Address" className="h-7 text-xs px-2 min-w-0 w-full" />
+                      <CellInput value={newRow.contactNumber} onChange={(v) => handleNewRowChange('contactNumber', v)} placeholder="Contact" className="h-7 text-xs px-2 min-w-0 w-full" />
                       <Select value={newRow.product} onValueChange={(v) => handleNewRowChange('product', v)}>
-                        <SelectTrigger className="h-7 text-xs px-2 min-w-0">
+                        <SelectTrigger className="h-7 text-xs px-2 min-w-0 w-full md:col-span-2">
                           <SelectValue placeholder="Product" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1164,23 +1163,8 @@ export function DailySellModule() {
                           </SelectGroup>
                         </SelectContent>
                       </Select>
-                      <Button
-                        size="sm"
-                        onClick={handleSaveNew}
-                        disabled={savingNew}
-                        className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
-                      >
-                        {savingNew ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <>
-                            <Plus className="size-3.5 mr-1" />
-                            Save
-                          </>
-                        )}
-                      </Button>
 
-                      {/* Row 2 */}
+                      {/* Row 2 — 7 items, Save button at the end after Remarks */}
                       {(() => {
                         const enteredQty = Number(newRow.quantity) || 0
                         const avail = newRow.product ? getProductAvail(newRow.product) : null
@@ -1193,7 +1177,7 @@ export function DailySellModule() {
                               value={newRow.quantity}
                               onChange={(v) => handleNewRowChange('quantity', v)}
                               placeholder="Qty"
-                              className={`h-7 text-xs px-2 min-w-0 ${isOver ? 'border-rose-500 ring-1 ring-rose-400 bg-rose-50 dark:bg-rose-950/30' : ''}`}
+                              className={`h-7 text-xs px-2 min-w-0 w-full ${isOver ? 'border-rose-500 ring-1 ring-rose-400 bg-rose-50 dark:bg-rose-950/30' : ''}`}
                             />
                             {isOver && (
                               <span
@@ -1206,11 +1190,26 @@ export function DailySellModule() {
                           </div>
                         )
                       })()}
-                      <CellInput type="number" min="0" value={newRow.rate} onChange={(v) => handleNewRowChange('rate', v)} placeholder="Rate" className="h-7 text-xs px-2 min-w-0" />
-                      <CellInput value={newRow.transporterName} onChange={(v) => handleNewRowChange('transporterName', v)} placeholder="Transporter" className="h-7 text-xs px-2 min-w-0" />
-                      <CellInput type="number" min="0" value={newRow.transporterFair} onChange={(v) => handleNewRowChange('transporterFair', v)} placeholder="T Fair" className="h-7 text-xs px-2 min-w-0" />
-                      <CellInput type="number" min="0" value={newRow.receivedAmount} onChange={(v) => handleNewRowChange('receivedAmount', v)} placeholder="Received" className="h-7 text-xs px-2 min-w-0" />
-                      <CellInput value={newRow.remarks} onChange={(v) => handleNewRowChange('remarks', v)} placeholder="Remarks" className="h-7 text-xs px-2 min-w-0" />
+                      <CellInput type="number" min="0" value={newRow.rate} onChange={(v) => handleNewRowChange('rate', v)} placeholder="Rate" className="h-7 text-xs px-2 min-w-0 w-full" />
+                      <CellInput value={newRow.transporterName} onChange={(v) => handleNewRowChange('transporterName', v)} placeholder="Transporter" className="h-7 text-xs px-2 min-w-0 w-full" />
+                      <CellInput type="number" min="0" value={newRow.transporterFair} onChange={(v) => handleNewRowChange('transporterFair', v)} placeholder="T Fair" className="h-7 text-xs px-2 min-w-0 w-full" />
+                      <CellInput type="number" min="0" value={newRow.receivedAmount} onChange={(v) => handleNewRowChange('receivedAmount', v)} placeholder="Received" className="h-7 text-xs px-2 min-w-0 w-full" />
+                      <CellInput value={newRow.remarks} onChange={(v) => handleNewRowChange('remarks', v)} placeholder="Remarks" className="h-7 text-xs px-2 min-w-0 w-full" />
+                      <Button
+                        size="sm"
+                        onClick={handleSaveNew}
+                        disabled={savingNew}
+                        className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white text-xs w-full"
+                      >
+                        {savingNew ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            <Plus className="size-3.5 mr-1" />
+                            Save
+                          </>
+                        )}
+                      </Button>
                     </div>
                     {/* Computed Amount / Pending — shown as a small hint below the grid */}
                     <div className="mt-1.5 flex items-center gap-3 text-[11px] text-muted-foreground">
