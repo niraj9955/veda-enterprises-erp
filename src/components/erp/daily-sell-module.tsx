@@ -879,16 +879,16 @@ export function DailySellModule() {
 
       {/* Search + Filters */}
       <Card>
-        <CardContent className="pt-6 space-y-3">
+        <CardContent className="px-3 py-2 space-y-2">
           {/* Top row: free-text search + filter toggle */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative flex-1 min-w-[260px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search across all fields (date, name, remarks, etc.)..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
+                className="pl-8 h-8 text-sm"
               />
             </div>
             <Button

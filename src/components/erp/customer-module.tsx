@@ -800,12 +800,12 @@ export function CustomerModule() {
       <Card>
         <CardContent className="px-3 py-2">
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <Input
               placeholder="Search customers by name or mobile..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-9 text-sm"
+              className="pl-8 h-8 text-sm"
             />
           </div>
         </CardContent>

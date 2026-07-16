@@ -315,7 +315,7 @@ export default function BillModule() {
             placeholder="Search by bill number or party name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-8 h-8 text-sm"
           />
         </div>
         <Select value={filterType} onValueChange={setFilterType}>
