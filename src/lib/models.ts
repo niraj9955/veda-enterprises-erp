@@ -413,6 +413,29 @@ const AiConfigSchema = new mongoose.Schema({
   model: { type: String, default: 'gpt-4o-mini' },
 }, { timestamps: true });
 
+// ─── Password Reset (OTP-based) ─────────────────────────────────────────────
+// Stores a 6-digit OTP issued for a forgot-password request.
+// Lifecycle:
+//   1. POST /api/auth/forgot-password/request-otp  → creates a new doc with
+//      otp + 10-minute expiry. Any previous unused docs for the same email
+//      are marked used (so only the latest OTP is valid).
+//   2. POST /api/auth/forgot-password/verify-otp   → marks doc.verified=true
+//      and returns a short-lived resetToken (JWT, 10 min).
+//   3. POST /api/auth/forgot-password/reset        → verifies resetToken +
+//      newPassword, updates User.password, marks doc.used=true.
+//
+// attempts: incremented on every wrong OTP entry. After 5 wrong attempts the
+// doc is auto-invalidated (user must request a new OTP).
+const PasswordResetSchema = new mongoose.Schema({
+  email: { type: String, required: true, index: true },
+  otpHash: { type: String, required: true }, // bcrypt hash of the 6-digit OTP
+  expiresAt: { type: Date, required: true },
+  verified: { type: Boolean, default: false },
+  used: { type: Boolean, default: false },
+  attempts: { type: Number, default: 0 },
+}, { timestamps: true });
+PasswordResetSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
 // ─── Models ─────────────────────────────────────────────────────────────────
 export const Company = mongoose.models.Company || mongoose.model('Company', CompanySchema);
 export const User = mongoose.models.User || mongoose.model('User', UserSchema);
@@ -434,3 +457,4 @@ export const Electricity = mongoose.models.Electricity || mongoose.model('Electr
 export const FactoryStuff = mongoose.models.FactoryStuff || mongoose.model('FactoryStuff', FactoryStuffSchema);
 export const Bill = mongoose.models.Bill || mongoose.model('Bill', BillSchema);
 export const AiConfig = mongoose.models.AiConfig || mongoose.model('AiConfig', AiConfigSchema);
+export const PasswordReset = mongoose.models.PasswordReset || mongoose.model('PasswordReset', PasswordResetSchema);

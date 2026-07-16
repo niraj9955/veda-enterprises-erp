@@ -60,7 +60,7 @@ export async function POST(request: Request) {
 
     const admin = await User.create({
       name: 'Admin',
-      email: 'admin@veda.com',
+      email: 'dataanalogydirector@gmail.com',
       password: hashedPassword,
       role: 'admin',
     })

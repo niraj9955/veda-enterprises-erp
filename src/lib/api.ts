@@ -87,6 +87,34 @@ export const api = {
     }),
   me: () => request<{ user: { userId: string; name: string; email: string; role: string } }>('/auth/me'),
 
+  // Forgot password (OTP-based)
+  requestOtp: (data: { email: string }) =>
+    request<{
+      message: string
+      email: string
+      expiryMinutes: number
+      emailConfigured?: boolean
+      devPreview?: { otp?: string; message: string }
+      cooldownSeconds?: number
+    }>('/auth/forgot-password/request-otp', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  verifyOtp: (data: { email: string; otp: string }) =>
+    request<{
+      message: string
+      resetToken: string
+      email: string
+    }>('/auth/forgot-password/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  resetPassword: (data: { email: string; resetToken: string; newPassword: string; confirmPassword: string }) =>
+    request<{ message: string; email: string }>('/auth/forgot-password/reset', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   // Dashboard
   getDashboard: () => request<Record<string, unknown>>('/dashboard'),
   getDashboardStats: () => request<Record<string, number>>('/dashboard/stats'),

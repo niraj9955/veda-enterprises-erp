@@ -1823,3 +1823,87 @@ Stage Summary:
 - Login hardened against user-enumeration via timing attack (dummy bcrypt)
 - Cookie secure flag defaults to true in production
 - All TS errors fixed — build is clean
+
+---
+Task ID: forgot-password-otp-flow
+Agent: Main Agent
+Task: Login me Forget Password option add karo — click → enter email → Send OTP → verify OTP → new password + confirm → update. Admin email: dataanalogydirector@gmail.com
+
+Work Log:
+- Installed nodemailer + @types/nodemailer for SMTP email delivery
+- Added PasswordReset Mongoose schema (email, otpHash, expiresAt, verified, used, attempts) with TTL index for auto-cleanup of expired docs
+- Created src/lib/email.ts:
+  • Gmail SMTP transport via nodemailer (EMAIL_USER + EMAIL_PASS env vars)
+  • DEV FALLBACK: if SMTP not configured, OTP is logged to server console + returned in devPreview field (so dev can test locally)
+  • buildOtpEmail() returns subject + plain text + styled HTML email body with the 6-digit OTP in a dashed emerald box
+  • Honors EMAIL_TO_OVERRIDE for staging environments
+- Updated /api/auth/init route: admin user now seeds with email dataanalogydirector@gmail.com (was admin@veda.com)
+- Created scripts/migrate-admin-email.ts: one-time migration that updates the existing admin user's email from admin@veda.com → dataanalogydirector@gmail.com (idempotent, safe to re-run). Usage: `MONGODB_URI="..." bun run scripts/migrate-admin-email.ts`
+- Created 3 new API routes:
+  1. POST /api/auth/forgot-password/request-otp
+     • Generates cryptographically-random 6-digit OTP (crypto.randomInt)
+     • Hashes OTP with bcrypt (10 rounds) before DB storage
+     • 10-minute TTL on the OTP doc
+     • 60-second resend cooldown (rate-limited)
+     • Invalidates previous unused OTPs for the same email
+     • Anti-enumeration: always returns generic "If the email exists..." message even if user not found
+     • Sends OTP via Gmail SMTP (or logs to console in dev mode)
+  2. POST /api/auth/forgot-password/verify-otp
+     • bcrypt-compares the OTP against the stored hash
+     • Max 5 wrong attempts per OTP (then doc is invalidated)
+     • Enforces 10-minute expiry
+     • On success: marks doc.verified=true and issues a short-lived resetToken (JWT, 10 min, signed with JWT_SECRET, purpose='password-reset' — cannot be reused as a login token)
+  3. POST /api/auth/forgot-password/reset
+     • Verifies resetToken signature + purpose claim
+     • Checks the PasswordReset doc is still in verified && !used state (prevents replay)
+     • Validates newPassword == confirmPassword, min 6 chars, max 256 chars
+     • Updates user.password with bcrypt hash (12 rounds — matches the rest of the auth system)
+     • Marks the PasswordReset doc as used (one-shot)
+- Added 3 new methods to src/lib/api.ts: requestOtp(), verifyOtp(), resetPassword()
+- Completely rewrote src/components/erp/login-page.tsx with a multi-step forgot password flow:
+  • Mode state machine: login → forgot-email → forgot-otp → forgot-reset → forgot-success
+  • Login screen: added "Forgot Password?" link next to Password label + show/hide password eye toggle
+  • Step 1 (forgot-email): Email input + Send OTP button + back to login
+  • Step 2 (forgot-otp): 6-slot OTP input (using existing input-otp component), 60s resend cooldown with live countdown, "Change email" link to go back to step 1
+  • Step 3 (forgot-reset): New password + confirm password fields with show/hide toggles, live validation (red border on mismatch, green border + checkmark on match), Update Password button
+  • Success screen: green checkmark + "All set!" + "Back to Login" button (pre-fills the login email with the reset email)
+  • In dev mode (SMTP not configured), a toast shows the actual OTP so the developer can complete the flow locally
+- Input validation moved BEFORE connectDB() in all 3 routes — bad input is rejected with 400 even if MongoDB is temporarily down
+- Build verified: `npx next build` compiled successfully in 14.5s. All 3 new routes registered: /api/auth/forgot-password/request-otp, /verify-otp, /reset
+- TypeScript: zero errors in src/ (pre-existing errors only in examples/ and skills/ directories — unrelated)
+- Smoke-tested all 3 endpoints via curl:
+  • Bad email → 400 "Please enter a valid email address."
+  • Bad OTP (3 digits) → 400 "OTP must be a 6-digit number."
+  • Password mismatch → 400 "Passwords do not match."
+  • Short password → 400 "Password must be at least 6 characters long."
+- Dev server restarted, login page returns 200
+
+Stage Summary:
+- Login page now has a "Forgot Password?" link next to the password field
+- Click → enter email (e.g. dataanalogydirector@gmail.com) → Send OTP → 6-digit OTP arrives via Gmail SMTP (or shown in toast in dev mode)
+- Enter OTP → verify → success moves to step 3
+- Enter new password + confirm → Update Password → success screen → back to login
+- Security features:
+  • OTP is bcrypt-hashed in DB (not plaintext)
+  • OTP expires in 10 minutes
+  • Max 5 wrong OTP attempts per request
+  • 60-second resend cooldown prevents abuse
+  • Anti-enumeration: unknown emails return the same "OTP sent" message as valid ones
+  • Reset token is a signed JWT (10 min TTL) — cannot be replayed or reused as login
+  • Reset token is one-shot (doc marked `used` after successful reset)
+  • Password min 6 chars, bcrypt 12 rounds
+- To enable production email delivery, set env vars:
+  EMAIL_USER=dataanalogydirector@gmail.com
+  EMAIL_PASS=<16-char Gmail App Password from https://myaccount.google.com/apppasswords>
+- To update the existing admin user's email (one-time), run:
+  MONGODB_URI="mongodb+srv://..." bun run scripts/migrate-admin-email.ts
+- Files changed:
+  • NEW: src/lib/email.ts (nodemailer utility + OTP email template)
+  • NEW: src/app/api/auth/forgot-password/request-otp/route.ts
+  • NEW: src/app/api/auth/forgot-password/verify-otp/route.ts
+  • NEW: src/app/api/auth/forgot-password/reset/route.ts
+  • NEW: scripts/migrate-admin-email.ts
+  • MODIFIED: src/lib/models.ts (added PasswordReset schema + export)
+  • MODIFIED: src/lib/api.ts (added requestOtp, verifyOtp, resetPassword methods)
+  • MODIFIED: src/app/api/auth/init/route.ts (admin email → dataanalogydirector@gmail.com)
+  • MODIFIED: src/components/erp/login-page.tsx (multi-step forgot password UI)
