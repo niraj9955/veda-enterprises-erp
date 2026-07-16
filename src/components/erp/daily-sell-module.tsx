@@ -1125,12 +1125,12 @@ export function DailySellModule() {
               </TableHeader>
               <TableBody>
                 {/* ───────────── Quick Add row — 2 proper flex rows, tight gap ─────────────
-                    Row 1: Date, Customer, Address, Contact, Product, Qty, Rate, Transporter
-                    Row 2: T Fair, Received, Remarks, Save
+                    Row 1: Date, Customer, Address, Contact, Product, Qty, Rate
+                    Row 2: Transporter, T Fair, Received, Remarks, Save
                 */}
                 <TableRow className="bg-emerald-50/60 dark:bg-emerald-900/15 border-t-2 border-t-emerald-400 hover:bg-emerald-50/60">
                   <TableCell colSpan={16} className="p-2 space-y-1.5">
-                    {/* Row 1 — identity + qty/rate/transporter */}
+                    {/* Row 1 — identity + qty/rate */}
                     <div className="flex flex-wrap items-center gap-1">
                       <Input
                         type="date"
@@ -1168,7 +1168,7 @@ export function DailySellModule() {
                         const avail = newRow.product ? getProductAvail(newRow.product) : null
                         const isOver = avail != null && enteredQty > avail
                         return (
-                          <div className="relative w-[90px] shrink-0">
+                          <div className="relative w-[120px] shrink-0">
                             <CellInput
                               type="number"
                               min="0"
@@ -1188,12 +1188,12 @@ export function DailySellModule() {
                           </div>
                         )
                       })()}
-                      <CellInput type="number" min="0" value={newRow.rate} onChange={(v) => handleNewRowChange('rate', v)} placeholder="Rate" className="h-7 text-xs px-2 w-[90px] shrink-0" />
-                      <CellInput value={newRow.transporterName} onChange={(v) => handleNewRowChange('transporterName', v)} placeholder="Transporter" className="h-7 text-xs px-2 w-[160px] shrink-0" />
+                      <CellInput type="number" min="0" value={newRow.rate} onChange={(v) => handleNewRowChange('rate', v)} placeholder="Rate" className="h-7 text-xs px-2 w-[120px] shrink-0" />
                     </div>
 
-                    {/* Row 2 — T Fair, Received, Remarks + Save */}
+                    {/* Row 2 — Transporter, T Fair, Received, Remarks + Save */}
                     <div className="flex flex-wrap items-center gap-1">
+                      <CellInput value={newRow.transporterName} onChange={(v) => handleNewRowChange('transporterName', v)} placeholder="Transporter" className="h-7 text-xs px-2 w-[160px] shrink-0" />
                       <CellInput type="number" min="0" value={newRow.transporterFair} onChange={(v) => handleNewRowChange('transporterFair', v)} placeholder="T Fair" className="h-7 text-xs px-2 w-[100px] shrink-0" />
                       <CellInput type="number" min="0" value={newRow.receivedAmount} onChange={(v) => handleNewRowChange('receivedAmount', v)} placeholder="Received" className="h-7 text-xs px-2 w-[120px] shrink-0" />
                       <CellInput value={newRow.remarks} onChange={(v) => handleNewRowChange('remarks', v)} placeholder="Remarks" className="h-7 text-xs px-2 w-[160px] shrink-0" />
