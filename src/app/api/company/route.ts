@@ -28,6 +28,22 @@ const VEDA_DEFAULTS = {
   email: 'vedaenterprises@gmail.com',
 }
 
+// ─── Legacy value migrations ─────────────────────────────────────────────────
+//
+// When we rename something globally (e.g. "Paper Block ERP" → "Paver Block
+// ERP"), existing MongoDB records still hold the OLD value because the
+// backfill logic above only touches EMPTY fields. This map silently
+// upgrades known stale strings to their current value on every GET, so
+// every existing deployment gets the rename without a manual migration
+// script.
+//
+// To add a new migration: { field: 'tagName', from: 'old value', to: 'new value' }
+// Keep the `from` comparison case-insensitive and trimmed so we catch
+// "Paper Block ERP", "paper block erp", " Paper Block ERP " etc.
+const LEGACY_MIGRATIONS: Array<{ field: keyof typeof VEDA_DEFAULTS; from: string; to: string }> = [
+  { field: 'tagline', from: 'Paper Block ERP', to: 'Paver Block ERP' },
+]
+
 export async function GET() {
   try {
     await connectDB()
@@ -54,6 +70,20 @@ export async function GET() {
           needsUpdate = true
         }
       }
+
+      // Legacy value migration — if a field holds a known stale value
+      // (e.g. tagline was "Paper Block ERP" before the rename to "Paver
+      // Block ERP"), silently upgrade it. This runs AFTER the empty-field
+      // backfill above so we don't accidentally re-set a value the admin
+      // had intentionally cleared.
+      for (const migration of LEGACY_MIGRATIONS) {
+        const current = (company as any)[migration.field]
+        if (typeof current === 'string' && current.trim().toLowerCase() === migration.from.toLowerCase()) {
+          patch[migration.field] = migration.to
+          needsUpdate = true
+        }
+      }
+
       if (needsUpdate) {
         company = await Company.findByIdAndUpdate(
           company._id,
