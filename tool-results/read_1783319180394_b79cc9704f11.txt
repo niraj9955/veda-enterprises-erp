@@ -1,0 +1,886 @@
+     1→'use client'
+     2→
+     3→import React, { useState, useRef, useEffect } from 'react'
+     4→import { Button } from '@/components/ui/button'
+     5→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+     6→import { Alert, AlertDescription } from '@/components/ui/alert'
+     7→import { Badge } from '@/components/ui/badge'
+     8→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+     9→import { ScrollArea } from '@/components/ui/scroll-area'
+    10→import {
+    11→  Select,
+    12→  SelectContent,
+    13→  SelectItem,
+    14→  SelectTrigger,
+    15→  SelectValue,
+    16→} from '@/components/ui/select'
+    17→import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download, Loader2, Sparkles, ArrowRight } from 'lucide-react'
+    18→import { api } from '@/lib/api'
+    19→import { toast } from '@/hooks/use-toast'
+    20→
+    21→interface ExcelImportProps {
+    22→  module:
+    23→    | 'customers'
+    24→    | 'production'
+    25→    | 'stock'
+    26→    | 'dailySell'
+    27→    | 'customerPayment'
+    28→    | 'labourPayment'
+    29→    | 'tractorPayment'
+    30→    | 'dustPurchase'
+    31→    | 'cementPurchase'
+    32→    | 'hardner'
+    33→    | 'electricity'
+    34→    | 'factoryStuff'
+    35→    | 'orders'
+    36→    | 'dispatch'
+    37→    | 'payments'
+    38→    | 'expenses'
+    39→  open: boolean
+    40→  onClose: () => void
+    41→  onSuccess: () => void
+    42→}
+    43→
+    44→// Field definitions for each module - includes all possible column name aliases
+    45→const moduleTemplates: Record<string, {
+    46→  label: string
+    47→  fields: { key: string; label: string; required: boolean; aliases: string[] }[]
+    48→}> = {
+    49→  customers: {
+    50→    label: 'Customers',
+    51→    fields: [
+    52→      { key: 'name', label: 'Customer Name', required: true, aliases: ['name', 'customer name', 'customer_name', 'customername', 'cust name', 'cust_name', 'client name', 'client_name', 'party name', 'party_name', 'नाम'] },
+    53→      { key: 'mobile', label: 'Mobile Number', required: true, aliases: ['mobile', 'mobile number', 'mobile_number', 'mobilenumber', 'phone', 'phone number', 'phone_number', 'contact', 'contact no', 'contact_no', 'contact number', 'cell', 'मोबाइल'] },
+    54→      { key: 'gstNumber', label: 'GST Number', required: false, aliases: ['gstnumber', 'gst number', 'gst_number', 'gst no', 'gst_no', 'gst', 'gstin', 'जीएसटी'] },
+    55→      { key: 'address', label: 'Address', required: false, aliases: ['address', 'addr', 'location', 'पता'] },
+    56→      { key: 'creditLimit', label: 'Credit Limit', required: false, aliases: ['creditlimit', 'credit limit', 'credit_limit', 'credit', 'limit', 'क्रेडिट लिमिट'] },
+    57→    ],
+    58→  },
+    59→  production: {
+    60→    label: 'Production',
+    61→    fields: [
+    62→      { key: 'date', label: 'Date', required: true, aliases: ['date', 'production date', 'production_date', 'date of production', 'दिनांक', 'tarikh'] },
+    63→      { key: 'cement', label: 'Cement', required: false, aliases: ['cement', 'cement bags', 'सीमेंट'] },
+    64→      { key: 'zigZagWhite80', label: 'Zig Zag White 80', required: false, aliases: ['zigzagwhite80', 'zig zag white 80', 'zig_zag_white_80', 'zz white 80', 'white 80'] },
+    65→      { key: 'zigZagRed80', label: 'Zig Zag Red 80', required: false, aliases: ['zigzagred80', 'zig zag red 80', 'zig_zag_red_80', 'zz red 80', 'red 80'] },
+    66→      { key: 'zigZagYellow80', label: 'Zig Zag Yellow 80', required: false, aliases: ['zigzagyellow80', 'zig zag yellow 80', 'zig_zag_yellow_80', 'zz yellow 80', 'yellow 80'] },
+    67→      { key: 'zigZagWhite60', label: 'Zig Zag White 60', required: false, aliases: ['zigzagwhite60', 'zig zag white 60', 'zig_zag_white_60', 'zz white 60', 'white 60'] },
+    68→      { key: 'zigZagRed60', label: 'Zig Zag Red 60', required: false, aliases: ['zigzagred60', 'zig zag red 60', 'zig_zag_red_60', 'zz red 60', 'red 60'] },
+    69→      { key: 'zigZagYellow60', label: 'Zig Zag Yellow 60', required: false, aliases: ['zigzagyellow60', 'zig zag yellow 60', 'zig_zag_yellow_60', 'zz yellow 60', 'yellow 60'] },
+    70→      { key: 'curveStone', label: 'Curve Stone', required: false, aliases: ['curvestone', 'curve stone', 'curve_stone', 'curve'] },
+    71→      { key: 'chequreTile', label: 'Chequre Tile', required: false, aliases: ['chequretile', 'chequre tile', 'chequre_tile', 'chequre', 'tile'] },
+    72→      { key: 'transportationCharge', label: 'Transportation Charge', required: false, aliases: ['transportationcharge', 'transportation charge', 'transportation_charge', 'transport', 'transport charge'] },
+    73→      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note', 'notes', 'comment', 'comments', 'टिप्पणी'] },
+    74→    ],
+    75→  },
+    76→  stock: {
+    77→    label: 'Stock',
+    78→    fields: [
+    79→      { key: 'date', label: 'Date', required: true, aliases: ['date', 'stock date', 'दिनांक'] },
+    80→      { key: 'cement', label: 'Cement', required: false, aliases: ['cement', 'cement bags'] },
+    81→      { key: 'zigZagGrey80', label: 'Zig Zag Grey 80', required: false, aliases: ['zigzaggrey80', 'zig zag grey 80', 'grey 80'] },
+    82→      { key: 'zigZagRed80', label: 'Zig Zag Red 80', required: false, aliases: ['zigzagred80', 'zig zag red 80', 'red 80'] },
+    83→      { key: 'zigZagYellow80', label: 'Zig Zag Yellow 80', required: false, aliases: ['zigzagyellow80', 'zig zag yellow 80', 'yellow 80'] },
+    84→      { key: 'zigZagGrey60', label: 'Zig Zag Grey 60', required: false, aliases: ['zigzaggrey60', 'zig zag grey 60', 'grey 60'] },
+    85→      { key: 'zigZagRed60', label: 'Zig Zag Red 60', required: false, aliases: ['zigzagred60', 'zig zag red 60', 'red 60'] },
+    86→      { key: 'zigZagYellow60', label: 'Zig Zag Yellow 60', required: false, aliases: ['zigzagyellow60', 'zig zag yellow 60', 'yellow 60'] },
+    87→      { key: 'chequreTile', label: 'Chequre Tile', required: false, aliases: ['chequretile', 'chequre tile', 'chequre'] },
+    88→      { key: 'curveStone', label: 'Curve Stone', required: false, aliases: ['curvestone', 'curve stone', 'curve'] },
+    89→      { key: 'dumbleGrey80', label: 'Dumble Grey 80', required: false, aliases: ['dumblegrey80', 'dumble grey 80'] },
+    90→      { key: 'dumbleRed80', label: 'Dumble Red 80', required: false, aliases: ['dumblered80', 'dumble red 80'] },
+    91→      { key: 'dumbleYellow80', label: 'Dumble Yellow 80', required: false, aliases: ['dumbleyellow80', 'dumble yellow 80'] },
+    92→    ],
+    93→  },
+    94→  dailySell: {
+    95→    label: 'Daily Sell',
+    96→    fields: [
+    97→      { key: 'date', label: 'Date', required: true, aliases: ['date', 'sell date', 'दिनांक'] },
+    98→      { key: 'customerName', label: 'Customer Name', required: true, aliases: ['customer name', 'customer_name', 'customer', 'party', 'name'] },
+    99→      { key: 'address', label: 'Address', required: false, aliases: ['address', 'addr', 'location'] },
+   100→      { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'sell amount', 'राशि'] },
+   101→      { key: 'contactNumber', label: 'Contact Number', required: false, aliases: ['contact', 'mobile', 'phone', 'contact number', 'contact_no'] },
+   102→      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
+   103→    ],
+   104→  },
+   105→  customerPayment: {
+   106→    label: 'Customer Payment',
+   107→    fields: [
+   108→      { key: 'date', label: 'Date', required: true, aliases: ['date', 'payment date', 'दिनांक'] },
+   109→      { key: 'name', label: 'Customer Name', required: true, aliases: ['name', 'customer name', 'customer_name', 'customer', 'party'] },
+   110→      { key: 'address', label: 'Address', required: false, aliases: ['address', 'addr'] },
+   111→      { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'paid', 'राशि'] },
+   112→      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
+   113→    ],
+   114→  },
+   115→  labourPayment: {
+   116→    label: 'Labour Payment',
+   117→    fields: [
+   118→      { key: 'date', label: 'Date', required: true, aliases: ['date', 'payment date', 'दिनांक'] },
+   119→      { key: 'name', label: 'Labour Name', required: true, aliases: ['name', 'labour name', 'labour_name', 'labour', 'worker name', 'worker'] },
+   120→      { key: 'address', label: 'Address', required: false, aliases: ['address', 'addr'] },
+   121→      { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'paid', 'wage', 'राशि'] },
+   122→      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
+   123→    ],
+   124→  },
+   125→  tractorPayment: {
+   126→    label: 'Tractor Payment',
+   127→    fields: [
+   128→      { key: 'date', label: 'Date', required: true, aliases: ['date', 'payment date', 'दिनांक'] },
+   129→      { key: 'vendorName', label: 'Vendor Name', required: true, aliases: ['vendor', 'vendor name', 'vendor_name', 'tractor', 'tractor name', 'party'] },
+   130→      { key: 'quantityTon', label: 'Quantity (Ton)', required: true, aliases: ['quantity', 'qty', 'quantity ton', 'quantity_ton', 'ton', 'tons'] },
+   131→      { key: 'rate', label: 'Rate', required: true, aliases: ['rate', 'price', 'per ton', 'rate per ton'] },
+   132→      { key: 'totalAmount', label: 'Total Amount', required: false, aliases: ['total', 'total amount', 'total_amount', 'amount'] },
+   133→      { key: 'paidAmount', label: 'Paid Amount', required: false, aliases: ['paid', 'paid amount', 'paid_amount'] },
+   134→      { key: 'remainingAmount', label: 'Remaining Amount', required: false, aliases: ['remaining', 'remaining amount', 'remaining_amount', 'balance'] },
+   135→      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
+   136→    ],
+   137→  },
+   138→  dustPurchase: {
+   139→    label: 'Dust Purchase',
+   140→    fields: [
+   141→      { key: 'date', label: 'Date', required: true, aliases: ['date', 'purchase date', 'दिनांक'] },
+   142→      { key: 'vendorName', label: 'Vendor Name', required: true, aliases: ['vendor', 'vendor name', 'vendor_name', 'party', 'supplier'] },
+   143→      { key: 'cementName', label: 'Cement Name', required: false, aliases: ['cement', 'cement name', 'cement_name', 'brand'] },
+   144→      { key: 'quantity', label: 'Quantity', required: true, aliases: ['quantity', 'qty', 'ton'] },
+   145→      { key: 'rate', label: 'Rate', required: true, aliases: ['rate', 'price', 'per ton'] },
+   146→      { key: 'totalAmount', label: 'Total Amount', required: false, aliases: ['total', 'total amount', 'amount'] },
+   147→      { key: 'paidAmount', label: 'Paid Amount', required: false, aliases: ['paid', 'paid amount'] },
+   148→      { key: 'transportationCharge', label: 'Transportation Charge', required: false, aliases: ['transport', 'transportation', 'transport charge'] },
+   149→      { key: 'gst', label: 'GST', required: false, aliases: ['gst', 'gst amount', 'tax'] },
+   150→      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
+   151→    ],
+   152→  },
+   153→  cementPurchase: {
+   154→    label: 'Cement Purchase',
+   155→    fields: [
+   156→      { key: 'date', label: 'Date', required: true, aliases: ['date', 'purchase date', 'दिनांक'] },
+   157→      { key: 'vendorName', label: 'Vendor Name', required: true, aliases: ['vendor', 'vendor name', 'vendor_name', 'party', 'supplier'] },
+   158→      { key: 'itemName', label: 'Item Name', required: false, aliases: ['item', 'item name', 'item_name', 'cement brand', 'brand'] },
+   159→      { key: 'quantity', label: 'Quantity', required: true, aliases: ['quantity', 'qty', 'bags'] },
+   160→      { key: 'rate', label: 'Rate', required: true, aliases: ['rate', 'price', 'per bag'] },
+   161→      { key: 'totalAmount', label: 'Total Amount', required: false, aliases: ['total', 'total amount', 'amount'] },
+   162→      { key: 'paidAmount', label: 'Paid Amount', required: false, aliases: ['paid', 'paid amount'] },
+   163→      { key: 'transportationCharge', label: 'Transportation Charge', required: false, aliases: ['transport', 'transportation'] },
+   164→      { key: 'gst', label: 'GST', required: false, aliases: ['gst', 'tax'] },
+   165→      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
+   166→    ],
+   167→  },
+   168→  hardner: {
+   169→    label: 'Hardner',
+   170→    fields: [
+   171→      { key: 'date', label: 'Date', required: true, aliases: ['date', 'दिनांक'] },
+   172→      { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'राशि'] },
+   173→    ],
+   174→  },
+   175→  electricity: {
+   176→    label: 'Electricity',
+   177→    fields: [
+   178→      { key: 'date', label: 'Date', required: true, aliases: ['date', 'bill date', 'दिनांक'] },
+   179→      { key: 'name', label: 'Name', required: false, aliases: ['name', 'party', 'connection name'] },
+   180→      { key: 'work', label: 'Work', required: false, aliases: ['work', 'description', 'details'] },
+   181→      { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'bill amount', 'राशि'] },
+   182→      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
+   183→    ],
+   184→  },
+   185→  factoryStuff: {
+   186→    label: 'Factory Stuff',
+   187→    fields: [
+   188→      { key: 'date', label: 'Date', required: true, aliases: ['date', 'दिनांक'] },
+   189→      { key: 'itemName', label: 'Item Name', required: true, aliases: ['item', 'item name', 'item_name', 'stuff'] },
+   190→      { key: 'quantity', label: 'Quantity', required: false, aliases: ['quantity', 'qty'] },
+   191→      { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'राशि'] },
+   192→      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
+   193→    ],
+   194→  },
+   195→  orders: {
+   196→    label: 'Orders',
+   197→    fields: [
+   198→      { key: 'customerName', label: 'Customer Name', required: true, aliases: ['customer name', 'customer_name', 'customername', 'cust name', 'cust_name', 'client name', 'client_name', 'party name', 'party_name', 'customer', 'name'] },
+   199→      { key: 'brickType', label: 'Brick Type', required: true, aliases: ['bricktype', 'brick type', 'brick_type', 'type', 'brick', 'product type', 'product_type', 'item', 'item name'] },
+   200→      { key: 'quantity', label: 'Quantity', required: true, aliases: ['quantity', 'qty', 'amount', 'count', 'order qty', 'order_qty'] },
+   201→      { key: 'rate', label: 'Rate', required: true, aliases: ['rate', 'price', 'unit price', 'unit_price', 'per unit', 'per_unit', 'unit rate', 'unit_rate', 'दर'] },
+   202→      { key: 'amount', label: 'Amount', required: false, aliases: ['amount', 'total', 'total amount', 'total_amount', 'value', 'bill amount', 'bill_amount'] },
+   203→      { key: 'deliveryDate', label: 'Delivery Date', required: false, aliases: ['deliverydate', 'delivery date', 'delivery_date', 'due date', 'due_date', 'expected date', 'expected_date', 'delivery', 'डिलीवरी दिनांक'] },
+   204→      { key: 'status', label: 'Status', required: false, aliases: ['status', 'order status', 'order_status', 'state'] },
+   205→    ],
+   206→  },
+   207→  dispatch: {
+   208→    label: 'Dispatch',
+   209→    fields: [
+   210→      { key: 'customerName', label: 'Customer Name', required: true, aliases: ['customer name', 'customer_name', 'customername', 'cust name', 'cust_name', 'client name', 'client_name', 'party name', 'party_name', 'customer', 'name'] },
+   211→      { key: 'brickType', label: 'Brick Type', required: false, aliases: ['bricktype', 'brick type', 'brick_type', 'type', 'brick', 'product type', 'product_type', 'item', 'item name'] },
+   212→      { key: 'quantity', label: 'Quantity', required: true, aliases: ['quantity', 'qty', 'amount', 'count', 'dispatch qty', 'dispatch_qty'] },
+   213→      { key: 'truckNumber', label: 'Truck Number', required: false, aliases: ['trucknumber', 'truck number', 'truck_number', 'truck no', 'truck_no', 'vehicle', 'vehicle number', 'vehicle_number', 'vehicle no', 'vehicle_no', 'ट्रक नंबर'] },
+   214→      { key: 'driverName', label: 'Driver Name', required: false, aliases: ['drivername', 'driver name', 'driver_name', 'driver', 'driver name', 'ड्राइवर'] },
+   215→      { key: 'date', label: 'Date', required: true, aliases: ['date', 'dispatch date', 'dispatch_date', 'date of dispatch', 'दिनांक'] },
+   216→    ],
+   217→  },
+   218→  payments: {
+   219→    label: 'Payments',
+   220→    fields: [
+   221→      { key: 'customerName', label: 'Customer Name', required: true, aliases: ['customer name', 'customer_name', 'customername', 'cust name', 'cust_name', 'client name', 'client_name', 'party name', 'party_name', 'customer', 'name', 'received from', 'received_from'] },
+   222→      { key: 'paymentType', label: 'Payment Type', required: false, aliases: ['paymenttype', 'payment type', 'payment_type', 'mode', 'payment mode', 'payment_mode', 'mode of payment', 'type', 'भुगतान का प्रकार'] },
+   223→      { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'payment amount', 'payment_amount', 'paid', 'received', 'राशि'] },
+   224→      { key: 'date', label: 'Date', required: true, aliases: ['date', 'payment date', 'payment_date', 'date of payment', 'दिनांक'] },
+   225→      { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note', 'notes', 'comment', 'description', 'टिप्पणी'] },
+   226→    ],
+   227→  },
+   228→  expenses: {
+   229→    label: 'Expenses',
+   230→    fields: [
+   231→      { key: 'category', label: 'Category', required: true, aliases: ['category', 'cat', 'type', 'expense type', 'expense_type', 'expense category', 'expense_category', 'head', 'खर्च का प्रकार'] },
+   232→      { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'expense amount', 'expense_amount', 'cost', 'value', 'राशि'] },
+   233→      { key: 'date', label: 'Date', required: true, aliases: ['date', 'expense date', 'expense_date', 'date of expense', 'दिनांक'] },
+   234→      { key: 'description', label: 'Description', required: false, aliases: ['description', 'desc', 'details', 'remark', 'remarks', 'note', 'notes', 'विवरण'] },
+   235→    ],
+   236→  },
+   237→}
+   238→
+   239→// Normalize a string for comparison: lowercase, remove special chars, spaces
+   240→function normalize(s: string): string {
+   241→  return s.toLowerCase().replace(/[^a-z0-9\u0900-\u097F]/g, '')
+   242→}
+   243→
+   244→// Smart auto-detect mapping between Excel columns and module fields
+   245→function autoMapColumns(excelColumns: string[], moduleFields: { key: string; label: string; required: boolean; aliases: string[] }[]): Record<string, string> {
+   246→  const mapping: Record<string, string> = {} // excelColumn -> fieldKey
+   247→  const normalizedExcel = excelColumns.map((col) => ({ original: col, normalized: normalize(col) }))
+   248→
+   249→  for (const field of moduleFields) {
+   250→    let bestMatch = ''
+   251→    let bestScore = 0
+   252→
+   253→    for (const excelCol of normalizedExcel) {
+   254→      // Check exact match with key
+   255→      if (excelCol.normalized === normalize(field.key)) {
+   256→        bestMatch = excelCol.original
+   257→        bestScore = 100
+   258→        break
+   259→      }
+   260→
+   261→      // Check aliases
+   262→      for (const alias of field.aliases) {
+   263→        const normAlias = normalize(alias)
+   264→        if (excelCol.normalized === normAlias) {
+   265→          if (100 > bestScore) {
+   266→            bestMatch = excelCol.original
+   267→            bestScore = 100
+   268→          }
+   269→          break
+   270→        }
+   271→      }
+   272→
+   273→      if (bestScore >= 100) break
+   274→
+   275→      // Fuzzy match: check if alias is contained in column name or vice versa
+   276→      for (const alias of field.aliases) {
+   277→        const normAlias = normalize(alias)
+   278→        if (normAlias.length > 2 && (excelCol.normalized.includes(normAlias) || normAlias.includes(excelCol.normalized))) {
+   279→          const score = Math.min(normAlias.length, excelCol.normalized.length) / Math.max(normAlias.length, excelCol.normalized.length) * 80
+   280→          if (score > bestScore) {
+   281→            bestMatch = excelCol.original
+   282→            bestScore = score
+   283→          }
+   284→        }
+   285→      }
+   286→    }
+   287→
+   288→    if (bestMatch && bestScore >= 50) {
+   289→      mapping[bestMatch] = field.key
+   290→    }
+   291→  }
+   292→
+   293→  return mapping
+   294→}
+   295→
+   296→// Auto-detect the module from Excel column headers
+   297→function autoDetectModule(columns: string[]): string | null {
+   298→  const normalized = columns.map(normalize)
+   299→  const scores: Record<string, number> = {}
+   300→
+   301→  for (const [moduleKey, template] of Object.entries(moduleTemplates)) {
+   302→    scores[moduleKey] = 0
+   303→    for (const field of template.fields) {
+   304→      for (const alias of field.aliases) {
+   305→        if (normalized.some((col) => col === normalize(alias) || (normalize(alias).length > 3 && col.includes(normalize(alias))))) {
+   306→          scores[moduleKey] += field.required ? 3 : 1
+   307→        }
+   308→      }
+   309→    }
+   310→  }
+   311→
+   312→  const bestModule = Object.entries(scores).sort((a, b) => b[1] - a[1])[0]
+   313→  return bestModule && bestModule[1] >= 3 ? bestModule[0] : null
+   314→}
+   315→
+   316→// Transform data using mapping, also handle customer name -> ID resolution
+   317→function transformRow(
+   318→  row: Record<string, unknown>,
+   319→  mapping: Record<string, string>,
+   320→  customers?: { id: string; name: string }[]
+   321→): Record<string, unknown> {
+   322→  const result: Record<string, unknown> = {}
+   323→
+   324→  for (const [excelCol, fieldKey] of Object.entries(mapping)) {
+   325→    let value = row[excelCol]
+   326→
+   327→    // Handle customer name -> ID resolution
+   328→    if ((fieldKey === 'customerName') && customers && customers.length > 0) {
+   329→      const nameStr = String(value || '').trim().toLowerCase()
+   330→      const matched = customers.find((c) => c.name.toLowerCase() === nameStr)
+   331→      if (matched) {
+   332→        result['customerId'] = matched.id
+   333→      } else {
+   334→        result['customerId'] = String(value || '') // fallback: keep as-is for error
+   335→      }
+   336→      continue
+   337→    }
+   338→
+   339→    // Handle numeric fields
+   340→    if ([
+   341→      'quantityProduced', 'quantity', 'creditLimit', 'amount', 'rate',
+   342→      'zigZagWhite80', 'zigZagRed80', 'zigZagYellow80',
+   343→      'zigZagWhite60', 'zigZagRed60', 'zigZagYellow60',
+   344→      'curveStone', 'chequreTile', 'transportationCharge',
+   345→      'cement', 'zigZagGrey80', 'zigZagGrey60',
+   346→      'dumbleGrey80', 'dumbleRed80', 'dumbleYellow80',
+   347→      'quantityTon', 'totalAmount', 'paidAmount', 'remainingAmount',
+   348→      'gst',
+   349→    ].includes(fieldKey)) {
+   350→      const numVal = Number(String(value || '').replace(/[^0-9.-]/g, '') || 0)
+   351→      result[fieldKey] = isNaN(numVal) ? 0 : numVal
+   352→      continue
+   353→    }
+   354→
+   355→    // Handle date fields - try to parse various formats
+   356→    if (['date', 'deliveryDate'].includes(fieldKey)) {
+   357→      result[fieldKey] = parseDate(String(value || ''))
+   358→      continue
+   359→    }
+   360→
+   361→    // Handle shift field - normalize
+   362→    if (fieldKey === 'shift') {
+   363→      const shiftStr = String(value || 'Morning').trim()
+   364→      const lower = shiftStr.toLowerCase()
+   365→      if (lower.includes('morn') || lower.includes('सुबह') || lower === '1' || lower === 'morning') {
+   366→        result[fieldKey] = 'Morning'
+   367→      } else if (lower.includes('eve') || lower.includes('शाम') || lower === '2' || lower === 'evening') {
+   368→        result[fieldKey] = 'Evening'
+   369→      } else if (lower.includes('night') || lower.includes('रात') || lower === '3' || lower === 'night') {
+   370→        result[fieldKey] = 'Night'
+   371→      } else {
+   372→        result[fieldKey] = shiftStr
+   373→      }
+   374→      continue
+   375→    }
+   376→
+   377→    // Handle payment type
+   378→    if (fieldKey === 'paymentType') {
+   379→      const ptStr = String(value || 'Cash').trim()
+   380→      const lower = ptStr.toLowerCase()
+   381→      if (lower.includes('cash') || lower.includes('नकद')) result[fieldKey] = 'Cash'
+   382→      else if (lower.includes('upi') || lower.includes('online')) result[fieldKey] = 'UPI'
+   383→      else if (lower.includes('bank') || lower.includes('transfer') || lower.includes('neft') || lower.includes('rtgs')) result[fieldKey] = 'Bank Transfer'
+   384→      else result[fieldKey] = ptStr
+   385→      continue
+   386→    }
+   387→
+   388→    // Handle expense category
+   389→    if (fieldKey === 'category') {
+   390→      const catStr = String(value || '').trim()
+   391→      const lower = catStr.toLowerCase()
+   392→      if (lower.includes('labour') || lower.includes('labor') || lower.includes('मजदूर') || lower.includes('wage')) result[fieldKey] = 'Labour'
+   393→      else if (lower.includes('coal') || lower.includes('कोयला')) result[fieldKey] = 'Coal'
+   394→      else if (lower.includes('diesel') || lower.includes('डीज़ल') || lower.includes('fuel')) result[fieldKey] = 'Diesel'
+   395→      else if (lower.includes('maint') || lower.includes('रखरखाव') || lower.includes('repair')) result[fieldKey] = 'Maintenance'
+   396→      else if (lower.includes('elect') || lower.includes('बिजली') || lower.includes('power')) result[fieldKey] = 'Electricity'
+   397→      else result[fieldKey] = catStr
+   398→      continue
+   399→    }
+   400→
+   401→    // Handle status
+   402→    if (fieldKey === 'status') {
+   403→      const stStr = String(value || 'Pending').trim()
+   404→      const lower = stStr.toLowerCase()
+   405→      if (lower.includes('pend') || lower.includes('लंबित')) result[fieldKey] = 'Pending'
+   406→      else if (lower.includes('process') || lower.includes('चल')) result[fieldKey] = 'Processing'
+   407→      else if (lower.includes('deliver') || lower.includes('भेजा') || lower.includes('complete')) result[fieldKey] = 'Delivered'
+   408→      else if (lower.includes('cancel') || lower.includes('रद्द')) result[fieldKey] = 'Cancelled'
+   409→      else result[fieldKey] = stStr
+   410→      continue
+   411→    }
+   412→
+   413→    result[fieldKey] = String(value || '')
+   414→  }
+   415→
+   416→  // For orders/dispatch: calculate amount if not mapped
+   417→  if (mapping) {
+   418→    const targetModule = Object.values(mapping)
+   419→    if (targetModule.includes('rate') && targetModule.includes('quantity') && !targetModule.includes('amount')) {
+   420→      const qty = Number(result.quantity || 0)
+   421→      const rate = Number(result.rate || 0)
+   422→      result.amount = qty * rate
+   423→    }
+   424→  }
+   425→
+   426→  return result
+   427→}
+   428→
+   429→// Parse various date formats to YYYY-MM-DD
+   430→function parseDate(value: string): string {
+   431→  if (!value || value.trim() === '') return new Date().toISOString().split('T')[0]
+   432→
+   433→  const trimmed = value.trim()
+   434→
+   435→  // Already in YYYY-MM-DD format
+   436→  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+   437→
+   438→  // DD-MM-YYYY or DD/MM/YYYY
+   439→  const dmyMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
+   440→  if (dmyMatch) {
+   441→    const [, d, m, y] = dmyMatch
+   442→    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+   443→  }
+   444→
+   445→  // DD-MM-YY or DD/MM/YY
+   446→  const dmyShortMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2})$/)
+   447→  if (dmyShortMatch) {
+   448→    const [, d, m, y] = dmyShortMatch
+   449→    return `20${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+   450→  }
+   451→
+   452→  // MM/DD/YYYY (US format) - only if first number > 12
+   453→  const mdyMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
+   454→  if (mdyMatch) {
+   455→    const [, m, d, y] = mdyMatch
+   456→    if (Number(m) > 12) {
+   457→      return `${y}-${d.padStart(2, '0')}-${m.padStart(2, '0')}`
+   458→    }
+   459→    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+   460→  }
+   461→
+   462→  // Try native Date parsing as fallback
+   463→  try {
+   464→    const date = new Date(trimmed)
+   465→    if (!isNaN(date.getTime())) {
+   466→      return date.toISOString().split('T')[0]
+   467→    }
+   468→  } catch {}
+   469→
+   470→  return trimmed
+   471→}
+   472→
+   473→export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelImportProps) {
+   474→  const [rawData, setRawData] = useState<Record<string, unknown>[]>([])
+   475→  const [transformedData, setTransformedData] = useState<Record<string, unknown>[]>([])
+   476→  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({})
+   477→  const [excelColumns, setExcelColumns] = useState<string[]>([])
+   478→  const [importing, setImporting] = useState(false)
+   479→  const [result, setResult] = useState<{ imported: number; total: number; duplicatesSkipped?: number; errors?: string[] } | null>(null)
+   480→  const [fileName, setFileName] = useState('')
+   481→  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([])
+   482→  const fileInputRef = useRef<HTMLInputElement>(null)
+   483→  const template = moduleTemplates[module]
+   484→
+   485→  // Fetch customers for name->ID resolution
+   486→  useEffect(() => {
+   487→    if (open && ['orders', 'dispatch', 'payments'].includes(module)) {
+   488→      api.getCustomers().then((data) => {
+   489→        setCustomers((data.customers as { id: string; name: string }[]).map((c) => ({ id: c.id, name: c.name })))
+   490→      }).catch(() => {})
+   491→    }
+   492→  }, [open, module])
+   493→
+   494→  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+   495→    const file = e.target.files?.[0]
+   496→    if (!file) return
+   497→
+   498→    setFileName(file.name)
+   499→    setResult(null)
+   500→
+   501→    try {
+   502→      const XLSX = await import('xlsx')
+   503→      const arrayBuffer = await file.arrayBuffer()
+   504→      const workbook = XLSX.read(arrayBuffer)
+   505→      const sheetName = workbook.SheetNames[0]
+   506→      const worksheet = workbook.Sheets[sheetName]
+   507→      const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
+   508→
+   509→      if (jsonData.length === 0) {
+   510→        toast({ title: 'Empty file', description: 'No data found in the uploaded file', variant: 'destructive' })
+   511→        return
+   512→      }
+   513→
+   514→      const data = jsonData as Record<string, unknown>[]
+   515→      const columns = Object.keys(data[0])
+   516→
+   517→      setRawData(data)
+   518→      setExcelColumns(columns)
+   519→
+   520→      // Auto-detect column mapping
+   521→      const autoMapping = autoMapColumns(columns, template.fields)
+   522→      setColumnMapping(autoMapping)
+   523→
+   524→      // Apply transformation immediately
+   525→      const transformed = data.map((row) => transformRow(row, autoMapping, customers))
+   526→      setTransformedData(transformed)
+   527→
+   528→      const mappedCount = Object.keys(autoMapping).length
+   529→      const totalFields = template.fields.length
+   530→      toast({
+   531→        title: 'File parsed successfully',
+   532→        description: `Found ${data.length} rows. Auto-mapped ${mappedCount} of ${totalFields} fields. Review and adjust if needed.`,
+   533→      })
+   534→    } catch (err) {
+   535→      toast({ title: 'Parse error', description: 'Could not read the Excel file. Make sure it is a valid .xlsx or .csv file.', variant: 'destructive' })
+   536→    }
+   537→  }
+   538→
+   539→  const handleMappingChange = (excelCol: string, fieldKey: string) => {
+   540→    const newMapping = { ...columnMapping }
+   541→
+   542→    // Remove old mapping for this excel column
+   543→    delete newMapping[excelCol]
+   544→
+   545→    // Remove any existing mapping to the same field key
+   546→    for (const [col, fKey] of Object.entries(newMapping)) {
+   547→      if (fKey === fieldKey) {
+   548→        delete newMapping[col]
+   549→      }
+   550→    }
+   551→
+   552→    // Set new mapping
+   553→    if (fieldKey && fieldKey !== 'skip') {
+   554→      newMapping[excelCol] = fieldKey
+   555→    }
+   556→
+   557→    setColumnMapping(newMapping)
+   558→
+   559→    // Re-transform data
+   560→    const transformed = rawData.map((row) => transformRow(row, newMapping, customers))
+   561→    setTransformedData(transformed)
+   562→  }
+   563→
+   564→  const handleImport = async () => {
+   565→    if (transformedData.length === 0) return
+   566→    setImporting(true)
+   567→    try {
+   568→      const res = await api.importData(module, transformedData)
+   569→      const skipped = res.total - res.imported
+   570→      const dups = (res as { duplicatesSkipped?: number }).duplicatesSkipped || 0
+   571→      setResult({ imported: res.imported, total: res.total, duplicatesSkipped: dups, errors: res.errors })
+   572→
+   573→      if (res.imported > 0 && skipped === 0) {
+   574→        // Full success — every row imported
+   575→        toast({
+   576→          title: 'Import successful',
+   577→          description: `All ${res.imported} row(s) imported. List refreshed.`,
+   578→        })
+   579→        onSuccess()
+   580→        // Auto-close after short delay so user sees the green banner
+   581→        setTimeout(() => { handleClose() }, 1500)
+   582→      } else if (res.imported > 0 && skipped > 0) {
+   583→        // Partial success — some imported, some skipped
+   584→        const dupText = dups > 0 ? ` (${dups} duplicate${dups !== 1 ? 's' : ''} skipped)` : ''
+   585→        toast({
+   586→          title: 'Partial import',
+   587→          description: `${res.imported} imported, ${skipped} skipped${dupText}. List refreshed.`,
+   588→        })
+   589→        onSuccess()
+   590→        // Keep dialog open longer so user can see the error list, then close
+   591→        setTimeout(() => { handleClose() }, 3500)
+   592→      } else {
+   593→        // Zero imported — DON'T auto-close. Force user to see what went wrong.
+   594→        const allDuplicates = dups > 0 && dups === skipped
+   595→        const reason = allDuplicates
+   596→          ? `All ${skipped} row(s) were duplicates — they already exist in records. Nothing new to import.`
+   597→          : res.errors?.length
+   598→            ? `${res.errors.length} row(s) skipped. Reasons are listed below.`
+   599→            : skipped > 0
+   600→              ? `All ${skipped} row(s) were skipped.`
+   601→              : 'No rows were imported. Please check your file and column mapping.'
+   602→        toast({
+   603→          title: allDuplicates ? 'All rows were duplicates' : 'No rows imported',
+   604→          description: reason,
+   605→          variant: allDuplicates ? 'default' : 'destructive',
+   606→        })
+   607→        // Do NOT call onSuccess — nothing changed, no need to refresh.
+   608→        // Do NOT auto-close — user needs to read the errors below.
+   609→      }
+   610→    } catch (err) {
+   611→      toast({
+   612→        title: 'Import failed',
+   613→        description: err instanceof Error ? err.message : 'Unknown error',
+   614→        variant: 'destructive',
+   615→      })
+   616→    } finally {
+   617→      setImporting(false)
+   618→    }
+   619→  }
+   620→
+   621→  const downloadTemplate = () => {
+   622→    const headers = template.fields.map((f) => f.label)
+   623→    const csvContent = [headers.join(','), ''].join('\n')
+   624→    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+   625→    const url = URL.createObjectURL(blob)
+   626→    const a = document.createElement('a')
+   627→    a.href = url
+   628→    a.download = `${module}_import_template.csv`
+   629→    a.click()
+   630→    URL.revokeObjectURL(url)
+   631→    toast({ title: 'Template downloaded', description: 'Fill in your data and upload the file' })
+   632→  }
+   633→
+   634→  const handleClose = () => {
+   635→    setRawData([])
+   636→    setTransformedData([])
+   637→    setColumnMapping({})
+   638→    setExcelColumns([])
+   639→    setResult(null)
+   640→    setFileName('')
+   641→    if (fileInputRef.current) fileInputRef.current.value = ''
+   642→    onClose()
+   643→  }
+   644→
+   645→  const mappedFieldKeys = new Set(Object.values(columnMapping))
+   646→  const unmappedRequired = template.fields.filter((f) => f.required && !mappedFieldKeys.has(f.key))
+   647→
+   648→  return (
+   649→    <Dialog open={open} onOpenChange={handleClose}>
+   650→      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+   651→        <DialogHeader>
+   652→          <DialogTitle className="flex items-center gap-2">
+   653→            <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
+   654→            Import {template.label} from Excel
+   655→          </DialogTitle>
+   656→          <DialogDescription>
+   657→            Upload an Excel or CSV file. Columns are auto-detected and mapped — review and adjust before importing.
+   658→          </DialogDescription>
+   659→        </DialogHeader>
+   660→
+   661→        <div className="space-y-4 flex-1 overflow-auto">
+   662→          {/* Step 1: Download template */}
+   663→          <div className="space-y-2">
+   664→            <h4 className="font-medium text-sm flex items-center gap-2">
+   665→              <span className="w-6 h-6 bg-emerald-600 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
+   666→              Template & Format
+   667→            </h4>
+   668→            <div className="flex flex-wrap gap-2">
+   669→              {template.fields.map((field) => (
+   670→                <Badge key={field.key} variant={field.required ? 'default' : 'outline'} className="text-xs">
+   671→                  {field.label} {field.required && '*'}
+   672→                </Badge>
+   673→              ))}
+   674→            </div>
+   675→            <Button variant="outline" size="sm" onClick={downloadTemplate}>
+   676→              <Download className="h-4 w-4 mr-2" />
+   677→              Download CSV Template
+   678→            </Button>
+   679→          </div>
+   680→
+   681→          {/* Step 2: Upload file */}
+   682→          <div className="space-y-2">
+   683→            <h4 className="font-medium text-sm flex items-center gap-2">
+   684→              <span className="w-6 h-6 bg-emerald-600 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
+   685→              Upload Excel/CSV File
+   686→            </h4>
+   687→            <div
+   688→              className="border-2 border-dashed rounded-lg p-6 text-center hover:border-emerald-400 transition-colors cursor-pointer"
+   689→              onClick={() => fileInputRef.current?.click()}
+   690→            >
+   691→              <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+   692→              <p className="text-sm text-muted-foreground">
+   693→                {fileName ? fileName : 'Click to upload .xlsx, .xls, or .csv file'}
+   694→              </p>
+   695→              <input
+   696→                ref={fileInputRef}
+   697→                type="file"
+   698→                accept=".xlsx,.xls,.csv"
+   699→                className="hidden"
+   700→                onChange={handleFileUpload}
+   701→              />
+   702→            </div>
+   703→          </div>
+   704→
+   705→          {/* Step 3: Column Mapping */}
+   706→          {excelColumns.length > 0 && (
+   707→            <div className="space-y-3">
+   708→              <h4 className="font-medium text-sm flex items-center gap-2">
+   709→                <span className="w-6 h-6 bg-emerald-600 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
+   710→                <Sparkles className="h-4 w-4 text-amber-500" />
+   711→                Column Mapping (Auto-detected)
+   712→              </h4>
+   713→
+   714→              {unmappedRequired.length > 0 && (
+   715→                <Alert variant="destructive" className="py-2">
+   716→                  <AlertCircle className="h-4 w-4" />
+   717→                  <AlertDescription className="text-xs">
+   718→                    Required fields not mapped: {unmappedRequired.map((f) => f.label).join(', ')}
+   719→                  </AlertDescription>
+   720→                </Alert>
+   721→              )}
+   722→
+   723→              <div className="border rounded-lg overflow-hidden">
+   724→                <Table>
+   725→                  <TableHeader>
+   726→                    <TableRow>
+   727→                      <TableHead className="w-1/3">Excel Column</TableHead>
+   728→                      <TableHead className="w-10 text-center"></TableHead>
+   729→                      <TableHead className="w-1/3">Maps To</TableHead>
+   730→                      <TableHead className="w-1/6">Status</TableHead>
+   731→                    </TableRow>
+   732→                  </TableHeader>
+   733→                  <TableBody>
+   734→                    {excelColumns.map((col) => {
+   735→                      const mappedField = columnMapping[col]
+   736→                      const field = mappedField ? template.fields.find((f) => f.key === mappedField) : null
+   737→                      return (
+   738→                        <TableRow key={col}>
+   739→                          <TableCell className="font-mono text-xs">{col}</TableCell>
+   740→                          <TableCell className="text-center"><ArrowRight className="h-4 w-4 text-muted-foreground mx-auto" /></TableCell>
+   741→                          <TableCell>
+   742→                            <Select
+   743→                              value={mappedField || 'skip'}
+   744→                              onValueChange={(val) => handleMappingChange(col, val)}
+   745→                            >
+   746→                              <SelectTrigger className="w-full text-xs">
+   747→                                <SelectValue placeholder="Select field..." />
+   748→                              </SelectTrigger>
+   749→                              <SelectContent>
+   750→                                <SelectItem value="skip">-- Skip --</SelectItem>
+   751→                                {template.fields.map((f) => (
+   752→                                  <SelectItem key={f.key} value={f.key}>
+   753→                                    {f.label} {f.required && '*'}
+   754→                                  </SelectItem>
+   755→                                ))}
+   756→                              </SelectContent>
+   757→                            </Select>
+   758→                          </TableCell>
+   759→                          <TableCell>
+   760→                            {field ? (
+   761→                              <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800">
+   762→                                <CheckCircle2 className="h-3 w-3 mr-1" /> Mapped
+   763→                              </Badge>
+   764→                            ) : (
+   765→                              <Badge variant="outline" className="text-xs text-muted-foreground">
+   766→                                Skipped
+   767→                              </Badge>
+   768→                            )}
+   769→                          </TableCell>
+   770→                        </TableRow>
+   771→                      )
+   772→                    })}
+   773→                  </TableBody>
+   774→                </Table>
+   775→              </div>
+   776→            </div>
+   777→          )}
+   778→
+   779→          {/* Step 4: Preview transformed data */}
+   780→          {transformedData.length > 0 && (
+   781→            <div className="space-y-2">
+   782→              <h4 className="font-medium text-sm flex items-center gap-2">
+   783→                <span className="w-6 h-6 bg-emerald-600 text-white rounded-full flex items-center justify-center text-xs font-bold">4</span>
+   784→                Preview ({transformedData.length} rows)
+   785→              </h4>
+   786→              <ScrollArea className="max-h-56">
+   787→                <div className="overflow-x-auto">
+   788→                  <Table>
+   789→                    <TableHeader>
+   790→                      <TableRow>
+   791→                        <TableHead className="text-xs w-8">#</TableHead>
+   792→                        {template.fields
+   793→                          .filter((f) => mappedFieldKeys.has(f.key))
+   794→                          .map((f) => (
+   795→                            <TableHead key={f.key} className="text-xs whitespace-nowrap">{f.label}</TableHead>
+   796→                          ))}
+   797→                      </TableRow>
+   798→                    </TableHeader>
+   799→                    <TableBody>
+   800→                      {transformedData.slice(0, 10).map((row, i) => (
+   801→                        <TableRow key={i}>
+   802→                          <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
+   803→                          {template.fields
+   804→                            .filter((f) => mappedFieldKeys.has(f.key))
+   805→                            .map((f) => (
+   806→                              <TableCell key={f.key} className="text-xs whitespace-nowrap">
+   807→                                {String(row[f.key] ?? '')}
+   808→                              </TableCell>
+   809→                            ))}
+   810→                        </TableRow>
+   811→                      ))}
+   812→                      {transformedData.length > 10 && (
+   813→                        <TableRow>
+   814→                          <TableCell colSpan={template.fields.filter((f) => mappedFieldKeys.has(f.key)).length + 1} className="text-xs text-center text-muted-foreground">
+   815→                            ... and {transformedData.length - 10} more rows
+   816→                          </TableCell>
+   817→                        </TableRow>
+   818→                      )}
+   819→                    </TableBody>
+   820→                  </Table>
+   821→                </div>
+   822→              </ScrollArea>
+   823→            </div>
+   824→          )}
+   825→
+   826→          {/* Import result */}
+   827→          {result && (
+   828→            <Alert variant={result.errors && result.errors.length > 0 ? 'destructive' : 'default'}>
+   829→              <div className="flex items-start gap-2">
+   830→                {result.errors && result.errors.length > 0 ? (
+   831→                  <AlertCircle className="h-4 w-4 mt-0.5" />
+   832→                ) : (
+   833→                  <CheckCircle2 className="h-4 w-4 mt-0.5" />
+   834→                )}
+   835→                <AlertDescription>
+   836→                  <p className="font-medium">
+   837→                    Imported {result.imported} of {result.total} rows successfully
+   838→                    {result.duplicatesSkipped && result.duplicatesSkipped > 0 ? (
+   839→                      <span className="text-amber-700 dark:text-amber-400 font-normal">
+   840→                        {' '}— {result.duplicatesSkipped} duplicate{result.duplicatesSkipped !== 1 ? 's' : ''} skipped
+   841→                      </span>
+   842→                    ) : null}
+   843→                  </p>
+   844→                  {result.errors && result.errors.length > 0 && (
+   845→                    <ScrollArea className="max-h-32 mt-2">
+   846→                      <ul className="text-xs space-y-1">
+   847→                        {result.errors.slice(0, 20).map((err, i) => (
+   848→                          <li key={i} className="text-destructive">{err}</li>
+   849→                        ))}
+   850→                        {result.errors.length > 20 && (
+   851→                          <li className="text-muted-foreground">... and {result.errors.length - 20} more errors</li>
+   852→                        )}
+   853→                      </ul>
+   854→                    </ScrollArea>
+   855→                  )}
+   856→                </AlertDescription>
+   857→              </div>
+   858→            </Alert>
+   859→          )}
+   860→        </div>
+   861→
+   862→        <DialogFooter>
+   863→          <Button variant="outline" onClick={handleClose}>Cancel</Button>
+   864→          <Button
+   865→            onClick={handleImport}
+   866→            disabled={transformedData.length === 0 || importing || unmappedRequired.length > 0}
+   867→            className="bg-emerald-600 hover:bg-emerald-700"
+   868→          >
+   869→            {importing ? (
+   870→              <>
+   871→                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+   872→                Importing...
+   873→              </>
+   874→            ) : (
+   875→              <>
+   876→                <Upload className="h-4 w-4 mr-2" />
+   877→                Import {transformedData.length} Rows
+   878→              </>
+   879→            )}
+   880→          </Button>
+   881→        </DialogFooter>
+   882→      </DialogContent>
+   883→    </Dialog>
+   884→  )
+   885→}
+   886→

@@ -1,0 +1,1055 @@
+     1→'use client'
+     2→
+     3→import * as React from 'react'
+     4→import { api } from '@/lib/api'
+     5→import { toast } from '@/hooks/use-toast'
+     6→import { Button } from '@/components/ui/button'
+     7→import { Input } from '@/components/ui/input'
+     8→import { Label } from '@/components/ui/label'
+     9→import { Textarea } from '@/components/ui/textarea'
+    10→import { Badge } from '@/components/ui/badge'
+    11→import { Skeleton } from '@/components/ui/skeleton'
+    12→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    13→import {
+    14→  Table,
+    15→  TableBody,
+    16→  TableCell,
+    17→  TableHead,
+    18→  TableHeader,
+    19→  TableRow,
+    20→} from '@/components/ui/table'
+    21→import { ScrollableTable } from '@/components/ui/scrollable-table'
+    22→import {
+    23→  Dialog,
+    24→  DialogContent,
+    25→  DialogDescription,
+    26→  DialogFooter,
+    27→  DialogHeader,
+    28→  DialogTitle,
+    29→} from '@/components/ui/dialog'
+    30→import {
+    31→  AlertDialog,
+    32→  AlertDialogAction,
+    33→  AlertDialogCancel,
+    34→  AlertDialogContent,
+    35→  AlertDialogDescription,
+    36→  AlertDialogFooter,
+    37→  AlertDialogHeader,
+    38→  AlertDialogTitle,
+    39→} from '@/components/ui/alert-dialog'
+    40→import {
+    41→  Users,
+    42→  Plus,
+    43→  Search,
+    44→  Pencil,
+    45→  Trash2,
+    46→  Trash,
+    47→  BookOpen,
+    48→  Loader2,
+    49→  IndianRupee,
+    50→  Upload,
+    51→} from 'lucide-react'
+    52→import ExcelImport from '@/components/erp/excel-import'
+    53→import { CustomerHistoryPage } from '@/components/erp/customer-history-page'
+    54→import { AiFillButton } from '@/components/ui/ai-fill-button'
+    55→import { FieldVoiceInput } from '@/components/ui/field-voice-input'
+    56→import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
+    57→import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
+    58→import { Checkbox } from '@/components/ui/checkbox'
+    59→
+    60→// ── Types ───────────────────────────────────────────────────────────────────
+    61→
+    62→interface Customer {
+    63→  id: string
+    64→  name: string
+    65→  mobile: string
+    66→  gstNumber: string
+    67→  address: string
+    68→  creditLimit: number
+    69→  createdAt: string
+    70→  updatedAt: string
+    71→}
+    72→
+    73→interface Payment {
+    74→  id: string
+    75→  customerId: string
+    76→  paymentType: string
+    77→  amount: number
+    78→  date: string
+    79→  remarks: string
+    80→  customer: { name: string }
+    81→}
+    82→
+    83→interface CustomerFormData {
+    84→  name: string
+    85→  mobile: string
+    86→  gstNumber: string
+    87→  address: string
+    88→  creditLimit: number | string
+    89→}
+    90→
+    91→// ── Helpers ─────────────────────────────────────────────────────────────────
+    92→
+    93→const formatCurrency = (amount: number): string =>
+    94→  new Intl.NumberFormat('en-IN', {
+    95→    style: 'currency',
+    96→    currency: 'INR',
+    97→    minimumFractionDigits: 0,
+    98→    maximumFractionDigits: 2,
+    99→  }).format(amount)
+   100→
+   101→const formatDate = (dateStr: string): string =>
+   102→  new Date(dateStr).toLocaleDateString('en-IN', {
+   103→    day: '2-digit',
+   104→    month: 'short',
+   105→    year: 'numeric',
+   106→  })
+   107→
+   108→const emptyForm: CustomerFormData = {
+   109→  name: '',
+   110→  mobile: '',
+   111→  gstNumber: '',
+   112→  address: '',
+   113→  creditLimit: '',
+   114→}
+   115→
+   116→// ── Component ───────────────────────────────────────────────────────────────
+   117→
+   118→export function CustomerModule() {
+   119→  // State
+   120→  const [customers, setCustomers] = React.useState<Customer[]>([])
+   121→  const [totalCount, setTotalCount] = React.useState(0)
+   122→  const [loading, setLoading] = React.useState(true)
+   123→  const [search, setSearch] = React.useState('')
+   124→  const [debouncedSearch, setDebouncedSearch] = React.useState('')
+   125→
+   126→  // Dialog states
+   127→  const [formOpen, setFormOpen] = React.useState(false)
+   128→  const [editingCustomer, setEditingCustomer] = React.useState<Customer | null>(null)
+   129→  const [formData, setFormData] = React.useState<CustomerFormData>(emptyForm)
+   130→  const [formSubmitting, setFormSubmitting] = React.useState(false)
+   131→
+   132→  // Excel import
+   133→  const [importOpen, setImportOpen] = React.useState(false)
+   134→
+   135→  // Delete confirmation
+   136→  const [deleteTarget, setDeleteTarget] = React.useState<Customer | null>(null)
+   137→  const [deleting, setDeleting] = React.useState(false)
+   138→
+   139→  // ── Multi-select state ──────────────────────────────────────────────────
+   140→  // Tracks which customer rows the user has ticked. The "Delete Selected"
+   141→  // button appears in the header whenever this set is non-empty. We use a
+   142→  // Set for O(1) toggle/lookup, then convert to an array when sending to
+   143→  // the API. Same pattern as production / daily-sell modules.
+   144→  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+   145→  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false)
+   146→  const [bulkDeleting, setBulkDeleting] = React.useState(false)
+   147→
+   148→  const toggleSelect = (id: string) => {
+   149→    setSelectedIds((prev) => {
+   150→      const next = new Set(prev)
+   151→      if (next.has(id)) next.delete(id)
+   152→      else next.add(id)
+   153→      return next
+   154→    })
+   155→  }
+   156→
+   157→  const toggleSelectAll = () => {
+   158→    setSelectedIds((prev) => {
+   159→      if (prev.size === customers.length && customers.length > 0) {
+   160→        return new Set()
+   161→      }
+   162→      return new Set(customers.map((c) => c.id))
+   163→    })
+   164→  }
+   165→
+   166→  const clearSelection = () => setSelectedIds(new Set())
+   167→
+   168→  const handleBulkDelete = async () => {
+   169→    const ids = Array.from(selectedIds)
+   170→    if (ids.length === 0) return
+   171→    setBulkDeleting(true)
+   172→    try {
+   173→      const res = await api.bulkDeleteCustomers(ids)
+   174→      toast({
+   175→        title: 'Success',
+   176→        description: `${res.deletedCount} of ${ids.length} customer${res.deletedCount === 1 ? '' : 's'} deleted`,
+   177→      })
+   178→      setBulkDeleteOpen(false)
+   179→      clearSelection()
+   180→      fetchCustomers()
+   181→    } catch (err) {
+   182→      toast({
+   183→        title: 'Error',
+   184→        description: err instanceof Error ? err.message : 'Failed to delete selected customers',
+   185→        variant: 'destructive',
+   186→      })
+   187→    } finally {
+   188→      setBulkDeleting(false)
+   189→    }
+   190→  }
+   191→
+   192→  // Ledger
+   193→  const [ledgerCustomer, setLedgerCustomer] = React.useState<Customer | null>(null)
+   194→  const [ledgerPayments, setLedgerPayments] = React.useState<Payment[]>([])
+   195→  const [ledgerLoading, setLedgerLoading] = React.useState(false)
+   196→
+   197→  // Full customer history PAGE (full-screen, not modal)
+   198→  const istoryCustomerId, setHistoryCustomerId] = React.useState<string | null>(null)
+   199→
+   200→  // ── Debounced search ────────────────────────────────────────────────────
+   201→  React.useEffect(() => {
+   202→    const timer = setTimeout(() => {
+   203→      setDebouncedSearch(search)
+   204→    }, 300)
+   205→    return () => clearTimeout(timer)
+   206→  }, [search])
+   207→
+   208→  // ── Fetch customers ─────────────────────────────────────────────────────
+   209→  const fetchCustomers = React.useCallback(async () => {
+   210→    setLoading(true)
+   211→    try {
+   212→      const res = await api.getCustomers(debouncedSearch || undefined)
+   213→      setCustomers(res.customers as Customer[])
+   214→      // Track total count separately so the badge can show "X of Y" when
+   215→      // pagination is in effect (the API now returns `total` alongside
+   216→      // the page slice). If `total` is missing (older deployments), fall
+   217→      // back to the slice length.
+   218→      const r = res as { total?: number; customers: Customer[] }
+   219→      setTotalCount(r.total ?? r.customers.length)
+   220→    } catch (err) {
+   221→      toast({
+   222→        title: 'Error',
+   223→        description: err instanceof Error ? err.message : 'Failed to fetch customers',
+   224→        variant: 'destructive',
+   225→      })
+   226→    } finally {
+   227→      setLoading(false)
+   228→    }
+   229→  }, [debouncedSearch])
+   230→
+   231→  React.useEffect(() => {
+   232→    fetchCustomers()
+   233→  }, [fetchCustomers])
+   234→
+   235→  // ── Form handlers ───────────────────────────────────────────────────────
+   236→  const openAddDialog = () => {
+   237→    setEditingCustomer(null)
+   238→    const pending = consumePendingAiResult('customer')
+   239→    if (pending) {
+   240→      const cl = pending.creditLimit
+   241→      setFormData({
+   242→        name: String(pending.name || ''),
+   243→        mobile: String(pending.mobile || pending.contactNumber || ''),
+   244→        gstNumber: String(pending.gstNumber || ''),
+   245→        address: String(pending.address || ''),
+   246→        creditLimit: cl != null && cl !== '' ? String(cl) : '',
+   247→      })
+   248→      toast({ title: 'AI auto-fill applied', description: 'Edit & verify before saving.' })
+   249→    } else {
+   250→      setFormData(emptyForm)
+   251→    }
+   252→    setFormOpen(true)
+   253→  }
+   254→
+   255→  const openEditDialog = (customer: Customer) => {
+   256→    setEditingCustomer(customer)
+   257→    setFormData({
+   258→      name: customer.name,
+   259→      mobile: customer.mobile,
+   260→      gstNumber: customer.gstNumber,
+   261→      address: customer.address,
+   262→      creditLimit: customer.creditLimit,
+   263→    })
+   264→    setFormOpen(true)
+   265→  }
+   266→
+   267→  const handleFormChange = (field: keyof CustomerFormData, value: string) => {
+   268→    setFormData((prev) => ({ ...prev, [field]: value }))
+   269→  }
+   270→
+   271→  const handleSubmit = async () => {
+   272→    // Unified empty-form check — show ONE popup instead of cascading errors
+   273→    if (isFormEmpty([formData.name, formData.mobile, formData.gstNumber, formData.address, formData.creditLimit])) {
+   274→      toast(showPleaseFillDataToast())
+   275→      return
+   276→    }
+   277→    if (!formData.name.trim()) {
+   278→      toast({ title: 'Validation Error', description: 'Customer name is required', variant: 'destructive' })
+   279→      return
+   280→    }
+   281→    if (!formData.mobile.trim()) {
+   282→      toast({ title: 'Validation Error', description: 'Mobile number is required', variant: 'destructive' })
+   283→      return
+   284→    }
+   285→
+   286→    setFormSubmitting(true)
+   287→    try {
+   288→      const payload = {
+   289→        name: formData.name.trim(),
+   290→        mobile: formData.mobile.trim(),
+   291→        gstNumber: formData.gstNumber.trim(),
+   292→        address: formData.address.trim(),
+   293→        creditLimit: Number(formData.creditLimit) || 0,
+   294→      }
+   295→
+   296→      if (editingCustomer) {
+   297→        await api.updateCustomer(editingCustomer.id, payload)
+   298→        toast({ title: 'Success', description: 'Customer updated successfully' })
+   299→      } else {
+   300→        await api.createCustomer(payload)
+   301→        toast({ title: 'Success', description: 'Customer created successfully' })
+   302→      }
+   303→
+   304→      setFormOpen(false)
+   305→      setFormData(emptyForm)
+   306→      setEditingCustomer(null)
+   307→      fetchCustomers()
+   308→    } catch (err) {
+   309→      toast({
+   310→        title: 'Error',
+   311→        description: err instanceof Error ? err.message : 'Failed to save customer',
+   312→        variant: 'destructive',
+   313→      })
+   314→    } finally {
+   315→      setFormSubmitting(false)
+   316→    }
+   317→  }
+   318→
+   319→  // ── Delete handler ──────────────────────────────────────────────────────
+   320→  const handleDelete = async () => {
+   321→    if (!deleteTarget) return
+   322→    setDeleting(true)
+   323→    try {
+   324→      await api.deleteCustomer(deleteTarget.id)
+   325→      toast({ title: 'Success', description: 'Customer deleted successfully' })
+   326→      setDeleteTarget(null)
+   327→      fetchCustomers()
+   328→    } catch (err) {
+   329→      toast({
+   330→        title: 'Error',
+   331→        description: err instanceof Error ? err.message : 'Failed to delete customer',
+   332→        variant: 'destructive',
+   333→      })
+   334→    } finally {
+   335→      setDeleting(false)
+   336→    }
+   337→  }
+   338→
+   339→  // ── Ledger handler ──────────────────────────────────────────────────────
+   340→  const openLedger = async (customer: Customer) => {
+   341→    setLedgerCustomer(customer)
+   342→    setLedgerLoading(true)
+   343→    try {
+   344→      const res = await api.getPayments()
+   345→      const allPayments = res.payments as Payment[]
+   346→      const filtered = allPayments.filter((p) => p.customerId === customer.id)
+   347→      // Sort by date descending
+   348→      filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+   349→      setLedgerPayments(filtered)
+   350→    } catch (err) {
+   351→      toast({
+   352→        title: 'Error',
+   353→        description: err instanceof Error ? err.message : 'Failed to fetch payment history',
+   354→        variant: 'destructive',
+   355→      })
+   356→      setLedgerPayments([])
+   357→    } finally {
+   358→      setLedgerLoading(false)
+   359→    }
+   360→  }
+   361→
+   362→  // ── Render: Loading skeletons ───────────────────────────────────────────
+   363→  const renderSkeletons = () =>
+   364→    Array.from({ length: 5 }).map((_, i) => (
+   365→      <TableRow key={i}>
+   366→        <TableCell className="w-10"><Skeleton className="h-4 w-4" /></TableCell>
+   367→        <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+   368→        <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+   369→        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+   370→        <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+   371→        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+   372→        <TableCell><Skeleton className="h-8 w-28" /></TableCell>
+   373→      </TableRow>
+   374→    ))
+   375→
+   376→  // ── Render: Form dialog ─────────────────────────────────────────────────
+   377→  const renderFormDialog = () => (
+   378→    <Dialog open={formOpen} onOpenChange={setFormOpen}>
+   379→      <DialogContent className="sm:max-w-md">
+   380→        <DialogHeader>
+   381→          <DialogTitle>
+   382→            {editingCustomer ? 'Edit Customer' : 'Add Customer'}
+   383→          </DialogTitle>
+   384→          <DialogDescription>
+   385→            {editingCustomer
+   386→              ? 'Update the customer details below.'
+   387→              : 'Fill in the details to create a new customer.'}
+   388→          </DialogDescription>
+   389→        </DialogHeader>
+   390→        {!editingCustomer && (
+   391→          <div className="flex justify-end">
+   392→            <AiFillButton
+   393→              module="customer"
+   394→              onApply={(fields) => setFormData((prev) => ({
+   395→                name: fields.name != null ? String(fields.name) : prev.name,
+   396→                mobile: fields.mobile != null ? String(fields.mobile) : (fields.contactNumber != null ? String(fields.contactNumber) : prev.mobile),
+   397→                gstNumber: fields.gstNumber != null ? String(fields.gstNumber) : prev.gstNumber,
+   398→                address: fields.address != null ? String(fields.address) : prev.address,
+   399→                creditLimit: fields.creditLimit != null && fields.creditLimit !== '' ? String(fields.creditLimit) : prev.creditLimit,
+   400→              }))}
+   401→            />
+   402→          </div>
+   403→        )}
+   404→
+   405→        <div className="grid gap-4 py-2">
+   406→          {/* Customer Name */}
+   407→          <div className="grid gap-2">
+   408→            <Label htmlFor="cust-name">
+   409→              Customer Name <span className="text-destructive">*</span>
+   410→            </Label>
+   411→            <div className="relative">
+   412→              <Input
+   413→                id="cust-name"
+   414→                placeholder="Enter customer name"
+   415→                value={formData.name}
+   416→                onChange={(e) => handleFormChange('name', e.target.value)}
+   417→                className="pr-9"
+   418→              />
+   419→              <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+   420→                <FieldVoiceInput
+   421→                  fieldLabel="customer name"
+   422→                  onChange={(text) => handleFormChange('name', text)}
+   423→                />
+   424→              </div>
+   425→            </div>
+   426→          </div>
+   427→
+   428→          {/* Mobile Number */}
+   429→          <div className="grid gap-2">
+   430→            <Label htmlFor="cust-mobile">
+   431→              Mobile Number <span className="text-destructive">*</span>
+   432→            </Label>
+   433→            <div className="relative">
+   434→              <Input
+   435→                id="cust-mobile"
+   436→                placeholder="Enter mobile number"
+   437→                value={formData.mobile}
+   438→                onChange={(e) => handleFormChange('mobile', e.target.value)}
+   439→                className="pr-9"
+   440→              />
+   441→              <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+   442→                <FieldVoiceInput
+   443→                  fieldLabel="mobile number"
+   444→                  onChange={(text) => handleFormChange('mobile', text.replace(/[^0-9+\-\s]/g, '').trim())}
+   445→                />
+   446→              </div>
+   447→            </div>
+   448→          </div>
+   449→
+   450→          {/* GST Number */}
+   451→          <div className="grid gap-2">
+   452→            <Label htmlFor="cust-gst">GST Number</Label>
+   453→            <div className="relative">
+   454→              <Input
+   455→                id="cust-gst"
+   456→                placeholder="Enter GST number (optional)"
+   457→                value={formData.gstNumber}
+   458→                onChange={(e) => handleFormChange('gstNumber', e.target.value)}
+   459→                className="pr-9"
+   460→              />
+   461→              <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+   462→                <FieldVoiceInput
+   463→                  fieldLabel="GST number"
+   464→                  onChange={(text) => handleFormChange('gstNumber', text.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+   465→                />
+   466→              </div>
+   467→            </div>
+   468→          </div>
+   469→
+   470→          {/* Address */}
+   471→          <div className="grid gap-2">
+   472→            <Label htmlFor="cust-address">Address</Label>
+   473→            <div className="relative">
+   474→              <Textarea
+   475→                id="cust-address"
+   476→                placeholder="Enter address"
+   477→                value={formData.address}
+   478→                onChange={(e) => handleFormChange('address', e.target.value)}
+   479→                className="min-h-[80px] pr-9"
+   480→              />
+   481→              <div className="absolute right-1.5 top-2">
+   482→                <FieldVoiceInput
+   483→                  fieldLabel="address"
+   484→                  onChange={(text) => handleFormChange('address', text)}
+   485→                />
+   486→              </div>
+   487→            </div>
+   488→          </div>
+   489→
+   490→          {/* Credit Limit */}
+   491→          <div className="grid gap-2">
+   492→            <Label htmlFor="cust-credit">Credit Limit (₹)</Label>
+   493→            <div className="relative">
+   494→              <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   495→              <Input
+   496→                id="cust-credit"
+   497→                type="number"
+   498→                placeholder="0"
+   499→                className="pl-9"
+   500→                value={formData.creditLimit}
+   501→                onChange={(e) => handleFormChange('creditLimit', e.target.value)}
+   502→              />
+   503→            </div>
+   504→          </div>
+   505→        </div>
+   506→
+   507→        <DialogFooter>
+   508→          <Button
+   509→            variant="outline"
+   510→            onClick={() => setFormOpen(false)}
+   511→            disabled={formSubmitting}
+   512→          >
+   513→            Cancel
+   514→          </Button>
+   515→          <Button
+   516→            onClick={handleSubmit}
+   517→            disabled={formSubmitting}
+   518→            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   519→          >
+   520→            {formSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+   521→            {editingCustomer ? 'Update Customer' : 'Create Customer'}
+   522→          </Button>
+   523→        </DialogFooter>
+   524→      </DialogContent>
+   525→    </Dialog>
+   526→  )
+   527→
+   528→  // ── Render: Delete confirmation ─────────────────────────────────────────
+   529→  const renderDeleteDialog = () => (
+   530→    <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+   531→      <AlertDialogContent>
+   532→        <AlertDialogHeader>
+   533→          <AlertDialogTitle>Delete Customer</AlertDialogTitle>
+   534→          <AlertDialogDescription>
+   535→            Are you sure you want to delete <strong>{deleteTarget?.name}</strong>? This action
+   536→            cannot be undone.
+   537→          </AlertDialogDescription>
+   538→        </AlertDialogHeader>
+   539→        <AlertDialogFooter>
+   540→          <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+   541→          <AlertDialogAction
+   542→            onClick={handleDelete}
+   543→            disabled={deleting}
+   544→            className="bg-destructive text-white hover:bg-destructive/90"
+   545→          >
+   546→            {deleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+   547→            Delete
+   548→          </AlertDialogAction>
+   549→        </AlertDialogFooter>
+   550→      </AlertDialogContent>
+   551→    </AlertDialog>
+   552→  )
+   553→
+   554→  // ── Render: Bulk-delete confirmation ────────────────────────────────────
+   555→  const renderBulkDeleteDialog = () => (
+   556→    <AlertDialog
+   557→      open={bulkDeleteOpen}
+   558→      onOpenChange={(open) => {
+   559→        if (!open && !bulkDeleting) setBulkDeleteOpen(false)
+   560→      }}
+   561→    >
+   562→      <AlertDialogContent>
+   563→        <AlertDialogHeader>
+   564→          <AlertDialogTitle className="text-destructive">
+   565→            Delete {selectedIds.size} Selected Customer{selectedIds.size === 1 ? '' : 's'}?
+   566→          </AlertDialogTitle>
+   567→          <AlertDialogDescription className="space-y-2 text-sm">
+   568→            <span className="block">
+   569→              You are about to permanently delete{' '}
+   570→              <strong className="text-destructive">
+   571→                {selectedIds.size} customer{selectedIds.size === 1 ? '' : 's'}
+   572→              </strong>
+   573→              . This action <strong>cannot be undone</strong>.
+   574→            </span>
+   575→            <span className="block text-muted-foreground">
+   576→              Linked orders, payments, and dispatches will be kept for audit but
+   577→              disassociated from the deleted customers (their customer field will
+   578→              be cleared).
+   579→            </span>
+   580→          </AlertDialogDescription>
+   581→        </AlertDialogHeader>
+   582→        <AlertDialogFooter>
+   583→          <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+   584→          <AlertDialogAction
+   585→            onClick={handleBulkDelete}
+   586→            disabled={bulkDeleting || selectedIds.size === 0}
+   587→            className="bg-destructive text-white hover:bg-destructive/90"
+   588→          >
+   589→            {bulkDeleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+   590→            Delete {selectedIds.size} Customer{selectedIds.size === 1 ? '' : 's'}
+   591→          </AlertDialogAction>
+   592→        </AlertDialogFooter>
+   593→      </AlertDialogContent>
+   594→    </AlertDialog>
+   595→  )
+   596→
+   597→  // ── Render: Ledger dialog ───────────────────────────────────────────────
+   598→  const renderLedgerDialog = () => (
+   599→    <Dialog open={!!ledgerCustomer} onOpenChange={(open) => !open && setLedgerCustomer(null)}>
+   600→      <DialogContent className="sm:max-w-2xl">
+   601→        <DialogHeader>
+   602→          <DialogTitle className="flex items-center gap-2">
+   603→            <BookOpen className="size-5 text-emerald-600" />
+   604→            Payment Ledger — {ledgerCustomer?.name}
+   605→          </DialogTitle>
+   606→          <DialogDescription>
+   607→            Payment history for {ledgerCustomer?.name}
+   608→          </DialogDescription>
+   609→        </DialogHeader>
+   610→
+   611→        {ledgerLoading ? (
+   612→          <div className="space-y-3 py-4">
+   613→            {Array.from({ length: 3 }).map((_, i) => (
+   614→              <Skeleton key={i} className="h-10 w-full" />
+   615→            ))}
+   616→          </div>
+   617→        ) : ledgerPayments.length === 0 ? (
+   618→          <div className="py-8 text-center text-muted-foreground">
+   619→            No payment records found for this customer.
+   620→          </div>
+   621→        ) : (
+   622→          <div className="max-h-96 overflow-y-auto">
+   623→            <Table>
+   624→              <TableHeader>
+   625→                <TableRow>
+   626→                  <TableHead>Date</TableHead>
+   627→                  <TableHead>Type</TableHead>
+   628→                  <TableHead className="text-right">Amount</TableHead>
+   629→                  <TableHead>Remarks</TableHead>
+   630→                </TableRow>
+   631→              </TableHeader>
+   632→              <TableBody>
+   633→                {ledgerPayments.map((payment) => (
+   634→                  <TableRow key={payment.id}>
+   635→                    <TableCell className="whitespace-nowrap">
+   636→                      {formatDate(payment.date)}
+   637→                    </TableCell>
+   638→                    <TableCell>
+   639→                      <Badge
+   640→                        variant={
+   641→                          payment.paymentType?.toLowerCase() === 'credit' ? 'secondary' : 'outline'
+   642→                        }
+   643→                        className={
+   644→                          payment.paymentType?.toLowerCase() === 'credit'
+   645→                            ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+   646→                            : 'bg-orange-100 text-orange-700 border-orange-200'
+   647→                        }
+   648→                      >
+   649→                        {payment.paymentType}
+   650→                      </Badge>
+   651→                    </TableCell>
+   652→                    <TableCell className="text-right font-medium whitespace-nowrap">
+   653→                      {formatCurrency(payment.amount)}
+   654→                    </TableCell>
+   655→                    <TableCell className="max-w-[200px] truncate text-muted-foreground">
+   656→                      {payment.remarks || '—'}
+   657→                    </TableCell>
+   658→                  </TableRow>
+   659→                ))}
+   660→              </TableBody>
+   661→            </Table>
+   662→          </div>
+   663→        )}
+   664→
+   665→        <DialogFooter>
+   666→          <Button variant="outline" onClick={() => setLedgerCustomer(null)}>
+   667→            Close
+   668→          </Button>
+   669→        </DialogFooter>
+   670→      </DialogContent>
+   671→    </Dialog>
+   672→  )
+   673→
+   674→  // ── Render: Main ────────────────────────────────────────────────────────
+   675→  // If a customer is selected for history view, render the full-screen history page
+   676→  // INSTEAD of the customer list — user requested this be a separate page, not a modal.
+   677→  if (historyCustomerId) {
+   678→    return (
+   679→      <CustomerHistoryPage
+   680→        customerId={historyCustomerId}
+   681→        onBack={() => setHistoryCustomerId(null)}
+   682→      />
+   683→    )
+   684→  }
+   685→
+   686→  return (
+   687→    <div className="space-y-4 md:space-y-6">
+   688→      {/* Full-screen loading overlay during bulk delete */}
+   689→      {bulkDeleting && (
+   690→        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+   691→          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl p-8 flex flex-col items-center gap-4 min-w-[280px]">
+   692→            <Loader2 className="size-12 animate-spin text-emerald-600" />
+   693→            <div className="text-center">
+   694→              <p className="text-lg font-semibold">
+   695→                Deleting {selectedIds.size} customer{selectedIds.size === 1 ? '' : 's'}...
+   696→              </p>
+   697→              <p className="text-sm text-muted-foreground mt-1">
+   698→                Please wait while records are removed.
+   699→              </p>
+   700→            </div>
+   701→          </div>
+   702→        </div>
+   703→      )}
+   704→      {/* Header */}
+   705→      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   706→        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+   707→          <div className="flex size-9 sm:size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 shrink-0">
+   708→            <Users className="size-4 sm:size-5" />
+   709→          </div>
+   710→          <div className="min-w-0">
+   711→            <h2 className="text-lg sm:text-2xl font-bold tracking-tight truncate">Customer Management</h2>
+   712→            <p className="text-xs sm:text-sm text-muted-foreground truncate">
+   713→              Manage your customer database and ledgers
+   714→            </p>
+   715→          </div>
+   716→        </div>
+   717→        <div className="flex flex-col gap-2 w-full sm:hidden">
+   718→          <Button
+   719→            variant="outline"
+   720→            onClick={() => setImportOpen(true)}
+   721→            className="w-full"
+   722→          >
+   723→            <Upload className="size-4 mr-2" />
+   724→            Import Excel
+   725→          </Button>
+   726→          {selectedIds.size > 0 && (
+   727→            <Button
+   728→              variant="outline"
+   729→              onClick={() => setBulkDeleteOpen(true)}
+   730→              disabled={bulkDeleting || loading}
+   731→              className="w-full text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+   732→            >
+   733→              <Trash2 className="size-4 mr-2" />
+   734→              Delete Selected
+   735→              <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">
+   736→                {selectedIds.size}
+   737→              </Badge>
+   738→            </Button>
+   739→          )}
+   740→          {selectedIds.size > 0 && (
+   741→            <Button
+   742→              variant="ghost"
+   743→              onClick={clearSelection}
+   744→              disabled={bulkDeleting}
+   745→              className="w-full"
+   746→            >
+   747→              Clear Selection
+   748→            </Button>
+   749→          )}
+   750→          <Button
+   751→            onClick={openAddDialog}
+   752→            className="bg-emerald-600 hover:bg-emerald-700 text-white w-full"
+   753→          >
+   754→            <Plus className="size-4 mr-2" />
+   755→            Add Customer
+   756→          </Button>
+   757→        </div>
+   758→        <div className="hidden sm:flex gap-2">
+   759→          <Button
+   760→            variant="outline"
+   761→            onClick={() => setImportOpen(true)}
+   762→          >
+   763→            <Upload className="size-4 mr-2" />
+   764→            Import Excel
+   765→          </Button>
+   766→          {selectedIds.size > 0 && (
+   767→            <Button
+   768→              variant="outline"
+   769→              onClick={() => setBulkDeleteOpen(true)}
+   770→              disabled={bulkDeleting || loading}
+   771→              className="text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+   772→            >
+   773→              <Trash2 className="size-4 mr-2" />
+   774→              Delete Selected
+   775→              <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">
+   776→                {selectedIds.size}
+   777→              </Badge>
+   778→            </Button>
+   779→          )}
+   780→          {selectedIds.size > 0 && (
+   781→            <Button
+   782→              variant="ghost"
+   783→              onClick={clearSelection}
+   784→              disabled={bulkDeleting}
+   785→            >
+   786→              Clear Selection
+   787→            </Button>
+   788→          )}
+   789→          <Button
+   790→            onClick={openAddDialog}
+   791→            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   792→          >
+   793→            <Plus className="size-4 mr-2" />
+   794→            Add Customer
+   795→          </Button>
+   796→        </div>
+   797→      </div>
+   798→
+   799→      {/* Search */}
+   800→      <Card>
+   801→        <CardContent className="pt-6">
+   802→          <div className="relative">
+   803→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   804→            <Input
+   805→              placeholder="Search customers by name or mobile..."
+   806→              value={search}
+   807→              onChange={(e) => setSearch(e.target.value)}
+   808→              className="pl-9"
+   809→            />
+   810→          </div>
+   811→        </CardContent>
+   812→      </Card>
+   813→
+   814→      {/* Desktop: Table view */}
+   815→      <Card className="hidden sm:block">
+   816→        <CardHeader>
+   817→          <CardTitle className="flex items-center justify-between">
+   818→            <span>Customers</span>
+   819→            <div className="flex items-center gap-2">
+   820→              {selectedIds.size > 0 && (
+   821→                <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/30">
+   822→                  {selectedIds.size} selected
+   823→                </Badge>
+   824→              )}
+   825→              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+   826→                {loading
+   827→                  ? 'Loading…'
+   828→                  : totalCount > customers.length
+   829→                    ? `Showing ${customers.length} of ${totalCount} records`
+   830→                    : `${customers.length} record${customers.length !== 1 ? 's' : ''}`}
+   831→              </Badge>
+   832→            </div>
+   833→          </CardTitle>
+   834→        </CardHeader>
+   835→        <CardContent>
+   836→          <ScrollableTable maxHeight="max-h-[60vh]">
+   837→            <Table>
+   838→              <TableHeader>
+   839→                <TableRow>
+   840→                  <TableHead className="w-10 sticky left-0 bg-background z-30">
+   841→                    <Checkbox
+   842→                      checked={
+   843→                        customers.length > 0 &&
+   844→                        selectedIds.size === customers.length
+   845→                      }
+   846→                      onCheckedChange={toggleSelectAll}
+   847→                      aria-label="Select all rows"
+   848→                    />
+   849→                  </TableHead>
+   850→                  <TableHead className="sticky left-10 bg-background z-20 min-w-[140px]">Name</TableHead>
+   851→                  <TableHead className="whitespace-nowrap">Mobile</TableHead>
+   852→                  <TableHead className="whitespace-nowrap">GST Number</TableHead>
+   853→                  <TableHead className="min-w-[180px]">Address</TableHead>
+   854→                  <TableHead className="text-right whitespace-nowrap">Credit Limit (₹)</TableHead>
+   855→                  <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
+   856→                </TableRow>
+   857→              </TableHeader>
+   858→              <TableBody>
+   859→                {loading ? (
+   860→                  renderSkeletons()
+   861→                ) : customers.length === 0 ? (
+   862→                  <TableRow>
+   863→                    <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+   864→                      {debouncedSearch
+   865→                        ? 'No customers found matching your search.'
+   866→                        : 'No customers yet. Click "Add Customer" to get started.'}
+   867→                    </TableCell>
+   868→                  </TableRow>
+   869→                ) : (
+   870→                  customers.map((customer) => (
+   871→                    <TableRow
+   872→                      key={customer.id}
+   873→                      data-state={selectedIds.has(customer.id) ? 'selected' : undefined}
+   874→                      className={`cursor-pointer hover:bg-emerald-50/40 ${selectedIds.has(customer.id) ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}`}
+   875→                      onClick={() => setHistoryCustomerId(customer.id)}
+   876→                    >
+   877→                      <TableCell className="w-10 sticky left-0 bg-background z-10" onClick={(e) => e.stopPropagation()}>
+   878→                        <Checkbox
+   879→                          checked={selectedIds.has(customer.id)}
+   880→                          onCheckedChange={() => toggleSelect(customer.id)}
+   881→                          aria-label={`Select row for ${customer.name}`}
+   882→                        />
+   883→                      </TableCell>
+   884→                      <TableCell className="font-medium sticky left-10 bg-background z-10 min-w-[140px]">
+   885→                        <button
+   886→                          type="button"
+   887→                          className="text-emerald-700 hover:text-emerald-900 hover:underline text-left"
+   888→                          onClick={(e) => {
+   889→                            e.stopPropagation()
+   890→                            setHistoryCustomerId(customer.id)
+   891→                          }}
+   892→                          title="Click to view full customer history"
+   893→                        >
+   894→                          {customer.name}
+   895→                        </button>
+   896→                      </TableCell>
+   897→                      <TableCell className="whitespace-nowrap">{customer.mobile}</TableCell>
+   898→                      <TableCell>
+   899→                        {customer.gstNumber ? (
+   900→                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
+   901→                            {customer.gstNumber}
+   902→                          </Badge>
+   903→                        ) : (
+   904→                          <Badge variant="outline" className="text-muted-foreground">
+   905→                            No GST
+   906→                          </Badge>
+   907→                        )}
+   908→                      </TableCell>
+   909→                      <TableCell className="max-w-[200px] truncate text-muted-foreground">
+   910→                        {customer.address || '—'}
+   911→                      </TableCell>
+   912→                      <TableCell className="text-right font-medium whitespace-nowrap">
+   913→                        {formatCurrency(customer.creditLimit)}
+   914→                      </TableCell>
+   915→                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+   916→                        <div className="flex items-center justify-end gap-1">
+   917→                          <Button
+   918→                            variant="ghost"
+   919→                            size="icon"
+   920→                            onClick={() => setHistoryCustomerId(customer.id)}
+   921→                            title="View Full History"
+   922→                            className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+   923→                          >
+   924→                            <BookOpen className="size-4" />
+   925→                          </Button>
+   926→                          <Button
+   927→                            variant="ghost"
+   928→                            size="icon"
+   929→                            onClick={() => openEditDialog(customer)}
+   930→                            title="Edit Customer"
+   931→                          >
+   932→                            <Pencil className="size-4" />
+   933→                          </Button>
+   934→                          <Button
+   935→                            variant="ghost"
+   936→                            size="icon"
+   937→                            onClick={() => setDeleteTarget(customer)}
+   938→                            title="Delete Customer"
+   939→                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+   940→                          >
+   941→                            <Trash2 className="size-4" />
+   942→                          </Button>
+   943→                        </div>
+   944→                      </TableCell>
+   945→                    </TableRow>
+   946→                  ))
+   947→                )}
+   948→              </TableBody>
+   949→            </Table>
+   950→          </ScrollableTable>
+   951→          <p className="text-xs text-muted-foreground mt-2 hidden sm:block">
+   952→            💡 Tip: Click on a customer's name or the book icon to view their complete transaction history (orders, dispatch, payments, sells, production, balance).
+   953→          </p>
+   954→        </CardContent>
+   955→      </Card>
+   956→
+   957→      {/* Mobile: Card list view */}
+   958→      <div className="sm:hidden space-y-3">
+   959→        <div className="flex items-center justify-between px-1">
+   960→          <div className="flex items-center gap-2">
+   961→            <Checkbox
+   962→              checked={
+   963→                customers.length > 0 &&
+   964→                selectedIds.size === customers.length
+   965→              }
+   966→              onCheckedChange={toggleSelectAll}
+   967→              aria-label="Select all customers"
+   968→            />
+   969→            <h3 className="text-base font-semibold">Customers</h3>
+   970→          </div>
+   971→          <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+   972→            {loading ? '…' : `${customers.length} of ${totalCount}`}
+   973→          </Badge>
+   974→        </div>
+   975→        {loading ? Array.from({ length: 4 }).map((_, i) => (
+   976→          <Card key={i}><CardContent className="p-4 space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-2/3" /></CardContent></Card>
+   977→        )) : customers.length === 0 ? (
+   978→          <Card><CardContent className="p-8 text-center text-muted-foreground">
+   979→            {debouncedSearch ? 'No customers found.' : 'No customers yet. Tap "Add Customer" to get started.'}
+   980→          </CardContent></Card>
+   981→        ) : customers.map((customer) => (
+   982→          <Card
+   983→            key={customer.id}
+   984→            data-state={selectedIds.has(customer.id) ? 'selected' : undefined}
+   985→            className={selectedIds.has(customer.id) ? 'border-destructive/40 bg-destructive/5' : ''}
+   986→          >
+   987→            <CardContent className="p-4 space-y-2">
+   988→              <div className="flex items-start justify-between gap-2">
+   989→                <div className="flex items-start gap-2 min-w-0 flex-1">
+   990→                  <Checkbox
+   991→                    checked={selectedIds.has(customer.id)}
+   992→                    onCheckedChange={() => toggleSelect(customer.id)}
+   993→                    aria-label={`Select ${customer.name}`}
+   994→                    className="mt-1"
+   995→                  />
+   996→                  <button
+   997→                    type="button"
+   998→                    className="text-emerald-700 hover:text-emerald-900 font-semibold text-left min-w-0 flex-1 truncate"
+   999→                    onClick={() => setHistoryCustomerId(customer.id)}
+  1000→                    title="Tap to view full history"
+  1001→                  >
+  1002→                    {customer.name}
+  1003→                  </button>
+  1004→                </div>
+  1005→                <p className="font-bold text-emerald-700 whitespace-nowrap text-sm">{formatCurrency(customer.creditLimit)}</p>
+  1006→              </div>
+  1007→              <div className="grid grid-cols-2 gap-2 text-sm">
+  1008→                <div className="min-w-0">
+  1009→                  <p className="text-xs text-muted-foreground">Mobile</p>
+  1010→                  <p className="font-medium truncate">{customer.mobile || '—'}</p>
+  1011→                </div>
+  1012→                <div className="min-w-0">
+  1013→                  <p className="text-xs text-muted-foreground">GST</p>
+  1014→                  {customer.gstNumber ? (
+  1015→                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">{customer.gstNumber}</Badge>
+  1016→                  ) : (
+  1017→                    <p className="text-muted-foreground text-xs">No GST</p>
+  1018→                  )}
+  1019→                </div>
+  1020→              </div>
+  1021→              {customer.address && (
+  1022→                <p className="text-sm text-muted-foreground">
+  1023→                  <span className="font-medium text-foreground">Address:</span>{' '}
+  1024→                  <span className="line-clamp-2">{customer.address}</span>
+  1025→                </p>
+  1026→              )}
+  1027→              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+  1028→                <Button variant="outline" size="sm" onClick={() => setHistoryCustomerId(customer.id)} className="h-8 text-emerald-700 border-emerald-200">
+  1029→                  <BookOpen className="size-3.5 mr-1" />History
+  1030→                </Button>
+  1031→                <Button variant="outline" size="sm" onClick={() => openEditDialog(customer)} className="h-8">
+  1032→                  <Pencil className="size-3.5 mr-1" />Edit
+  1033→                </Button>
+  1034→                <Button variant="outline" size="sm" onClick={() => setDeleteTarget(customer)} className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive">
+  1035→                  <Trash2 className="size-3.5 mr-1" />Delete
+  1036→                </Button>
+  1037→              </div>
+  1038→            </CardContent>
+  1039→          </Card>
+  1040→        ))}
+  1041→      </div>
+  1042→
+  1043→      {/* Dialogs */}
+  1044→      {renderFormDialog()}
+  1045→      {renderDeleteDialog()}
+  1046→      {renderBulkDeleteDialog()}
+  1047→      {renderLedgerDialog()}
+  1048→
+  1049→      <ExcelImport module="customers" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchCustomers} />
+  1050→    </div>
+  1051→  )
+  1052→}
+  1053→
+  1054→export default CustomerModule
+  1055→

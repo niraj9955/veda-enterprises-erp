@@ -1,0 +1,521 @@
+     1→'use client'
+     2→
+     3→import * as React from 'react'
+     4→import { api } from '@/lib/api'
+     5→import { toast } from '@/hooks/use-toast'
+     6→import { Button } from '@/components/ui/button'
+     7→import { Input } from '@/components/ui/input'
+     8→import { Label } from '@/components/ui/label'
+     9→import { Textarea } from '@/components/ui/textarea'
+    10→import { Badge } from '@/components/ui/badge'
+    11→import { Skeleton } from '@/components/ui/skeleton'
+    12→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    13→import {
+    14→  Table,
+    15→  TableBody,
+    16→  TableCell,
+    17→  TableHead,
+    18→  TableHeader,
+    19→  TableRow,
+    20→} from '@/components/ui/table'
+    21→import {
+    22→  Dialog,
+    23→  DialogContent,
+    24→  DialogDescription,
+    25→  DialogFooter,
+    26→  DialogHeader,
+    27→  DialogTitle,
+    28→} from '@/components/ui/dialog'
+    29→import {
+    30→  AlertDialog,
+    31→  AlertDialogAction,
+    32→  AlertDialogCancel,
+    33→  AlertDialogContent,
+    34→  AlertDialogDescription,
+    35→  AlertDialogFooter,
+    36→  AlertDialogHeader,
+    37→  AlertDialogTitle,
+    38→} from '@/components/ui/alert-dialog'
+    39→import { Mountain, Plus, Trash2, Pencil, Loader2, IndianRupee, Upload , Search} from 'lucide-react'
+    40→import ExcelImport from '@/components/erp/excel-import'
+    41→import { AiFillButton } from '@/components/ui/ai-fill-button'
+    42→import { FieldVoiceInput } from '@/components/ui/field-voice-input'
+    43→import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
+    44→import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
+    45→import { Checkbox } from '@/components/ui/checkbox'
+    46→
+    47→interface DustPurchase {
+    48→  id: string
+    49→  date: string
+    50→  vendorName: string
+    51→  cementName: string
+    52→  quantity: number
+    53→  rate: number
+    54→  totalAmount: number
+    55→  paidAmount: number
+    56→  transportationCharge: number
+    57→  gst: number
+    58→  remarks: string
+    59→  createdAt: string
+    60→  updatedAt: string
+    61→}
+    62→
+    63→interface DustPurchaseFormData {
+    64→  date: string
+    65→  vendorName: string
+    66→  cementName: string
+    67→  quantity: string
+    68→  rate: string
+    69→  paidAmount: string
+    70→  transportationCharge: string
+    71→  gst: string
+    72→  remarks: string
+    73→}
+    74→
+    75→const formatCurrency = (amount: number): string =>
+    76→  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(amount)
+    77→
+    78→const formatDate = (dateStr: string): string =>
+    79→  new Date(dateStr + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    80→
+    81→const emptyForm: DustPurchaseFormData = { date: '', vendorName: '', cementName: '', quantity: '', rate: '', paidAmount: '', transportationCharge: '', gst: '', remarks: '' }
+    82→
+    83→export function DustPurchaseModule() {
+    84→  const [items, setItems] = React.useState<DustPurchase[]>([])
+    85→  const [search, setSearch] = React.useState('')
+    86→  const [debouncedSearch, setDebouncedSearch] = React.useState('')
+    87→  const [loading, setLoading] = React.useState(true)
+    88→  const [formOpen, setFormOpen] = React.useState(false)
+    89→  const [editingItem, setEditingItem] = React.useState<DustPurchase | null>(null)
+    90→  const [formData, setFormData] = React.useState<DustPurchaseFormData>(emptyForm)
+    91→  const [formSubmitting, setFormSubmitting] = React.useState(false)
+    92→  const [deleteTarget, setDeleteTarget] = React.useState<DustPurchase | null>(null)
+    93→  const [deleting, setDeleting] = React.useState(false)
+    94→
+    95→  // ── Multi-select state ──────────────────────────────────────────────────
+    96→  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+    97→  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false)
+    98→  const [bulkDeleting, setBulkDeleting] = React.useState(false)
+    99→
+   100→  const toggleSelect = (id: string) => {
+   101→    setSelectedIds((prev) => {
+   102→      const next = new Set(prev)
+   103→      if (next.has(id)) next.delete(id)
+   104→      else next.add(id)
+   105→      return next
+   106→    })
+   107→  }
+   108→
+   109→  const toggleSelectAll = () => {
+   110→    setSelectedIds((prev) => {
+   111→      if (prev.size === filteredItems.length && filteredItems.length > 0) {
+   112→        return new Set()
+   113→      }
+   114→      return new Set(filteredItems.map((i) => i.id))
+   115→    })
+   116→  }
+   117→
+   118→  const clearSelection = () => setSelectedIds(new Set())
+   119→
+   120→  const handleBulkDelete = async () => {
+   121→    const ids = Array.from(selectedIds)
+   122→    if (ids.length === 0) return
+   123→    setBulkDeleting(true)
+   124→    try {
+   125→      const res = await api.bulkDeleteDustPurchases(ids)
+   126→      toast({
+   127→        title: 'Success',
+   128→        description: `${res.deletedCount} of ${ids.length} dust purchase entr${res.deletedCount === 1 ? 'y' : 'ies'} deleted`,
+   129→      })
+   130→      setBulkDeleteOpen(false)
+   131→      clearSelection()
+   132→      fetchData()
+   133→    } catch (err) {
+   134→      toast({
+   135→        title: 'Error',
+   136→        description: err instanceof Error ? err.message : 'Failed to delete selected entries',
+   137→        variant: 'destructive',
+   138→      })
+   139→    } finally {
+   140→      setBulkDeleting(false)
+   141→    }
+   142→  }
+   143→
+   144→  const fetchData = React.useCallback(async () => {
+   145→    setLoading(true)
+   146→    try {
+   147→      const res = await api.getDustPurchases()
+   148→      const data = (res.dustPurchases as DustPurchase[]).sort(
+   149→        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+   150→      )
+   151→      setItems(data)
+   152→    } catch (err) {
+   153→      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to fetch data', variant: 'destructive' })
+   154→    } finally { setLoading(false) }
+   155→  }, [])
+   156→
+   157→  // Debounced search
+   158→  React.useEffect(() => {
+   159→    const t = setTimeout(() => setDebouncedSearch(search), 250)
+   160→    return () => clearTimeout(t)
+   161→  }, [search])
+   162→
+   163→  // Client-side filter
+   164→  const filteredItems = React.useMemo(() => {
+   165→    if (!debouncedSearch.trim()) return items
+   166→    const q = debouncedSearch.toLowerCase()
+   167→    return items.filter((item: any) =>
+   168→      ['date', 'vendorName', 'cementName', 'remarks'].some((f) =>
+   169→        String((item as any)[f] ?? '').toLowerCase().includes(q)
+   170→      )
+   171→    )
+   172→  }, [items, debouncedSearch])
+   173→
+   174→  React.useEffect(() => { fetchData() }, [fetchData])
+   175→
+   176→  // Excel import
+   177→
+   178→  const [importOpen, setImportOpen] = React.useState(false)
+   179→
+   180→
+   181→  const openAddDialog = () => {
+   182→    setEditingItem(null)
+   183→    setFormData(emptyForm)
+   184→    const pending = consumePendingAiResult('dustPurchase')
+   185→    if (pending) {
+   186→      setFormData((prev) => ({
+   187→        ...prev,
+   188→        date: pending.date ? String(pending.date).slice(0, 10) : prev.date,
+   189→        vendorName: pending.vendorName != null ? String(pending.vendorName) : prev.vendorName,
+   190→        cementName: pending.cementName != null ? String(pending.cementName) : prev.cementName,
+   191→        quantity: pending.quantity != null ? String(pending.quantity) : prev.quantity,
+   192→        rate: pending.rate != null ? String(pending.rate) : prev.rate,
+   193→        paidAmount: pending.paidAmount != null ? String(pending.paidAmount) : prev.paidAmount,
+   194→        transportationCharge: pending.transportationCharge != null ? String(pending.transportationCharge) : prev.transportationCharge,
+   195→        gst: pending.gst != null ? String(pending.gst) : prev.gst,
+   196→        remarks: pending.remarks != null ? String(pending.remarks) : prev.remarks,
+   197→      }))
+   198→    }
+   199→    setFormOpen(true)
+   200→  }
+   201→  const openEditDialog = (item: DustPurchase) => {
+   202→    setEditingItem(item)
+   203→    setFormData({
+   204→      date: item.date ? item.date.split('T')[0] : '',
+   205→      vendorName: item.vendorName || '',
+   206→      cementName: item.cementName || '',
+   207→      quantity: String(item.quantity || ''),
+   208→      rate: String(item.rate || ''),
+   209→      paidAmount: String(item.paidAmount || ''),
+   210→      transportationCharge: String(item.transportationCharge || ''),
+   211→      gst: String(item.gst || ''),
+   212→      remarks: item.remarks || '',
+   213→    })
+   214→    setFormOpen(true)
+   215→  }
+   216→
+   217→  const handleFormChange = (field: keyof DustPurchaseFormData, value: string) => {
+   218→    setFormData((prev) => ({ ...prev, [field]: value }))
+   219→  }
+   220→
+   221→  // Auto-calculated
+   222→  const qty = Number(formData.quantity) || 0
+   223→  const rate = Number(formData.rate) || 0
+   224→  const totalAmount = qty * rate
+   225→
+   226→  const handleSubmit = async () => {
+   227→    // Unified empty-form check — show ONE popup instead of cascading errors
+   228→    if (isFormEmpty([formData.date, formData.vendorName, formData.cementName, formData.quantity, formData.rate, formData.paidAmount, formData.transportationCharge, formData.gst, formData.remarks])) {
+   229→      toast(showPleaseFillDataToast())
+   230→      return
+   231→    }
+   232→    if (!formData.date) { toast({ title: 'Validation Error', description: 'Date is required', variant: 'destructive' }); return }
+   233→    if (!formData.vendorName.trim()) { toast({ title: 'Validation Error', description: 'Vendor name is required', variant: 'destructive' }); return }
+   234→    setFormSubmitting(true)
+   235→    try {
+   236→      const payload = {
+   237→        date: formData.date,
+   238→        vendorName: formData.vendorName.trim(),
+   239→        cementName: formData.cementName.trim(),
+   240→        quantity: qty,
+   241→        rate,
+   242→        totalAmount,
+   243→        paidAmount: Number(formData.paidAmount) || 0,
+   244→        transportationCharge: Number(formData.transportationCharge) || 0,
+   245→        gst: Number(formData.gst) || 0,
+   246→        remarks: formData.remarks.trim(),
+   247→      }
+   248→      if (editingItem) {
+   249→        await api.updateDustPurchase(editingItem.id, payload)
+   250→        toast({ title: 'Success', description: 'Dust purchase updated successfully' })
+   251→      } else {
+   252→        await api.createDustPurchase(payload)
+   253→        toast({ title: 'Success', description: 'Dust purchase created successfully' })
+   254→      }
+   255→      setFormOpen(false); setFormData(emptyForm); setEditingItem(null); fetchData()
+   256→    } catch (err) {
+   257→      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to save', variant: 'destructive' })
+   258→    } finally { setFormSubmitting(false) }
+   259→  }
+   260→
+   261→  const handleDelete = async () => {
+   262→    if (!deleteTarget) return
+   263→    setDeleting(true)
+   264→    try {
+   265→      await api.deleteDustPurchase(deleteTarget.id)
+   266→      toast({ title: 'Success', description: 'Dust purchase deleted successfully' })
+   267→      setDeleteTarget(null); fetchData()
+   268→    } catch (err) {
+   269→      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to delete', variant: 'destructive' })
+   270→    } finally { setDeleting(false) }
+   271→  }
+   272→
+   273→  const grandTotal = items.reduce((sum, i) => sum + (i.totalAmount || 0), 0)
+   274→
+   275→  return (
+   276→    <div className="space-y-6">
+   277→      {/* Full-screen loading overlay during bulk delete */}
+   278→      {bulkDeleting && (
+   279→        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+   280→          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl p-8 flex flex-col items-center gap-4 min-w-[280px]">
+   281→            <Loader2 className="size-12 animate-spin text-emerald-600" />
+   282→            <div className="text-center">
+   283→              <p className="text-lg font-semibold">Deleting {selectedIds.size} entr{selectedIds.size === 1 ? 'y' : 'ies'}...</p>
+   284→              <p className="text-sm text-muted-foreground mt-1">Please wait while records are removed.</p>
+   285→            </div>
+   286→          </div>
+   287→        </div>
+   288→      )}
+   289→      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   290→        <div className="flex items-center gap-3">
+   291→          <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700"><Mountain className="size-5" /></div>
+   292→          <div>
+   293→            <h2 className="text-2xl font-bold tracking-tight">Dust Purchase</h2>
+   294→            <p className="text-sm text-muted-foreground">Track dust/raw material purchases</p>
+   295→          </div>
+   296→        </div>
+   297→        <div className="flex flex-col gap-2 w-full sm:hidden">
+   298→          <Button variant="outline" onClick={() => setImportOpen(true)} className="w-full"><Upload className="size-4 mr-2" />Import Excel</Button>
+   299→          {selectedIds.size > 0 && (
+   300→            <Button
+   301→              variant="outline"
+   302→              onClick={() => setBulkDeleteOpen(true)}
+   303→              disabled={bulkDeleting || loading}
+   304→              className="w-full text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+   305→            >
+   306→              <Trash2 className="size-4 mr-2" />Delete Selected
+   307→              <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">{selectedIds.size}</Badge>
+   308→            </Button>
+   309→          )}
+   310→          {selectedIds.size > 0 && (
+   311→            <Button variant="ghost" onClick={clearSelection} disabled={bulkDeleting} className="w-full">Clear Selection</Button>
+   312→          )}
+   313→          <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700 text-white w-full"><Plus className="size-4" />Add Purchase</Button>
+   314→        </div>
+   315→        <div className="hidden sm:flex gap-2">
+   316→          <Button variant="outline" onClick={() => setImportOpen(true)}><Upload className="size-4 mr-2" />Import Excel</Button>
+   317→          {selectedIds.size > 0 && (
+   318→            <Button
+   319→              variant="outline"
+   320→              onClick={() => setBulkDeleteOpen(true)}
+   321→              disabled={bulkDeleting || loading}
+   322→              className="text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+   323→            >
+   324→              <Trash2 className="size-4 mr-2" />Delete Selected
+   325→              <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">{selectedIds.size}</Badge>
+   326→            </Button>
+   327→          )}
+   328→          {selectedIds.size > 0 && (
+   329→            <Button variant="ghost" onClick={clearSelection} disabled={bulkDeleting}>Clear Selection</Button>
+   330→          )}
+   331→          <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700 text-white"><Plus className="size-4" />Add Purchase</Button>
+   332→        </div>
+   333→      </div>
+   334→
+   335→      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   336→        <Card className="border-l-4 border-l-emerald-500"><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Purchase Value</p>{loading ? <Skeleton className="h-6 w-32 mt-1" /> : <p className="text-xl font-bold text-emerald-700">{formatCurrency(grandTotal)}</p>}</CardContent></Card>
+   337→        <Card className="border-l-4 border-l-amber-500"><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Records</p>{loading ? <Skeleton className="h-6 w-16 mt-1" /> : <p className="text-xl font-bold text-amber-700">{items.length}</p>}</CardContent></Card>
+   338→      </div>
+   339→
+   340→      {/* Search */}
+   341→      <Card>
+   342→        <CardContent className="pt-6">
+   343→          <div className="relative">
+   344→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   345→            <Input
+   346→              placeholder="Search across all fields (date, name, remarks, etc.)..."
+   347→              value={search}
+   348→              onChange={(e) => setSearch(e.target.value)}
+   349→              className="pl-9"
+   350→            />
+   351→          </div>
+   352→        </CardContent>
+   353→      </Card>
+   354→
+   355→      {/* Desktop: Table view */}
+   356→      <Card className="hidden sm:block">
+   357→        <CardHeader><CardTitle className="flex items-center justify-between"><span>Dust Purchase Records</span><div className="flex items-center gap-2">{selectedIds.size > 0 && <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/30">{selectedIds.size} selected</Badge>}<Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">{filteredItems.length} of {items.length} record{items.length !== 1 ? 's' : ''}</Badge></div></CardTitle></CardHeader>
+   358→        <CardContent>
+   359→          <div className="max-h-[60vh] overflow-auto rounded-md border">
+   360→            <Table>
+   361→              <TableHeader className="sticky top-0 bg-background z-10"><TableRow><TableHead className="w-10"><Checkbox checked={filteredItems.length > 0 && selectedIds.size === filteredItems.length} onCheckedChange={toggleSelectAll} aria-label="Select all rows" /></TableHead><TableHead>Date</TableHead><TableHead>Vendor Name</TableHead><TableHead>Cement Name</TableHead><TableHead className="text-right">Quantity</TableHead><TableHead className="text-right">Rate</TableHead><TableHead className="text-right">Total (₹)</TableHead><TableHead className="text-right">Paid (₹)</TableHead><TableHead className="text-right">Transport (₹)</TableHead><TableHead className="text-right">GST (₹)</TableHead><TableHead>Remarks</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+   362→              <TableBody>
+   363→                {loading ? Array.from({ length: 5 }).map((_, i) => <TableRow key={i}>{Array.from({ length: 12 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-16" /></TableCell>)}</TableRow>)
+   364→                : filteredItems.length === 0 ? <TableRow><TableCell colSpan={12} className="h-32 text-center text-muted-foreground">No dust purchases yet. Click &quot;Add Purchase&quot; to get started.</TableCell></TableRow>
+   365→                : filteredItems.map((item) => (
+   366→                  <TableRow key={item.id} data-state={selectedIds.has(item.id) ? 'selected' : undefined} className={selectedIds.has(item.id) ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}>
+   367→                    <TableCell className="w-10"><Checkbox checked={selectedIds.has(item.id)} onCheckedChange={() => toggleSelect(item.id)} aria-label={`Select row for ${item.vendorName}`} /></TableCell>
+   368→                    <TableCell className="font-medium whitespace-nowrap">{formatDate(item.date)}</TableCell>
+   369→                    <TableCell className="font-medium">{item.vendorName}</TableCell>
+   370→                    <TableCell>{item.cementName || '—'}</TableCell>
+   371→                    <TableCell className="text-right font-mono">{item.quantity}</TableCell>
+   372→                    <TableCell className="text-right font-mono">{formatCurrency(item.rate)}</TableCell>
+   373→                    <TableCell className="text-right font-medium whitespace-nowrap">{formatCurrency(item.totalAmount)}</TableCell>
+   374→                    <TableCell className="text-right whitespace-nowrap">{formatCurrency(item.paidAmount)}</TableCell>
+   375→                    <TableCell className="text-right whitespace-nowrap">{formatCurrency(item.transportationCharge)}</TableCell>
+   376→                    <TableCell className="text-right whitespace-nowrap">{formatCurrency(item.gst)}</TableCell>
+   377→                    <TableCell className="max-w-[120px] truncate text-muted-foreground">{item.remarks || '—'}</TableCell>
+   378→                    <TableCell className="text-right"><div className="flex items-center justify-end gap-1"><Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} title="Edit"><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" onClick={() => setDeleteTarget(item)} title="Delete" className="text-destructive hover:text-destructive hover:bg-destructive/10"><Trash2 className="size-4" /></Button></div></TableCell>
+   379→                  </TableRow>
+   380→                ))}
+   381→              </TableBody>
+   382→            </Table>
+   383→          </div>
+   384→        </CardContent>
+   385→      </Card>
+   386→
+   387→      {/* Mobile: Card list view */}
+   388→      <div className="sm:hidden space-y-3">
+   389→        <div className="flex items-center justify-between px-1">
+   390→          <div className="flex items-center gap-2">
+   391→            <Checkbox
+   392→              checked={filteredItems.length > 0 && selectedIds.size === filteredItems.length}
+   393→              onCheckedChange={toggleSelectAll}
+   394→              aria-label="Select all"
+   395→            />
+   396→            <h3 className="text-base font-semibold">Records</h3>
+   397→          </div>
+   398→          <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">{filteredItems.length} of {items.length}</Badge>
+   399→        </div>
+   400→        {loading ? Array.from({ length: 4 }).map((_, i) => <Card key={i}><CardContent className="p-4 space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-2/3" /></CardContent></Card>)
+   401→        : filteredItems.length === 0 ? <Card><CardContent className="p-8 text-center text-muted-foreground">No dust purchases yet. Tap &quot;Add Purchase&quot; to get started.</CardContent></Card>
+   402→        : filteredItems.map((item) => (
+   403→          <Card key={item.id} data-state={selectedIds.has(item.id) ? 'selected' : undefined} className={selectedIds.has(item.id) ? 'border-destructive/40 bg-destructive/5' : ''}>
+   404→            <CardContent className="p-4 space-y-2">
+   405→              <div className="flex items-start justify-between gap-2">
+   406→                <div className="flex items-start gap-2 min-w-0 flex-1">
+   407→                  <Checkbox checked={selectedIds.has(item.id)} onCheckedChange={() => toggleSelect(item.id)} aria-label={`Select ${item.vendorName}`} className="mt-1" />
+   408→                  <div className="min-w-0 flex-1">
+   409→                    <p className="font-semibold truncate">{item.vendorName}</p>
+   410→                    <p className="text-xs text-muted-foreground">{formatDate(item.date)}</p>
+   411→                  </div>
+   412→                </div>
+   413→                <p className="font-bold text-emerald-700 whitespace-nowrap">{formatCurrency(item.totalAmount)}</p>
+   414→              </div>
+   415→              {item.cementName && <p className="text-sm text-muted-foreground truncate"><span className="font-medium text-foreground">Cement:</span> {item.cementName}</p>}
+   416→              <div className="grid grid-cols-2 gap-2 text-sm">
+   417→                <div><p className="text-xs text-muted-foreground">Quantity</p><p className="font-medium">{item.quantity}</p></div>
+   418→                <div><p className="text-xs text-muted-foreground">Rate</p><p className="font-medium">{formatCurrency(item.rate)}</p></div>
+   419→                <div><p className="text-xs text-muted-foreground">Paid</p><p className="font-medium text-emerald-700">{formatCurrency(item.paidAmount)}</p></div>
+   420→                <div><p className="text-xs text-muted-foreground">Transport</p><p className="font-medium">{formatCurrency(item.transportationCharge)}</p></div>
+   421→                <div className="col-span-2"><p className="text-xs text-muted-foreground">GST</p><p className="font-medium">{formatCurrency(item.gst)}</p></div>
+   422→              </div>
+   423→              {item.remarks && <p className="text-sm text-muted-foreground truncate"><span className="font-medium text-foreground">Remarks:</span> {item.remarks}</p>}
+   424→              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+   425→                <Button variant="outline" size="sm" onClick={() => openEditDialog(item)} className="h-8"><Pencil className="size-3.5 mr-1" />Edit</Button>
+   426→                <Button variant="outline" size="sm" onClick={() => setDeleteTarget(item)} className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"><Trash2 className="size-3.5 mr-1" />Delete</Button>
+   427→              </div>
+   428→            </CardContent>
+   429→          </Card>
+   430→        ))}
+   431→      </div>
+   432→
+   433→      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+   434→        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+   435→          <DialogHeader><DialogTitle>{editingItem ? 'Edit Dust Purchase' : 'Add Dust Purchase'}</DialogTitle><DialogDescription>{editingItem ? 'Update the purchase details.' : 'Fill in the details to create a new dust purchase.'}</DialogDescription></DialogHeader>
+   436→          <div className="grid gap-4 py-2">
+   437→            <div className="grid gap-2"><Label htmlFor="dp-date">Date <span className="text-destructive">*</span></Label><Input id="dp-date" type="date" value={formData.date} onChange={(e) => handleFormChange('date', e.target.value)} /></div>
+   438→            {!editingItem && (
+   439→              <div className="flex justify-end">
+   440→                <AiFillButton module="dustPurchase" onApply={(fields) => setFormData((prev) => ({
+   441→                  ...prev,
+   442→                  date: fields.date ? String(fields.date).slice(0, 10) : prev.date,
+   443→                  vendorName: fields.vendorName != null ? String(fields.vendorName) : prev.vendorName,
+   444→                  cementName: fields.cementName != null ? String(fields.cementName) : prev.cementName,
+   445→                  quantity: fields.quantity != null ? String(fields.quantity) : prev.quantity,
+   446→                  rate: fields.rate != null ? String(fields.rate) : prev.rate,
+   447→                  paidAmount: fields.paidAmount != null ? String(fields.paidAmount) : prev.paidAmount,
+   448→                  transportationCharge: fields.transportationCharge != null ? String(fields.transportationCharge) : prev.transportationCharge,
+   449→                  gst: fields.gst != null ? String(fields.gst) : prev.gst,
+   450→                  remarks: fields.remarks != null ? String(fields.remarks) : prev.remarks,
+   451→                }))} />
+   452→              </div>
+   453→            )}
+   454→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   455→            <div className="grid gap-2"><Label htmlFor="dp-vendor">Vendor Name <span className="text-destructive">*</span></Label>
+   456→              <div className="relative">
+   457→                <Input id="dp-vendor" placeholder="Enter vendor name" value={formData.vendorName} onChange={(e) => handleFormChange('vendorName', e.target.value)} className="pr-9" />
+   458→                <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+   459→                  <FieldVoiceInput fieldLabel="vendor name" onChange={(text) => handleFormChange('vendorName', text)} />
+   460→                </div>
+   461→              </div>
+   462→            </div>
+   463→              <div className="grid gap-2"><Label htmlFor="dp-cement">Cement Name</Label>
+   464→                <div className="relative">
+   465→                  <Input id="dp-cement" placeholder="Enter cement name" value={formData.cementName} onChange={(e) => handleFormChange('cementName', e.target.value)} className="pr-9" />
+   466→                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+   467→                    <FieldVoiceInput fieldLabel="cement name" onChange={(text) => handleFormChange('cementName', text)} />
+   468→                  </div>
+   469→                </div>
+   470→              </div>
+   471→            </div>
+   472→            <div className="grid grid-cols-2 gap-4">
+   473→              <div className="grid gap-2"><Label htmlFor="dp-qty">Quantity</Label><Input id="dp-qty" type="number" min="0" placeholder="0" value={formData.quantity} onChange={(e) => handleFormChange('quantity', e.target.value)} /></div>
+   474→              <div className="grid gap-2"><Label htmlFor="dp-rate">Rate</Label><div className="relative"><IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" /><Input id="dp-rate" type="number" min="0" placeholder="0" className="pl-9" value={formData.rate} onChange={(e) => handleFormChange('rate', e.target.value)} /></div></div>
+   475→            </div>
+   476→            <div className="grid gap-2"><Label>Total Amount (₹)</Label><div className="h-10 flex items-center px-3 rounded-md border bg-muted/50 font-medium">{formatCurrency(totalAmount)}</div></div>
+   477→            <div className="grid grid-cols-2 gap-4">
+   478→              <div className="grid gap-2"><Label htmlFor="dp-paid">Paid Amount (₹)</Label><div className="relative"><IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" /><Input id="dp-paid" type="number" min="0" placeholder="0" className="pl-9" value={formData.paidAmount} onChange={(e) => handleFormChange('paidAmount', e.target.value)} /></div></div>
+   479→              <div className="grid gap-2"><Label htmlFor="dp-transport">Transportation Charge (₹)</Label><div className="relative"><IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" /><Input id="dp-transport" type="number" min="0" placeholder="0" className="pl-9" value={formData.transportationCharge} onChange={(e) => handleFormChange('transportationCharge', e.target.value)} /></div></div>
+   480→            </div>
+   481→            <div className="grid gap-2"><Label htmlFor="dp-gst">GST (₹)</Label><div className="relative"><IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" /><Input id="dp-gst" type="number" min="0" placeholder="0" className="pl-9" value={formData.gst} onChange={(e) => handleFormChange('gst', e.target.value)} /></div></div>
+   482→            <div className="grid gap-2"><Label htmlFor="dp-remarks">Remarks</Label>
+   483→              <div className="relative">
+   484→                <Textarea id="dp-remarks" placeholder="Optional remarks..." value={formData.remarks} onChange={(e) => handleFormChange('remarks', e.target.value)} className="min-h-[80px] pr-9" />
+   485→                <div className="absolute right-1.5 top-2">
+   486→                  <FieldVoiceInput fieldLabel="remarks" onChange={(text) => handleFormChange('remarks', text)} />
+   487→                </div>
+   488→              </div>
+   489→            </div>
+   490→          </div>
+   491→          <DialogFooter><Button variant="outline" onClick={() => setFormOpen(false)} disabled={formSubmitting}>Cancel</Button><Button onClick={handleSubmit} disabled={formSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white">{formSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}{editingItem ? 'Update' : 'Create'}</Button></DialogFooter>
+   492→        </DialogContent>
+   493→      </Dialog>
+   494→
+   495→      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+   496→        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Dust Purchase</AlertDialogTitle><AlertDialogDescription>Are you sure you want to delete this purchase entry? This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} disabled={deleting} className="bg-destructive text-white hover:bg-destructive/90">{deleting && <Loader2 className="mr-2 size-4 animate-spin" />}Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+   497→      </AlertDialog>
+   498→
+   499→      {/* Bulk Delete Selected confirmation */}
+   500→      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => { if (!open && !bulkDeleting) setBulkDeleteOpen(false) }}>
+   501→        <AlertDialogContent>
+   502→          <AlertDialogHeader>
+   503→            <AlertDialogTitle className="text-destructive">Delete {selectedIds.size} Selected Dust Purchase {selectedIds.size === 1 ? 'Entry' : 'Entries'}?</AlertDialogTitle>
+   504→            <AlertDialogDescription className="space-y-2 text-sm">
+   505→              <span className="block">You are about to permanently delete <strong className="text-destructive">{selectedIds.size} dust purchase {selectedIds.size === 1 ? 'entry' : 'entries'}</strong>. This action <strong>cannot be undone</strong>.</span>
+   506→            </AlertDialogDescription>
+   507→          </AlertDialogHeader>
+   508→          <AlertDialogFooter>
+   509→            <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+   510→            <AlertDialogAction onClick={handleBulkDelete} disabled={bulkDeleting || selectedIds.size === 0} className="bg-destructive text-white hover:bg-destructive/90">{bulkDeleting && <Loader2 className="mr-2 size-4 animate-spin" />}Delete {selectedIds.size} {selectedIds.size === 1 ? 'Entry' : 'Entries'}</AlertDialogAction>
+   511→          </AlertDialogFooter>
+   512→        </AlertDialogContent>
+   513→      </AlertDialog>
+   514→
+   515→      <ExcelImport module="dustPurchase" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchData} />
+   516→    </div>
+   517→  )
+   518→}
+   519→
+   520→export default DustPurchaseModule
+   521→

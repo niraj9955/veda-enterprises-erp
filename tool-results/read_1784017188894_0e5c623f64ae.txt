@@ -1,0 +1,1100 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import * as React from 'react'
+     4→     4→import { api } from '@/lib/api'
+     5→     5→import { toast } from '@/hooks/use-toast'
+     6→     6→import { Button } from '@/components/ui/button'
+     7→     7→import { Input } from '@/components/ui/input'
+     8→     8→import { Badge } from '@/components/ui/badge'
+     9→     9→import { Skeleton } from '@/components/ui/skeleton'
+    10→    10→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    11→    11→import { Checkbox } from '@/components/ui/checkbox'
+    12→    12→import {
+    13→    13→  Table,
+    14→    14→  TableBody,
+    15→    15→  TableCell,
+    16→    16→  TableHead,
+    17→    17→  TableHeader,
+    18→    18→  TableRow,
+    19→    19→} from '@/components/ui/table'
+    20→    20→import { ScrollableTable } from '@/components/ui/scrollable-table'
+    21→    21→import {
+    22→    22→  AlertDialog,
+    23→    23→  AlertDialogAction,
+    24→    24→  AlertDialogCancel,
+    25→    25→  AlertDialogContent,
+    26→    26→  AlertDialogDescription,
+    27→    27→  AlertDialogFooter,
+    28→    28→  AlertDialogHeader,
+    29→    29→  AlertDialogTitle,
+    30→    30→} from '@/components/ui/alert-dialog'
+    31→    31→import { ShoppingCart, Plus, Trash2, Pencil, Loader2, Upload, Search, Trash, RefreshCw, CheckCircle2, X, Save } from 'lucide-react'
+    32→    32→import ExcelImport from '@/components/erp/excel-import'
+    33→    33→import { AiFillButton } from '@/components/ui/ai-fill-button'
+    34→    34→import { consumePendingAiResult } from '@/components/ui/ai-chat-widget'
+    35→    35→import { isFormEmpty, showPleaseFillDataToast } from '@/lib/form-validation'
+    36→    36→import {
+    37→    37→  Select,
+    38→    38→  SelectContent,
+    39→    39→  SelectGroup,
+    40→    40→  SelectItem,
+    41→    41→  SelectLabel,
+    42→    42→  SelectTrigger,
+    43→    43→  SelectValue,
+    44→    44→} from '@/components/ui/select'
+    45→    45→
+    46→    46→// ── Product list (single source of truth — matches Stock Overview items) ──
+    47→    47→const PRODUCT_ITEMS: { key: string; label: string }[] = [
+    48→    48→  { key: 'Cement', label: 'Cement' },
+    49→    49→  { key: 'Zig Zag Grey 80mm', label: 'Zig Zag Grey 80mm' },
+    50→    50→  { key: 'Zig Zag Red 80mm', label: 'Zig Zag Red 80mm' },
+    51→    51→  { key: 'Zig Zag Yellow 80mm', label: 'Zig Zag Yellow 80mm' },
+    52→    52→  { key: 'Zig Zag Grey 60mm', label: 'Zig Zag Grey 60mm' },
+    53→    53→  { key: 'Zig Zag Red 60mm', label: 'Zig Zag Red 60mm' },
+    54→    54→  { key: 'Zig Zag Yellow 60mm', label: 'Zig Zag Yellow 60mm' },
+    55→    55→  { key: 'Chequre Tile', label: 'Chequre Tile' },
+    56→    56→  { key: 'Curve Stone', label: 'Curve Stone' },
+    57→    57→  { key: 'Dumble Grey 80mm', label: 'Dumble Grey 80mm' },
+    58→    58→  { key: 'Dumble Red 80mm', label: 'Dumble Red 80mm' },
+    59→    59→  { key: 'Dumble Yellow 80mm', label: 'Dumble Yellow 80mm' },
+    60→    60→]
+    61→    61→
+    62→    62→// ── Types ───────────────────────────────────────────────────────────────────
+    63→    63→
+    64→    64→interface DailySell {
+    65→    65→  id: string
+    66→    66→  date: string
+    67→    67→  customerName: string
+    68→    68→  address: string
+    69→    69→  contactNumber: string
+    70→    70→  product: string
+    71→    71→  quantity: number
+    72→    72→  rate?: number
+    73→    73→  amount: number
+    74→    74→  transporterName?: string
+    75→    75→  transporterFair?: number
+    76→    76→  receivedAmount?: number
+    77→    77→  pendingAmount?: number
+    78→    78→  remarks: string
+    79→    79→  customerId?: string | null
+    80→    80→  orderId?: string | null
+    81→    81→  customerPaymentId?: string | null
+    82→    82→  syncNotes?: string
+    83→    83→  createdAt: string
+    84→    84→  updatedAt: string
+    85→    85→}
+    86→    86→
+    87→    87→interface DailySellFormData {
+    88→    88→  date: string
+    89→    89→  customerName: string
+    90→    90→  address: string
+    91→    91→  contactNumber: string
+    92→    92→  product: string
+    93→    93→  quantity: string
+    94→    94→  rate: string
+    95→    95→  amount: string
+    96→    96→  transporterName: string
+    97→    97→  transporterFair: string
+    98→    98→  receivedAmount: string
+    99→    99→  pendingAmount: string
+   100→   100→  remarks: string
+   101→   101→}
+   102→   102→
+   103→   103→// ── Helpers ─────────────────────────────────────────────────────────────────
+   104→   104→
+   105→   105→const formatCurrency = (amount: number): string =>
+   106→   106→  new Intl.NumberFormat('en-IN', {
+   107→   107→    style: 'currency',
+   108→   108→    currency: 'INR',
+   109→   109→    minimumFractionDigits: 0,
+   110→   110→    maximumFractionDigits: 2,
+   111→   111→  }).format(amount)
+   112→   112→
+   113→   113→const formatDate = (dateStr: string): string =>
+   114→   114→  new Date(dateStr + 'T00:00:00').toLocaleDateString('en-IN', {
+   115→   115→    day: '2-digit',
+   116→   116→    month: 'short',
+   117→   117→    year: 'numeric',
+   118→   118→  })
+   119→   119→
+   120→   120→const emptyForm: DailySellFormData = {
+   121→   121→  date: '',
+   122→   122→  customerName: '',
+   123→   123→  address: '',
+   124→   124→  contactNumber: '',
+   125→   125→  product: '',
+   126→   126→  quantity: '',
+   127→   127→  rate: '',
+   128→   128→  amount: '',
+   129→   129→  transporterName: '',
+   130→   130→  transporterFair: '',
+   131→   131→  receivedAmount: '',
+   132→   132→  pendingAmount: '',
+   133→   133→  remarks: '',
+   134→   134→}
+   135→   135→
+   136→   136→// ── Reusable inline cell input ──────────────────────────────────────────────
+   137→   137→// Small text/number Input that fits inside a table cell. Memoized so the
+   138→   138→// entire table doesn't re-render on every keystroke.
+   139→   139→
+   140→   140→const CellInput = React.memo(function CellInput({
+   141→   141→  value,
+   142→   142→  onChange,
+   143→   143→  placeholder,
+   144→   144→  type = 'text',
+   145→   145→  min,
+   146→   146→}: {
+   147→   147→  value: string
+   148→   148→  onChange: (v: string) => void
+   149→   149→  placeholder?: string
+   150→   150→  type?: string
+   151→   151→  min?: string
+   152→   152→}) {
+   153→   153→  return (
+   154→   154→    <Input
+   155→   155→      type={type}
+   156→   156→      min={min}
+   157→   157→      value={value}
+   158→   158→      onChange={(e) => onChange(e.target.value)}
+   159→   159→      placeholder={placeholder}
+   160→   160→      className="h-8 text-xs px-2 min-w-[80px]"
+   161→   161→    />
+   162→   162→  )
+   163→   163→})
+   164→   164→
+   165→   165→// ── Component ───────────────────────────────────────────────────────────────
+   166→   166→
+   167→   167→export function DailySellModule() {
+   168→   168→  const [dailySells, setDailySells] = React.useState<DailySell[]>([])
+   169→   169→  const [search, setSearch] = React.useState('')
+   170→   170→  const [debouncedSearch, setDebouncedSearch] = React.useState('')
+   171→   171→  const [loading, setLoading] = React.useState(true)
+   172→   172→
+   173→   173→  // ── Inline "Quick Add" row state ─────────────────────────────────────
+   174→   174→  // The form is now an inline row at the top of the table — no popup.
+   175→   175→  const [newRow, setNewRow] = React.useState<DailySellFormData>(emptyForm)
+   176→   176→  const [savingNew, setSavingNew] = React.useState(false)
+   177→   177→
+   178→   178→  // ── Inline edit mode for an existing row ─────────────────────────────
+   179→   179→  // When editingId is set, that row becomes editable in place.
+   180→   180→  const [editingId, setEditingId] = React.useState<string | null>(null)
+   181→   181→  const [editRow, setEditRow] = React.useState<DailySellFormData>(emptyForm)
+   182→   182→  const [savingEdit, setSavingEdit] = React.useState(false)
+   183→   183→
+   184→   184→  // ── Multi-select / delete state ──────────────────────────────────────
+   185→   185→  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+   186→   186→  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false)
+   187→   187→  const [bulkDeleting, setBulkDeleting] = React.useState(false)
+   188→   188→  const [deleteAllOpen, setDeleteAllOpen] = React.useState(false)
+   189→   189→  const [deletingAll, setDeletingAll] = React.useState(false)
+   190→   190→  const [deleteTarget, setDeleteTarget] = React.useState<DailySell | null>(null)
+   191→   191→  const [deleting, setDeleting] = React.useState(false)
+   192→   192→  const [importOpen, setImportOpen] = React.useState(false)
+   193→   193→
+   194→   194→  const fetchData = React.useCallback(async () => {
+   195→   195→    setLoading(true)
+   196→   196→    try {
+   197→   197→      const res = await api.getDailySells()
+   198→   198→      const data = (res.dailySells as DailySell[]).sort(
+   199→   199→        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+   200→   200→      )
+   201→   201→      setDailySells(data)
+   202→   202→    } catch (err) {
+   203→   203→      toast({
+   204→   204→        title: 'Error',
+   205→   205→        description: err instanceof Error ? err.message : 'Failed to fetch daily sell data',
+   206→   206→        variant: 'destructive',
+   207→   207→      })
+   208→   208→    } finally {
+   209→   209→      setLoading(false)
+   210→   210→    }
+   211→   211→  }, [])
+   212→   212→
+   213→   213→  // Debounced search
+   214→   214→  React.useEffect(() => {
+   215→   215→    const t = setTimeout(() => setDebouncedSearch(search), 250)
+   216→   216→    return () => clearTimeout(t)
+   217→   217→  }, [search])
+   218→   218→
+   219→   219→  const filteredDailySells = React.useMemo(() => {
+   220→   220→    if (!debouncedSearch.trim()) return dailySells
+   221→   221→    const q = debouncedSearch.toLowerCase()
+   222→   222→    return dailySells.filter((item: any) =>
+   223→   223→      ['date', 'customerName', 'address', 'contactNumber', 'product', 'remarks'].some((f) =>
+   224→   224→        String((item as any)[f] ?? '').toLowerCase().includes(q)
+   225→   225→      )
+   226→   226→    )
+   227→   227→  }, [dailySells, debouncedSearch])
+   228→   228→
+   229→   229→  React.useEffect(() => {
+   230→   230→    fetchData()
+   231→   231→  }, [fetchData])
+   232→   232→
+   233→   233→  // ── Auto-calc for new row ────────────────────────────────────────────
+   234→   234→  const newComputedAmount = React.useMemo(() => {
+   235→   235→    const qty = Number(newRow.quantity) || 0
+   236→   236→    const rate = Number(newRow.rate) || 0
+   237→   237→    return qty * rate
+   238→   238→  }, [newRow.quantity, newRow.rate])
+   239→   239→
+   240→   240→  const newComputedPending = React.useMemo(() => {
+   241→   241→    return Math.max(0, newComputedAmount - (Number(newRow.receivedAmount) || 0))
+   242→   242→  }, [newComputedAmount, newRow.receivedAmount])
+   243→   243→
+   244→   244→  // ── Auto-calc for edit row ───────────────────────────────────────────
+   245→   245→  const editComputedAmount = React.useMemo(() => {
+   246→   246→    const qty = Number(editRow.quantity) || 0
+   247→   247→    const rate = Number(editRow.rate) || 0
+   248→   248→    return qty * rate
+   249→   249→  }, [editRow.quantity, editRow.rate])
+   250→   250→
+   251→   251→  const editComputedPending = React.useMemo(() => {
+   252→   252→    return Math.max(0, editComputedAmount - (Number(editRow.receivedAmount) || 0))
+   253→   253→  }, [editComputedAmount, editRow.receivedAmount])
+   254→   254→
+   255→   255→  // ── Auto-fill from chat-widget AI result ─────────────────────────────
+   256→   256→  React.useEffect(() => {
+   257→   257→    const pending = consumePendingAiResult('dailySell')
+   258→   258→    if (pending) {
+   259→   259→      setNewRow({
+   260→   260→        date: String(pending.date || ''),
+   261→   261→        customerName: String(pending.customerName || ''),
+   262→   262→        address: String(pending.address || ''),
+   263→   263→        contactNumber: String(pending.contactNumber || ''),
+   264→   264→        product: String(pending.product || ''),
+   265→   265→        quantity: pending.quantity != null ? String(pending.quantity) : '',
+   266→   266→        rate: pending.rate != null ? String(pending.rate) : '',
+   267→   267→        amount: pending.amount != null ? String(pending.amount) : '',
+   268→   268→        transporterName: String(pending.transporterName || ''),
+   269→   269→        transporterFair: pending.transporterFair != null ? String(pending.transporterFair) : '',
+   270→   270→        receivedAmount: (pending as any).receivedAmount != null ? String((pending as any).receivedAmount) : '',
+   271→   271→        pendingAmount: (pending as any).pendingAmount != null ? String((pending as any).pendingAmount) : '',
+   272→   272→        remarks: String(pending.remarks || ''),
+   273→   273→      })
+   274→   274→      toast({ title: 'AI auto-fill applied', description: 'Review the top row and click Save.' })
+   275→   275→    }
+   276→   276→  }, [])
+   277→   277→
+   278→   278→  // ── Handlers ─────────────────────────────────────────────────────────
+   279→   279→  const handleNewRowChange = (field: keyof DailySellFormData, value: string) => {
+   280→   280→    setNewRow((prev) => ({ ...prev, [field]: value }))
+   281→   281→  }
+   282→   282→  const handleEditRowChange = (field: keyof DailySellFormData, value: string) => {
+   283→   283→    setEditRow((prev) => ({ ...prev, [field]: value }))
+   284→   284→  }
+   285→   285→
+   286→   286→  const handleSaveNew = async () => {
+   287→   287→    if (isFormEmpty([newRow.date, newRow.customerName])) {
+   288→   288→      toast(showPleaseFillDataToast())
+   289→   289→      return
+   290→   290→    }
+   291→   291→    if (!newRow.date) {
+   292→   292→      toast({ title: 'Validation Error', description: 'Date is required', variant: 'destructive' })
+   293→   293→      return
+   294→   294→    }
+   295→   295→    if (!newRow.customerName.trim()) {
+   296→   296→      toast({ title: 'Validation Error', description: 'Customer name is required', variant: 'destructive' })
+   297→   297→      return
+   298→   298→    }
+   299→   299→
+   300→   300→    setSavingNew(true)
+   301→   301→    try {
+   302→   302→      const payload = {
+   303→   303→        date: newRow.date,
+   304→   304→        customerName: newRow.customerName.trim(),
+   305→   305→        address: newRow.address.trim(),
+   306→   306→        contactNumber: newRow.contactNumber.trim(),
+   307→   307→        product: newRow.product.trim(),
+   308→   308→        quantity: Number(newRow.quantity) || 0,
+   309→   309→        rate: Number(newRow.rate) || 0,
+   310→   310→        amount: newComputedAmount,
+   311→   311→        transporterName: newRow.transporterName.trim(),
+   312→   312→        transporterFair: Number(newRow.transporterFair) || 0,
+   313→   313→        receivedAmount: Number(newRow.receivedAmount) || 0,
+   314→   314→        remarks: newRow.remarks.trim(),
+   315→   315→      }
+   316→   316→      const res = await api.createDailySell(payload)
+   317→   317→      const synced = (res as any)?.dailySell?.syncNotes
+   318→   318→      toast({
+   319→   319→        title: 'Success',
+   320→   320→        description: synced
+   321→   321→          ? `Entry created · Auto-synced: ${synced}`
+   322→   322→          : 'Daily sell entry created successfully',
+   323→   323→      })
+   324→   324→      setNewRow(emptyForm)
+   325→   325→      fetchData()
+   326→   326→    } catch (err) {
+   327→   327→      toast({
+   328→   328→        title: 'Error',
+   329→   329→        description: err instanceof Error ? err.message : 'Failed to save daily sell entry',
+   330→   330→        variant: 'destructive',
+   331→   331→      })
+   332→   332→    } finally {
+   333→   333→      setSavingNew(false)
+   334→   334→    }
+   335→   335→  }
+   336→   336→
+   337→   337→  const handleStartEdit = (item: DailySell) => {
+   338→   338→    setEditingId(item.id)
+   339→   339→    setEditRow({
+   340→   340→      date: item.date ? item.date.split('T')[0] : '',
+   341→   341→      customerName: item.customerName || '',
+   342→   342→      address: item.address || '',
+   343→   343→      contactNumber: item.contactNumber || '',
+   344→   344→      product: item.product || '',
+   345→   345→      quantity: String(item.quantity ?? ''),
+   346→   346→      rate: String(item.rate ?? ''),
+   347→   347→      amount: String(item.amount || ''),
+   348→   348→      transporterName: item.transporterName || '',
+   349→   349→      transporterFair: String(item.transporterFair ?? ''),
+   350→   350→      receivedAmount: String(item.receivedAmount ?? ''),
+   351→   351→      pendingAmount: String(item.pendingAmount ?? ''),
+   352→   352→      remarks: item.remarks || '',
+   353→   353→    })
+   354→   354→  }
+   355→   355→
+   356→   356→  const handleCancelEdit = () => {
+   357→   357→    setEditingId(null)
+   358→   358→    setEditRow(emptyForm)
+   359→   359→  }
+   360→   360→
+   361→   361→  const handleSaveEdit = async () => {
+   362→   362→    if (!editingId) return
+   363→   363→    if (!editRow.date) {
+   364→   364→      toast({ title: 'Validation Error', description: 'Date is required', variant: 'destructive' })
+   365→   365→      return
+   366→   366→    }
+   367→   367→    if (!editRow.customerName.trim()) {
+   368→   368→      toast({ title: 'Validation Error', description: 'Customer name is required', variant: 'destructive' })
+   369→   369→      return
+   370→   370→    }
+   371→   371→
+   372→   372→    setSavingEdit(true)
+   373→   373→    try {
+   374→   374→      const payload = {
+   375→   375→        date: editRow.date,
+   376→   376→        customerName: editRow.customerName.trim(),
+   377→   377→        address: editRow.address.trim(),
+   378→   378→        contactNumber: editRow.contactNumber.trim(),
+   379→   379→        product: editRow.product.trim(),
+   380→   380→        quantity: Number(editRow.quantity) || 0,
+   381→   381→        rate: Number(editRow.rate) || 0,
+   382→   382→        amount: editComputedAmount,
+   383→   383→        transporterName: editRow.transporterName.trim(),
+   384→   384→        transporterFair: Number(editRow.transporterFair) || 0,
+   385→   385→        receivedAmount: Number(editRow.receivedAmount) || 0,
+   386→   386→        remarks: editRow.remarks.trim(),
+   387→   387→      }
+   388→   388→      const res = await api.updateDailySell(editingId, payload)
+   389→   389→      const synced = (res as any)?.dailySell?.syncNotes
+   390→   390→      toast({
+   391→   391→        title: 'Success',
+   392→   392→        description: synced
+   393→   393→          ? `Entry updated · Auto-synced: ${synced}`
+   394→   394→          : 'Daily sell entry updated successfully',
+   395→   395→      })
+   396→   396→      handleCancelEdit()
+   397→   397→      fetchData()
+   398→   398→    } catch (err) {
+   399→   399→      toast({
+   400→   400→        title: 'Error',
+   401→   401→        description: err instanceof Error ? err.message : 'Failed to update daily sell entry',
+   402→   402→        variant: 'destructive',
+   403→   403→      })
+   404→   404→    } finally {
+   405→   405→      setSavingEdit(false)
+   406→   406→    }
+   407→   407→  }
+   408→   408→
+   409→   409→  // ── Selection handlers ──────────────────────────────────────────────
+   410→   410→  const toggleSelect = (id: string) => {
+   411→   411→    setSelectedIds((prev) => {
+   412→   412→      const next = new Set(prev)
+   413→   413→      if (next.has(id)) next.delete(id)
+   414→   414→      else next.add(id)
+   415→   415→      return next
+   416→   416→    })
+   417→   417→  }
+   418→   418→
+   419→   419→  const toggleSelectAll = () => {
+   420→   420→    setSelectedIds((prev) => {
+   421→   421→      if (prev.size === filteredDailySells.length && filteredDailySells.length > 0) {
+   422→   422→        return new Set()
+   423→   423→      }
+   424→   424→      return new Set(filteredDailySells.map((s) => s.id))
+   425→   425→    })
+   426→   426→  }
+   427→   427→
+   428→   428→  const clearSelection = () => setSelectedIds(new Set())
+   429→   429→
+   430→   430→  // ── Bulk delete selected ────────────────────────────────────────────
+   431→   431→  const handleBulkDelete = async () => {
+   432→   432→    const ids = Array.from(selectedIds)
+   433→   433→    if (ids.length === 0) return
+   434→   434→    setBulkDeleting(true)
+   435→   435→    try {
+   436→   436→      const res = await api.bulkDeleteDailySells(ids)
+   437→   437→      toast({
+   438→   438→        title: 'Success',
+   439→   439→        description: `${res.deletedCount} of ${ids.length} entr${res.deletedCount === 1 ? 'y' : 'ies'} deleted`,
+   440→   440→      })
+   441→   441→      setBulkDeleteOpen(false)
+   442→   442→      clearSelection()
+   443→   443→      fetchData()
+   444→   444→    } catch (err) {
+   445→   445→      toast({
+   446→   446→        title: 'Error',
+   447→   447→        description: err instanceof Error ? err.message : 'Failed to delete selected entries',
+   448→   448→        variant: 'destructive',
+   449→   449→      })
+   450→   450→    } finally {
+   451→   451→      setBulkDeleting(false)
+   452→   452→    }
+   453→   453→  }
+   454→   454→
+   455→   455→  // ── Delete ALL ──────────────────────────────────────────────────────
+   456→   456→  const handleDeleteAll = async () => {
+   457→   457→    setDeletingAll(true)
+   458→   458→    try {
+   459→   459→      const res = await api.deleteAllDailySells()
+   460→   460→      toast({
+   461→   461→        title: 'Success',
+   462→   462→        description: `${res.deletedCount} entr${res.deletedCount === 1 ? 'y' : 'ies'} deleted`,
+   463→   463→      })
+   464→   464→      setDeleteAllOpen(false)
+   465→   465→      clearSelection()
+   466→   466→      fetchData()
+   467→   467→    } catch (err) {
+   468→   468→      toast({
+   469→   469→        title: 'Error',
+   470→   470→        description: err instanceof Error ? err.message : 'Failed to delete all entries',
+   471→   471→        variant: 'destructive',
+   472→   472→      })
+   473→   473→    } finally {
+   474→   474→      setDeletingAll(false)
+   475→   475→    }
+   476→   476→  }
+   477→   477→
+   478→   478→  const handleDelete = async () => {
+   479→   479→    if (!deleteTarget) return
+   480→   480→    setDeleting(true)
+   481→   481→    try {
+   482→   482→      await api.deleteDailySell(deleteTarget.id)
+   483→   483→      toast({ title: 'Success', description: 'Daily sell entry deleted successfully' })
+   484→   484→      setDeleteTarget(null)
+   485→   485→      fetchData()
+   486→   486→    } catch (err) {
+   487→   487→      toast({
+   488→   488→        title: 'Error',
+   489→   489→        description: err instanceof Error ? err.message : 'Failed to delete entry',
+   490→   490→        variant: 'destructive',
+   491→   491→      })
+   492→   492→    } finally {
+   493→   493→      setDeleting(false)
+   494→   494→    }
+   495→   495→  }
+   496→   496→
+   497→   497→  // ── Summary totals ──────────────────────────────────────────────────
+   498→   498→  const totalAmount = dailySells.reduce((sum, s) => sum + (s.amount || 0), 0)
+   499→   499→  const totalReceived = dailySells.reduce((sum, s) => sum + (s.receivedAmount || 0), 0)
+   500→   500→  const totalPending = dailySells.reduce((sum, s) => sum + (s.pendingAmount || 0), 0)
+   501→   501→
+   502→   502→  const renderSkeletons = () =>
+   503→   503→    Array.from({ length: 5 }).map((_, i) => (
+   504→   504→      <TableRow key={i}>
+   505→   505→        <TableCell><Skeleton className="h-4 w-6" /></TableCell>
+   506→   506→        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+   507→   507→        <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+   508→   508→        <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+   509→   509→        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+   510→   510→        <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+   511→   511→        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+   512→   512→        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+   513→   513→        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+   514→   514→        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+   515→   515→        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+   516→   516→        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+   517→   517→        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+   518→   518→        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+   519→   519→        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+   520→   520→        <TableCell><Skeleton className="h-8 w-20" /></TableCell>
+   521→   521→      </TableRow>
+   522→   522→    ))
+   523→   523→
+   524→   524→  // ── Reusable AI-fill handler for the Quick Add row ──────────────────
+   525→   525→  const applyAiToNewRow = (fields: any) =>
+   526→   526→    setNewRow((prev) => ({
+   527→   527→      date: fields.date != null ? String(fields.date) : prev.date,
+   528→   528→      customerName: fields.customerName != null ? String(fields.customerName) : prev.customerName,
+   529→   529→      address: fields.address != null ? String(fields.address) : prev.address,
+   530→   530→      contactNumber: fields.contactNumber != null ? String(fields.contactNumber) : prev.contactNumber,
+   531→   531→      product: fields.product != null ? String(fields.product) : prev.product,
+   532→   532→      quantity: fields.quantity != null ? String(fields.quantity) : prev.quantity,
+   533→   533→      rate: fields.rate != null ? String(fields.rate) : prev.rate,
+   534→   534→      amount: fields.amount != null ? String(fields.amount) : prev.amount,
+   535→   535→      transporterName: fields.transporterName != null ? String(fields.transporterName) : prev.transporterName,
+   536→   536→      transporterFair: fields.transporterFair != null ? String(fields.transporterFair) : prev.transporterFair,
+   537→   537→      receivedAmount: fields.receivedAmount != null ? String(fields.receivedAmount) : prev.receivedAmount,
+   538→   538→      pendingAmount: fields.pendingAmount != null ? String(fields.pendingAmount) : prev.pendingAmount,
+   539→   539→      remarks: fields.remarks != null ? String(fields.remarks) : prev.remarks,
+   540→   540→    }))
+   541→   541→
+   542→   542→  return (
+   543→   543→    <div className="space-y-6 relative">
+   544→   544→      {/* Full-screen loading overlay for delete operations */}
+   545→   545→      {(deleting || deletingAll || bulkDeleting) && (
+   546→   546→        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+   547→   547→          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl p-8 flex flex-col items-center gap-4 min-w-[280px]">
+   548→   548→            <Loader2 className="size-12 animate-spin text-emerald-600" />
+   549→   549→            <div className="text-center">
+   550→   550→              <p className="text-lg font-semibold">
+   551→   551→                {bulkDeleting
+   552→   552→                  ? `Deleting ${selectedIds.size} entries...`
+   553→   553→                  : deletingAll
+   554→   554→                  ? 'Deleting all entries...'
+   555→   555→                  : 'Deleting entry...'}
+   556→   556→              </p>
+   557→   557→              <p className="text-sm text-muted-foreground mt-1">Please wait while records are removed.</p>
+   558→   558→            </div>
+   559→   559→          </div>
+   560→   560→        </div>
+   561→   561→      )}
+   562→   562→
+   563→   563→      {/* Header */}
+   564→   564→      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   565→   565→        <div className="flex items-center gap-3">
+   566→   566→          <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+   567→   567→            <ShoppingCart className="size-5" />
+   568→   568→          </div>
+   569→   569→          <div>
+   570→   570→            <h2 className="text-2xl font-bold tracking-tight">Daily Sell</h2>
+   571→   571→            <p className="text-sm text-muted-foreground">
+   572→   572→              Track daily sales — auto-syncs to Customer, Order, Payment &amp; Stock
+   573→   573→            </p>
+   574→   574→          </div>
+   575→   575→        </div>
+   576→   576→        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+   577→   577→          <Button variant="outline" onClick={() => setImportOpen(true)} className="w-full sm:w-auto">
+   578→   578→            <Upload className="size-4 mr-2" />
+   579→   579→            Import Excel
+   580→   580→          </Button>
+   581→   581→          {selectedIds.size > 0 && (
+   582→   582→            <Button
+   583→   583→              variant="outline"
+   584→   584→              onClick={() => setBulkDeleteOpen(true)}
+   585→   585→              disabled={bulkDeleting || loading}
+   586→   586→              className="w-full sm:w-auto text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+   587→   587→            >
+   588→   588→              <Trash2 className="size-4 mr-2" />
+   589→   589→              Delete Selected
+   590→   590→              <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive border-destructive/30">
+   591→   591→                {selectedIds.size}
+   592→   592→              </Badge>
+   593→   593→            </Button>
+   594→   594→          )}
+   595→   595→          {selectedIds.size > 0 && (
+   596→   596→            <Button variant="ghost" onClick={clearSelection} disabled={bulkDeleting} className="w-full sm:w-auto">
+   597→   597→              Clear Selection
+   598→   598→            </Button>
+   599→   599→          )}
+   600→   600→          <Button
+   601→   601→            variant="outline"
+   602→   602→            onClick={() => setDeleteAllOpen(true)}
+   603→   603→            disabled={dailySells.length === 0 || loading}
+   604→   604→            className="w-full sm:w-auto text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+   605→   605→          >
+   606→   606→            <Trash className="size-4 mr-2" />
+   607→   607→            Delete All
+   608→   608→          </Button>
+   609→   609→        </div>
+   610→   610→      </div>
+   611→   611→
+   612→   612→      {/* Summary cards — 3 cards: Total Sales, Total Received, Total Pending */}
+   613→   613→      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   614→   614→        <Card className="border-l-4 border-l-emerald-500">
+   615→   615→          <CardContent className="p-4">
+   616→   616→            <p className="text-xs text-muted-foreground">Total Sales</p>
+   617→   617→            {loading ? (
+   618→   618→              <Skeleton className="h-6 w-32 mt-1" />
+   619→   619→            ) : (
+   620→   620→              <p className="text-xl font-bold text-emerald-700">{formatCurrency(totalAmount)}</p>
+   621→   621→            )}
+   622→   622→          </CardContent>
+   623→   623→        </Card>
+   624→   624→        <Card className="border-l-4 border-l-blue-500">
+   625→   625→          <CardContent className="p-4">
+   626→   626→            <p className="text-xs text-muted-foreground">Total Received</p>
+   627→   627→            {loading ? (
+   628→   628→              <Skeleton className="h-6 w-32 mt-1" />
+   629→   629→            ) : (
+   630→   630→              <p className="text-xl font-bold text-blue-700">{formatCurrency(totalReceived)}</p>
+   631→   631→            )}
+   632→   632→          </CardContent>
+   633→   633→        </Card>
+   634→   634→        <Card className="border-l-4 border-l-amber-500">
+   635→   635→          <CardContent className="p-4">
+   636→   636→            <p className="text-xs text-muted-foreground">Total Pending</p>
+   637→   637→            {loading ? (
+   638→   638→              <Skeleton className="h-6 w-32 mt-1" />
+   639→   639→            ) : (
+   640→   640→              <p className="text-xl font-bold text-amber-700">{formatCurrency(totalPending)}</p>
+   641→   641→            )}
+   642→   642→          </CardContent>
+   643→   643→        </Card>
+   644→   644→      </div>
+   645→   645→
+   646→   646→      {/* Search */}
+   647→   647→      <Card>
+   648→   648→        <CardContent className="pt-6">
+   649→   649→          <div className="relative">
+   650→   650→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   651→   651→            <Input
+   652→   652→              placeholder="Search across all fields (date, name, remarks, etc.)..."
+   653→   653→              value={search}
+   654→   654→              onChange={(e) => setSearch(e.target.value)}
+   655→   655→              className="pl-9"
+   656→   656→            />
+   657→   657→          </div>
+   658→   658→        </CardContent>
+   659→   659→      </Card>
+   660→   660→
+   661→   661→      {/* Auto-sync info banner — compact, above table */}
+   662→   662→      <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-900/15 px-3 py-2 flex items-center gap-2 text-xs text-emerald-800 dark:text-emerald-200">
+   663→   663→        <RefreshCw className="size-3.5 shrink-0" />
+   664→   664→        <span>
+   665→   665→          <strong>Auto-sync on save:</strong> Customer, Order, Customer Payment (received amount),
+   666→   666→          and Stock auto-update from each entry. Fill the green row below and click Save — no popup.
+   667→   667→        </span>
+   668→   668→      </div>
+   669→   669→
+   670→   670→      {/* Table card — inline editable */}
+   671→   671→      <Card>
+   672→   672→        <CardHeader>
+   673→   673→          <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
+   674→   674→            <div className="flex items-center gap-2">
+   675→   675→              <span>Daily Sell Records — Inline Editable</span>
+   676→   676→              <AiFillButton module="dailySell" onApply={applyAiToNewRow} />
+   677→   677→            </div>
+   678→   678→            <div className="flex items-center gap-2 flex-wrap">
+   679→   679→              {selectedIds.size > 0 && (
+   680→   680→                <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/30">
+   681→   681→                  {selectedIds.size} selected
+   682→   682→                </Badge>
+   683→   683→              )}
+   684→   684→              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+   685→   685→                {filteredDailySells.length} of {dailySells.length} record{dailySells.length !== 1 ? 's' : ''}
+   686→   686→              </Badge>
+   687→   687→            </div>
+   688→   688→          </CardTitle>
+   689→   689→        </CardHeader>
+   690→   690→        <CardContent>
+   691→   691→          <ScrollableTable maxHeight="max-h-[70vh]">
+   692→   692→            <Table>
+   693→   693→              <TableHeader>
+   694→   694→                <TableRow>
+   695→   695→                  <TableHead className="w-10 sticky left-0 bg-background z-20">
+   696→   696→                    <Checkbox
+   697→   697→                      checked={
+   698→   698→                        filteredDailySells.length > 0 &&
+   699→   699→                        selectedIds.size === filteredDailySells.length
+   700→   700→                      }
+   701→   701→                      onCheckedChange={toggleSelectAll}
+   702→   702→                      aria-label="Select all rows"
+   703→   703→                    />
+   704→   704→                  </TableHead>
+   705→   705→                  <TableHead className="sticky left-10 bg-background z-20 whitespace-nowrap">Date</TableHead>
+   706→   706→                  <TableHead className="whitespace-nowrap">Customer Name</TableHead>
+   707→   707→                  <TableHead className="whitespace-nowrap">Address</TableHead>
+   708→   708→                  <TableHead className="whitespace-nowrap">Contact</TableHead>
+   709→   709→                  <TableHead className="whitespace-nowrap">Product</TableHead>
+   710→   710→                  <TableHead className="text-right whitespace-nowrap">Qty</TableHead>
+   711→   711→                  <TableHead className="text-right whitespace-nowrap">Rate</TableHead>
+   712→   712→                  <TableHead className="text-right whitespace-nowrap">Amount</TableHead>
+   713→   713→                  <TableHead className="whitespace-nowrap">Transporter</TableHead>
+   714→   714→                  <TableHead className="text-right whitespace-nowrap">T. Fair</TableHead>
+   715→   715→                  <TableHead className="text-right whitespace-nowrap">Received</TableHead>
+   716→   716→                  <TableHead className="text-right whitespace-nowrap">Pending</TableHead>
+   717→   717→                  <TableHead className="whitespace-nowrap">Remarks</TableHead>
+   718→   718→                  <TableHead className="text-center whitespace-nowrap">Synced</TableHead>
+   719→   719→                  <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
+   720→   720→                </TableRow>
+   721→   721→              </TableHeader>
+   722→   722→              <TableBody>
+   723→   723→                {/* ───────────── Quick Add row (always visible at top) ───────────── */}
+   724→   724→                <TableRow className="bg-emerald-50/60 dark:bg-emerald-900/15 border-t-2 border-t-emerald-400 hover:bg-emerald-50/60">
+   725→   725→                  <TableCell className="sticky left-0 bg-emerald-50/60 dark:bg-emerald-900/15 z-10">
+   726→   726→                    <span className="text-emerald-600 text-base font-bold">+</span>
+   727→   727→                  </TableCell>
+   728→   728→                  <TableCell className="sticky left-10 bg-emerald-50/60 dark:bg-emerald-900/15 z-10 min-w-[130px]">
+   729→   729→                    <Input
+   730→   730→                      type="date"
+   731→   731→                      value={newRow.date}
+   732→   732→                      onChange={(e) => handleNewRowChange('date', e.target.value)}
+   733→   733→                      className="h-8 text-xs px-2"
+   734→   734→                    />
+   735→   735→                  </TableCell>
+   736→   736→                  <TableCell className="min-w-[140px]">
+   737→   737→                    <CellInput value={newRow.customerName} onChange={(v) => handleNewRowChange('customerName', v)} placeholder="Customer" />
+   738→   738→                  </TableCell>
+   739→   739→                  <TableCell className="min-w-[140px]">
+   740→   740→                    <CellInput value={newRow.address} onChange={(v) => handleNewRowChange('address', v)} placeholder="Address" />
+   741→   741→                  </TableCell>
+   742→   742→                  <TableCell className="min-w-[120px]">
+   743→   743→                    <CellInput value={newRow.contactNumber} onChange={(v) => handleNewRowChange('contactNumber', v)} placeholder="Contact" />
+   744→   744→                  </TableCell>
+   745→   745→                  <TableCell className="min-w-[160px]">
+   746→   746→                    <Select value={newRow.product} onValueChange={(v) => handleNewRowChange('product', v)}>
+   747→   747→                      <SelectTrigger className="h-8 text-xs px-2">
+   748→   748→                        <SelectValue placeholder="Product" />
+   749→   749→                      </SelectTrigger>
+   750→   750→                      <SelectContent>
+   751→   751→                        <SelectGroup>
+   752→   752→                          <SelectLabel>Product Items</SelectLabel>
+   753→   753→                          {PRODUCT_ITEMS.map((p) => (
+   754→   754→                            <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
+   755→   755→                          ))}
+   756→   756→                        </SelectGroup>
+   757→   757→                      </SelectContent>
+   758→   758→                    </Select>
+   759→   759→                  </TableCell>
+   760→   760→                  <TableCell className="min-w-[80px]">
+   761→   761→                    <CellInput type="number" min="0" value={newRow.quantity} onChange={(v) => handleNewRowChange('quantity', v)} placeholder="0" />
+   762→   762→                  </TableCell>
+   763→   763→                  <TableCell className="min-w-[90px]">
+   764→   764→                    <CellInput type="number" min="0" value={newRow.rate} onChange={(v) => handleNewRowChange('rate', v)} placeholder="0" />
+   765→   765→                  </TableCell>
+   766→   766→                  <TableCell className="text-right font-semibold whitespace-nowrap tabular-nums text-emerald-700 dark:text-emerald-300">
+   767→   767→                    {formatCurrency(newComputedAmount)}
+   768→   768→                  </TableCell>
+   769→   769→                  <TableCell className="min-w-[130px]">
+   770→   770→                    <CellInput value={newRow.transporterName} onChange={(v) => handleNewRowChange('transporterName', v)} placeholder="Transporter" />
+   771→   771→                  </TableCell>
+   772→   772→                  <TableCell className="min-w-[90px]">
+   773→   773→                    <CellInput type="number" min="0" value={newRow.transporterFair} onChange={(v) => handleNewRowChange('transporterFair', v)} placeholder="0" />
+   774→   774→                  </TableCell>
+   775→   775→                  <TableCell className="min-w-[100px]">
+   776→   776→                    <CellInput type="number" min="0" value={newRow.receivedAmount} onChange={(v) => handleNewRowChange('receivedAmount', v)} placeholder="0" />
+   777→   777→                  </TableCell>
+   778→   778→                  <TableCell className="text-right font-semibold whitespace-nowrap tabular-nums text-amber-700 dark:text-amber-300">
+   779→   779→                    {formatCurrency(newComputedPending)}
+   780→   780→                  </TableCell>
+   781→   781→                  <TableCell className="min-w-[140px]">
+   782→   782→                    <CellInput value={newRow.remarks} onChange={(v) => handleNewRowChange('remarks', v)} placeholder="Remarks" />
+   783→   783→                  </TableCell>
+   784→   784→                  <TableCell className="text-center text-xs text-muted-foreground">—</TableCell>
+   785→   785→                  <TableCell className="text-right">
+   786→   786→                    <Button
+   787→   787→                      size="sm"
+   788→   788→                      onClick={handleSaveNew}
+   789→   789→                      disabled={savingNew}
+   790→   790→                      className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white"
+   791→   791→                    >
+   792→   792→                      {savingNew ? (
+   793→   793→                        <Loader2 className="size-3.5 animate-spin" />
+   794→   794→                      ) : (
+   795→   795→                        <>
+   796→   796→                          <Plus className="size-3.5 mr-1" />
+   797→   797→                          Save
+   798→   798→                        </>
+   799→   799→                      )}
+   800→   800→                    </Button>
+   801→   801→                  </TableCell>
+   802→   802→                </TableRow>
+   803→   803→
+   804→   804→                {/* Loading skeletons */}
+   805→   805→                {loading && renderSkeletons()}
+   806→   806→
+   807→   807→                {/* Empty state */}
+   808→   808→                {!loading && filteredDailySells.length === 0 && (
+   809→   809→                  <TableRow>
+   810→   810→                    <TableCell colSpan={16} className="h-32 text-center text-muted-foreground">
+   811→   811→                      No daily sell entries yet. Fill the green row above and click Save to add your first entry.
+   812→   812→                    </TableCell>
+   813→   813→                  </TableRow>
+   814→   814→                )}
+   815→   815→
+   816→   816→                {/* Existing rows — read mode OR edit mode */}
+   817→   817→                {!loading && filteredDailySells.map((item) => {
+   818→   818→                  const isEditing = editingId === item.id
+   819→   819→                  return (
+   820→   820→                    <TableRow
+   821→   821→                      key={item.id}
+   822→   822→                      data-state={selectedIds.has(item.id) ? 'selected' : undefined}
+   823→   823→                      className={
+   824→   824→                        selectedIds.has(item.id)
+   825→   825→                          ? 'bg-emerald-50/60 dark:bg-emerald-900/15'
+   826→   826→                          : isEditing
+   827→   827→                          ? 'bg-blue-50/60 dark:bg-blue-900/15'
+   828→   828→                          : ''
+   829→   829→                      }
+   830→   830→                    >
+   831→   831→                      <TableCell className="w-10 sticky left-0 bg-background z-10">
+   832→   832→                        <Checkbox
+   833→   833→                          checked={selectedIds.has(item.id)}
+   834→   834→                          onCheckedChange={() => toggleSelect(item.id)}
+   835→   835→                          aria-label={`Select row for ${item.customerName}`}
+   836→   836→                          disabled={isEditing}
+   837→   837→                        />
+   838→   838→                      </TableCell>
+   839→   839→
+   840→   840→                      {isEditing ? (
+   841→   841→                        // ── Edit mode — all cells become inputs ──
+   842→   842→                        <>
+   843→   843→                          <TableCell className="sticky left-10 bg-background z-10 min-w-[130px]">
+   844→   844→                            <Input
+   845→   845→                              type="date"
+   846→   846→                              value={editRow.date}
+   847→   847→                              onChange={(e) => handleEditRowChange('date', e.target.value)}
+   848→   848→                              className="h-8 text-xs px-2"
+   849→   849→                            />
+   850→   850→                          </TableCell>
+   851→   851→                          <TableCell className="min-w-[140px]">
+   852→   852→                            <CellInput value={editRow.customerName} onChange={(v) => handleEditRowChange('customerName', v)} placeholder="Customer" />
+   853→   853→                          </TableCell>
+   854→   854→                          <TableCell className="min-w-[140px]">
+   855→   855→                            <CellInput value={editRow.address} onChange={(v) => handleEditRowChange('address', v)} placeholder="Address" />
+   856→   856→                          </TableCell>
+   857→   857→                          <TableCell className="min-w-[120px]">
+   858→   858→                            <CellInput value={editRow.contactNumber} onChange={(v) => handleEditRowChange('contactNumber', v)} placeholder="Contact" />
+   859→   859→                          </TableCell>
+   860→   860→                          <TableCell className="min-w-[160px]">
+   861→   861→                            <Select value={editRow.product} onValueChange={(v) => handleEditRowChange('product', v)}>
+   862→   862→                              <SelectTrigger className="h-8 text-xs px-2">
+   863→   863→                                <SelectValue placeholder="Product" />
+   864→   864→                              </SelectTrigger>
+   865→   865→                              <SelectContent>
+   866→   866→                                <SelectGroup>
+   867→   867→                                  <SelectLabel>Product Items</SelectLabel>
+   868→   868→                                  {PRODUCT_ITEMS.map((p) => (
+   869→   869→                                    <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
+   870→   870→                                  ))}
+   871→   871→                                </SelectGroup>
+   872→   872→                              </SelectContent>
+   873→   873→                            </Select>
+   874→   874→                          </TableCell>
+   875→   875→                          <TableCell className="min-w-[80px]">
+   876→   876→                            <CellInput type="number" min="0" value={editRow.quantity} onChange={(v) => handleEditRowChange('quantity', v)} placeholder="0" />
+   877→   877→                          </TableCell>
+   878→   878→                          <TableCell className="min-w-[90px]">
+   879→   879→                            <CellInput type="number" min="0" value={editRow.rate} onChange={(v) => handleEditRowChange('rate', v)} placeholder="0" />
+   880→   880→                          </TableCell>
+   881→   881→                          <TableCell className="text-right font-semibold whitespace-nowrap tabular-nums text-emerald-700 dark:text-emerald-300">
+   882→   882→                            {formatCurrency(editComputedAmount)}
+   883→   883→                          </TableCell>
+   884→   884→                          <TableCell className="min-w-[130px]">
+   885→   885→                            <CellInput value={editRow.transporterName} onChange={(v) => handleEditRowChange('transporterName', v)} placeholder="Transporter" />
+   886→   886→                          </TableCell>
+   887→   887→                          <TableCell className="min-w-[90px]">
+   888→   888→                            <CellInput type="number" min="0" value={editRow.transporterFair} onChange={(v) => handleEditRowChange('transporterFair', v)} placeholder="0" />
+   889→   889→                          </TableCell>
+   890→   890→                          <TableCell className="min-w-[100px]">
+   891→   891→                            <CellInput type="number" min="0" value={editRow.receivedAmount} onChange={(v) => handleEditRowChange('receivedAmount', v)} placeholder="0" />
+   892→   892→                          </TableCell>
+   893→   893→                          <TableCell className="text-right font-semibold whitespace-nowrap tabular-nums text-amber-700 dark:text-amber-300">
+   894→   894→                            {formatCurrency(editComputedPending)}
+   895→   895→                          </TableCell>
+   896→   896→                          <TableCell className="min-w-[140px]">
+   897→   897→                            <CellInput value={editRow.remarks} onChange={(v) => handleEditRowChange('remarks', v)} placeholder="Remarks" />
+   898→   898→                          </TableCell>
+   899→   899→                          <TableCell className="text-center text-xs text-muted-foreground">—</TableCell>
+   900→   900→                          <TableCell className="text-right">
+   901→   901→                            <div className="flex items-center justify-end gap-1">
+   902→   902→                              <Button
+   903→   903→                                size="icon"
+   904→   904→                                variant="ghost"
+   905→   905→                                onClick={handleSaveEdit}
+   906→   906→                                disabled={savingEdit}
+   907→   907→                                title="Save"
+   908→   908→                                className="h-8 w-8 text-emerald-600 hover:bg-emerald-100"
+   909→   909→                              >
+   910→   910→                                {savingEdit ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+   911→   911→                              </Button>
+   912→   912→                              <Button
+   913→   913→                                size="icon"
+   914→   914→                                variant="ghost"
+   915→   915→                                onClick={handleCancelEdit}
+   916→   916→                                disabled={savingEdit}
+   917→   917→                                title="Cancel"
+   918→   918→                                className="h-8 w-8 text-muted-foreground hover:bg-zinc-100"
+   919→   919→                              >
+   920→   920→                                <X className="size-3.5" />
+   921→   921→                              </Button>
+   922→   922→                            </div>
+   923→   923→                          </TableCell>
+   924→   924→                        </>
+   925→   925→                      ) : (
+   926→   926→                        // ── Read mode — display values + Edit/Delete buttons ──
+   927→   927→                        <>
+   928→   928→                          <TableCell className="font-medium whitespace-nowrap sticky left-10 bg-background z-10">
+   929→   929→                            {formatDate(item.date)}
+   930→   930→                          </TableCell>
+   931→   931→                          <TableCell className="font-medium whitespace-nowrap">{item.customerName}</TableCell>
+   932→   932→                          <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.address || '—'}</TableCell>
+   933→   933→                          <TableCell className="whitespace-nowrap">{item.contactNumber || '—'}</TableCell>
+   934→   934→                          <TableCell className="max-w-[150px] truncate">{item.product || '—'}</TableCell>
+   935→   935→                          <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">
+   936→   936→                            {item.quantity != null ? item.quantity.toLocaleString('en-IN') : '—'}
+   937→   937→                          </TableCell>
+   938→   938→                          <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">
+   939→   939→                            {item.rate != null ? formatCurrency(item.rate) : '—'}
+   940→   940→                          </TableCell>
+   941→   941→                          <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">{formatCurrency(item.amount)}</TableCell>
+   942→   942→                          <TableCell className="max-w-[150px] truncate">{item.transporterName || '—'}</TableCell>
+   943→   943→                          <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">
+   944→   944→                            {item.transporterFair != null ? formatCurrency(item.transporterFair) : '—'}
+   945→   945→                          </TableCell>
+   946→   946→                          <TableCell className="text-right font-medium whitespace-nowrap tabular-nums text-blue-700 dark:text-blue-300">
+   947→   947→                            {item.receivedAmount != null ? formatCurrency(item.receivedAmount) : '—'}
+   948→   948→                          </TableCell>
+   949→   949→                          <TableCell className={`text-right font-medium whitespace-nowrap tabular-nums ${(item.pendingAmount ?? 0) > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}`}>
+   950→   950→                            {item.pendingAmount != null ? formatCurrency(item.pendingAmount) : '—'}
+   951→   951→                          </TableCell>
+   952→   952→                          <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.remarks || '—'}</TableCell>
+   953→   953→                          <TableCell className="text-center">
+   954→   954→                            {item.orderId || item.customerPaymentId || item.customerId ? (
+   955→   955→                              <span
+   956→   956→                                className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300"
+   957→   957→                                title={item.syncNotes || 'Auto-synced'}
+   958→   958→                              >
+   959→   959→                                <CheckCircle2 className="size-3" />
+   960→   960→                                Synced
+   961→   961→                              </span>
+   962→   962→                            ) : (
+   963→   963→                              <span
+   964→   964→                                className="inline-flex items-center rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-xs text-muted-foreground"
+   965→   965→                                title="Created before auto-sync was enabled"
+   966→   966→                              >
+   967→   967→                                —
+   968→   968→                              </span>
+   969→   969→                            )}
+   970→   970→                          </TableCell>
+   971→   971→                          <TableCell className="text-right">
+   972→   972→                            <div className="flex items-center justify-end gap-1">
+   973→   973→                              <Button
+   974→   974→                                variant="ghost"
+   975→   975→                                size="icon"
+   976→   976→                                onClick={() => handleStartEdit(item)}
+   977→   977→                                title="Edit"
+   978→   978→                                disabled={!!editingId}
+   979→   979→                              >
+   980→   980→                                <Pencil className="size-4" />
+   981→   981→                              </Button>
+   982→   982→                              <Button
+   983→   983→                                variant="ghost"
+   984→   984→                                size="icon"
+   985→   985→                                onClick={() => setDeleteTarget(item)}
+   986→   986→                                title="Delete"
+   987→   987→                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+   988→   988→                                disabled={!!editingId}
+   989→   989→                              >
+   990→   990→                                <Trash2 className="size-4" />
+   991→   991→                              </Button>
+   992→   992→                            </div>
+   993→   993→                          </TableCell>
+   994→   994→                        </>
+   995→   995→                      )}
+   996→   996→                    </TableRow>
+   997→   997→                  )
+   998→   998→                })}
+   999→   999→              </TableBody>
+  1000→  1000→            </Table>
+  1001→  1001→          </ScrollableTable>
+  1002→  1002→        </CardContent>
+  1003→  1003→      </Card>
+  1004→  1004→
+  1005→  1005→      {/* Delete single confirmation */}
+  1006→  1006→      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+  1007→  1007→        <AlertDialogContent>
+  1008→  1008→          <AlertDialogHeader>
+  1009→  1009→            <AlertDialogTitle>Delete Daily Sell Entry</AlertDialogTitle>
+  1010→  1010→            <AlertDialogDescription>
+  1011→  1011→              Are you sure you want to delete this daily sell entry? Auto-linked Order and Customer
+  1012→  1012→              Payment will also be cleaned up. This action cannot be undone.
+  1013→  1013→            </AlertDialogDescription>
+  1014→  1014→          </AlertDialogHeader>
+  1015→  1015→          <AlertDialogFooter>
+  1016→  1016→            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+  1017→  1017→            <AlertDialogAction
+  1018→  1018→              onClick={handleDelete}
+  1019→  1019→              disabled={deleting}
+  1020→  1020→              className="bg-destructive text-white hover:bg-destructive/90"
+  1021→  1021→            >
+  1022→  1022→              {deleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+  1023→  1023→              Delete
+  1024→  1024→            </AlertDialogAction>
+  1025→  1025→          </AlertDialogFooter>
+  1026→  1026→        </AlertDialogContent>
+  1027→  1027→      </AlertDialog>
+  1028→  1028→
+  1029→  1029→      {/* Delete All confirmation */}
+  1030→  1030→      <AlertDialog open={deleteAllOpen} onOpenChange={(open) => {
+  1031→  1031→        if (!open && !deletingAll) setDeleteAllOpen(false)
+  1032→  1032→      }}>
+  1033→  1033→        <AlertDialogContent className="max-w-md">
+  1034→  1034→          <AlertDialogHeader>
+  1035→  1035→            <AlertDialogTitle className="text-destructive">Delete ALL Daily Sell Entries?</AlertDialogTitle>
+  1036→  1036→            <AlertDialogDescription className="space-y-2 text-sm">
+  1037→  1037→              <span className="block">
+  1038→  1038→                You are about to permanently delete{' '}
+  1039→  1039→                <strong className="text-destructive">all daily sell entries</strong>.
+  1040→  1040→                This action <strong>cannot be undone</strong>.
+  1041→  1041→              </span>
+  1042→  1042→              <span className="block text-muted-foreground">
+  1043→  1043→                All {dailySells.length} record{dailySells.length !== 1 ? 's' : ''} will be removed.
+  1044→  1044→                Auto-linked Orders and Customer Payment entries will also be cleaned up.
+  1045→  1045→                Customer master records are preserved.
+  1046→  1046→              </span>
+  1047→  1047→            </AlertDialogDescription>
+  1048→  1048→          </AlertDialogHeader>
+  1049→  1049→          <AlertDialogFooter>
+  1050→  1050→            <AlertDialogCancel disabled={deletingAll} className="border-border">No, Cancel</AlertDialogCancel>
+  1051→  1051→            <AlertDialogAction
+  1052→  1052→              onClick={handleDeleteAll}
+  1053→  1053→              disabled={deletingAll}
+  1054→  1054→              className="bg-destructive text-white hover:bg-destructive/90"
+  1055→  1055→            >
+  1056→  1056→              {deletingAll && <Loader2 className="mr-2 size-4 animate-spin" />}
+  1057→  1057→              Yes, Delete All
+  1058→  1058→            </AlertDialogAction>
+  1059→  1059→          </AlertDialogFooter>
+  1060→  1060→        </AlertDialogContent>
+  1061→  1061→      </AlertDialog>
+  1062→  1062→
+  1063→  1063→      {/* Bulk Delete Selected confirmation */}
+  1064→  1064→      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => {
+  1065→  1065→        if (!open && !bulkDeleting) setBulkDeleteOpen(false)
+  1066→  1066→      }}>
+  1067→  1067→        <AlertDialogContent>
+  1068→  1068→          <AlertDialogHeader>
+  1069→  1069→            <AlertDialogTitle className="text-destructive">
+  1070→  1070→              Delete {selectedIds.size} Selected Daily Sell {selectedIds.size === 1 ? 'Entry' : 'Entries'}?
+  1071→  1071→            </AlertDialogTitle>
+  1072→  1072→            <AlertDialogDescription>
+  1073→  1073→              You are about to permanently delete{' '}
+  1074→  1074→              <strong className="text-destructive">{selectedIds.size}</strong>{' '}
+  1075→  1075→              daily sell {selectedIds.size === 1 ? 'entry' : 'entries'}.
+  1076→  1076→              Auto-linked Orders and Customer Payments will also be cleaned up.
+  1077→  1077→              This action <strong>cannot be undone</strong>.
+  1078→  1078→            </AlertDialogDescription>
+  1079→  1079→          </AlertDialogHeader>
+  1080→  1080→          <AlertDialogFooter>
+  1081→  1081→            <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+  1082→  1082→            <AlertDialogAction
+  1083→  1083→              onClick={handleBulkDelete}
+  1084→  1084→              disabled={bulkDeleting}
+  1085→  1085→              className="bg-destructive text-white hover:bg-destructive/90"
+  1086→  1086→            >
+  1087→  1087→              {bulkDeleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+  1088→  1088→              Delete Selected
+  1089→  1089→            </AlertDialogAction>
+  1090→  1090→          </AlertDialogFooter>
+  1091→  1091→        </AlertDialogContent>
+  1092→  1092→      </AlertDialog>
+  1093→  1093→
+  1094→  1094→      <ExcelImport module="dailySell" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchData} />
+  1095→  1095→    </div>
+  1096→  1096→  )
+  1097→  1097→}
+  1098→  1098→
+  1099→  1099→export default DailySellModule
+  1100→  1100→

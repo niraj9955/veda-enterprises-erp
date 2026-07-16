@@ -1,0 +1,727 @@
+     1→'use client'
+     2→
+     3→import * as React from 'react'
+     4→import { api } from '@/lib/api'
+     5→import { toast } from '@/hooks/use-toast'
+     6→import { Button } from '@/components/ui/button'
+     7→import { Input } from '@/components/ui/input'
+     8→import { Label } from '@/components/ui/label'
+     9→import { Badge } from '@/components/ui/badge'
+    10→import { Skeleton } from '@/components/ui/skeleton'
+    11→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    12→import {
+    13→  Select,
+    14→  SelectContent,
+    15→  SelectItem,
+    16→  SelectTrigger,
+    17→  SelectValue,
+    18→} from '@/components/ui/select'
+    19→import {
+    20→  Table,
+    21→  TableBody,
+    22→  TableCell,
+    23→  TableHead,
+    24→  TableHeader,
+    25→  TableRow,
+    26→} from '@/components/ui/table'
+    27→import {
+    28→  Dialog,
+    29→  DialogContent,
+    30→  DialogDescription,
+    31→  DialogFooter,
+    32→  DialogHeader,
+    33→  DialogTitle,
+    34→} from '@/components/ui/dialog'
+    35→import {
+    36→  AlertDialog,
+    37→  AlertDialogAction,
+    38→  AlertDialogCancel,
+    39→  AlertDialogContent,
+    40→  AlertDialogDescription,
+    41→  AlertDialogFooter,
+    42→  AlertDialogHeader,
+    43→  AlertDialogTitle,
+    44→} from '@/components/ui/alert-dialog'
+    45→import {
+    46→  ClipboardList,
+    47→  Plus,
+    48→  Pencil,
+    49→  Trash2,
+    50→  Loader2,
+    51→  IndianRupee,
+    52→  Upload,
+    53→  Search,
+    54→} from 'lucide-react'
+    55→import ExcelImport from '@/components/erp/excel-import'
+    56→
+    57→// ── Types ───────────────────────────────────────────────────────────────────
+    58→
+    59→interface Customer {
+    60→  id: string
+    61→  name: string
+    62→}
+    63→
+    64→interface Order {
+    65→  id: string
+    66→  orderNumber: string
+    67→  customerId: string
+    68→  brickType: string
+    69→  quantity: number
+    70→  rate: number
+    71→  amount: number
+    72→  deliveryDate: string
+    73→  status: string
+    74→  createdAt: string
+    75→  customer: { id: string; name: string }
+    76→}
+    77→
+    78→interface OrderFormData {
+    79→  customerId: string
+    80→  brickType: string
+    81→  quantity: number | string
+    82→  rate: number | string
+    83→  deliveryDate: string
+    84→  status: string
+    85→}
+    86→
+    87→// ── Constants ───────────────────────────────────────────────────────────────
+    88→
+    89→const BRICK_TYPES = ['Red Brick', 'Fly Ash Brick', 'Cement Brick', 'Hollow Block'] as const
+    90→
+    91→const ORDER_STATUSES = ['Pending', 'Processing', 'Delivered', 'Cancelled'] as const
+    92→
+    93→const STATUS_COLORS: Record<string, string> = {
+    94→  Pending: 'bg-amber-100 text-amber-700 border-amber-200',
+    95→  Processing: 'bg-sky-100 text-sky-700 border-sky-200',
+    96→  Delivered: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    97→  Cancelled: 'bg-rose-100 text-rose-700 border-rose-200',
+    98→}
+    99→
+   100→// ── Helpers ─────────────────────────────────────────────────────────────────
+   101→
+   102→const formatCurrency = (amount: number): string =>
+   103→  new Intl.NumberFormat('en-IN', {
+   104→    style: 'currency',
+   105→    currency: 'INR',
+   106→    minimumFractionDigits: 0,
+   107→    maximumFractionDigits: 2,
+   108→  }).format(amount)
+   109→
+   110→const formatDate = (dateStr: string): string =>
+   111→  new Date(dateStr).toLocaleDateString('en-IN', {
+   112→    day: '2-digit',
+   113→    month: 'short',
+   114→    year: 'numeric',
+   115→  })
+   116→
+   117→const emptyForm: OrderFormData = {
+   118→  customerId: '',
+   119→  brickType: '',
+   120→  quantity: '',
+   121→  rate: '',
+   122→  deliveryDate: '',
+   123→  status: 'Pending',
+   124→}
+   125→
+   126→// ── Component ───────────────────────────────────────────────────────────────
+   127→
+   128→export function OrderModule() {
+   129→  // State
+   130→  const [orders, setOrders] = React.useState<Order[]>([])
+   131→  const [search, setSearch] = React.useState('')
+   132→  const [debouncedSearch, setDebouncedSearch] = React.useState('')
+   133→  const [customers, setCustomers] = React.useState<Customer[]>([])
+   134→  const [loading, setLoading] = React.useState(true)
+   135→
+   136→  // Create dialog states
+   137→  const [createOpen, setCreateOpen] = React.useState(false)
+   138→  const [formData, setFormData] = React.useState<OrderFormData>(emptyForm)
+   139→  const [formSubmitting, setFormSubmitting] = React.useState(false)
+   140→
+   141→  // Edit status dialog states
+   142→  const [editStatusOpen, setEditStatusOpen] = React.useState(false)
+   143→  const [editTarget, setEditTarget] = React.useState<Order | null>(null)
+   144→  const [editStatus, setEditStatus] = React.useState('')
+   145→  const [editSubmitting, setEditSubmitting] = React.useState(false)
+   146→
+   147→  // Excel import
+   148→  const [importOpen, setImportOpen] = React.useState(false)
+   149→
+   150→  // Delete confirmation
+   151→  const [deleteTarget, setDeleteTarget] = React.useState<Order | null>(null)
+   152→  const [deleting, setDeleting] = React.useState(false)
+   153→
+   154→  // ── Computed amount ─────────────────────────────────────────────────────
+   155→  const computedAmount = React.useMemo(() => {
+   156→    const qty = Number(formData.quantity) || 0
+   157→    const rate = Number(formData.rate) || 0
+   158→    return qty * rate
+   159→  }, [formData.quantity, formData.rate])
+   160→
+   161→  // ── Fetch orders ────────────────────────────────────────────────────────
+   162→  const fetchOrders = React.useCallback(async () => {
+   163→    setLoading(true)
+   164→    try {
+   165→      const res = await api.getOrders()
+   166→      const orderList = (res.orders as Order[]).sort(
+   167→        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+   168→      )
+   169→      setOrders(orderList)
+   170→    } catch (err) {
+   171→      toast({
+   172→        title: 'Error',
+   173→        description: err instanceof Error ? err.message : 'Failed to fetch orders',
+   174→        variant: 'destructive',
+   175→      })
+   176→    } finally {
+   177→      setLoading(false)
+   178→    }
+   179→  }, [])
+   180→
+   181→  // ── Fetch customers (for dropdown) ─────────────────────────────────────
+   182→  const fetchCustomers = React.useCallback(async () => {
+   183→    try {
+   184→      const res = await api.getCustomers()
+   185→      setCustomers(res.customers as Customer[])
+   186→    } catch {
+   187→      // Silently fail — customer dropdown will just be empty
+   188→    }
+   189→  }, [])
+   190→
+   191→  // Debounced search
+   192→  React.useEffect(() => {
+   193→    const t = setTimeout(() => setDebouncedSearch(search), 250)
+   194→    return () => clearTimeout(t)
+   195→  }, [search])
+   196→
+   197→  // Client-side filter
+   198→  const filteredOrders = React.useMemo(() => {
+   199→    if (!debouncedSearch.trim()) return orders
+   200→    const q = debouncedSearch.toLowerCase()
+   201→    return orders.filter((item: any) =>
+   202→      ['orderNumber', 'brickType', 'status', 'deliveryDate'].some((f) =>
+   203→        String((item as any)[f] ?? '').toLowerCase().includes(q)
+   204→      )
+   205→    )
+   206→  }, [orders, debouncedSearch])
+   207→
+   208→  React.useEffect(() => {
+   209→    fetchOrders()
+   210→    fetchCustomers()
+   211→  }, [fetchOrders, fetchCustomers])
+   212→
+   213→  // ── Create dialog handlers ──────────────────────────────────────────────
+   214→  const openCreateDialog = () => {
+   215→    setFormData(emptyForm)
+   216→    setCreateOpen(true)
+   217→  }
+   218→
+   219→  const handleFormChange = (field: keyof OrderFormData, value: string) => {
+   220→    setFormData((prev) => ({ ...prev, [field]: value }))
+   221→  }
+   222→
+   223→  const handleCreateSubmit = async () => {
+   224→    if (!formData.customerId) {
+   225→      toast({ title: 'Validation Error', description: 'Please select a customer', variant: 'destructive' })
+   226→      return
+   227→    }
+   228→    if (!formData.brickType) {
+   229→      toast({ title: 'Validation Error', description: 'Please select a brick type', variant: 'destructive' })
+   230→      return
+   231→    }
+   232→    if (!formData.quantity || Number(formData.quantity) <= 0) {
+   233→      toast({ title: 'Validation Error', description: 'Quantity must be greater than 0', variant: 'destructive' })
+   234→      return
+   235→    }
+   236→    if (!formData.rate || Number(formData.rate) <= 0) {
+   237→      toast({ title: 'Validation Error', description: 'Rate must be greater than 0', variant: 'destructive' })
+   238→      return
+   239→    }
+   240→    if (!formData.deliveryDate) {
+   241→      toast({ title: 'Validation Error', description: 'Delivery date is required', variant: 'destructive' })
+   242→      return
+   243→    }
+   244→
+   245→    setFormSubmitting(true)
+   246→    try {
+   247→      const payload = {
+   248→        customerId: formData.customerId,
+   249→        brickType: formData.brickType,
+   250→        quantity: Number(formData.quantity),
+   251→        rate: Number(formData.rate),
+   252→        amount: computedAmount,
+   253→        deliveryDate: formData.deliveryDate,
+   254→        status: formData.status,
+   255→      }
+   256→
+   257→      await api.createOrder(payload)
+   258→      toast({ title: 'Success', description: 'Order created successfully' })
+   259→      setCreateOpen(false)
+   260→      setFormData(emptyForm)
+   261→      fetchOrders()
+   262→    } catch (err) {
+   263→      toast({
+   264→        title: 'Error',
+   265→        description: err instanceof Error ? err.message : 'Failed to create order',
+   266→        variant: 'destructive',
+   267→      })
+   268→    } finally {
+   269→      setFormSubmitting(false)
+   270→    }
+   271→  }
+   272→
+   273→  // ── Edit status handlers ────────────────────────────────────────────────
+   274→  const openEditStatusDialog = (order: Order) => {
+   275→    setEditTarget(order)
+   276→    setEditStatus(order.status)
+   277→    setEditStatusOpen(true)
+   278→  }
+   279→
+   280→  const handleEditStatusSubmit = async () => {
+   281→    if (!editTarget) return
+   282→    setEditSubmitting(true)
+   283→    try {
+   284→      await api.updateOrder(editTarget.id, { status: editStatus })
+   285→      toast({ title: 'Success', description: 'Order status updated successfully' })
+   286→      setEditStatusOpen(false)
+   287→      setEditTarget(null)
+   288→      setEditStatus('')
+   289→      fetchOrders()
+   290→    } catch (err) {
+   291→      toast({
+   292→        title: 'Error',
+   293→        description: err instanceof Error ? err.message : 'Failed to update order status',
+   294→        variant: 'destructive',
+   295→      })
+   296→    } finally {
+   297→      setEditSubmitting(false)
+   298→    }
+   299→  }
+   300→
+   301→  // ── Delete handler ──────────────────────────────────────────────────────
+   302→  const handleDelete = async () => {
+   303→    if (!deleteTarget) return
+   304→    setDeleting(true)
+   305→    try {
+   306→      await api.deleteOrder(deleteTarget.id)
+   307→      toast({ title: 'Success', description: 'Order deleted successfully' })
+   308→      setDeleteTarget(null)
+   309→      fetchOrders()
+   310→    } catch (err) {
+   311→      toast({
+   312→        title: 'Error',
+   313→        description: err instanceof Error ? err.message : 'Failed to delete order',
+   314→        variant: 'destructive',
+   315→      })
+   316→    } finally {
+   317→      setDeleting(false)
+   318→    }
+   319→  }
+   320→
+   321→  // ── Render: Loading skeletons ───────────────────────────────────────────
+   322→  const renderSkeletons = () =>
+   323→    Array.from({ length: 5 }).map((_, i) => (
+   324→      <TableRow key={i}>
+   325→        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+   326→        <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+   327→        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+   328→        <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+   329→        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+   330→        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+   331→        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+   332→        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+   333→        <TableCell><Skeleton className="h-8 w-20" /></TableCell>
+   334→      </TableRow>
+   335→    ))
+   336→
+   337→  // ── Render: Status badge ────────────────────────────────────────────────
+   338→  const renderStatusBadge = (status: string) => (
+   339→    <Badge className={STATUS_COLORS[status] || 'bg-gray-100 text-gray-700 border-gray-200'}>
+   340→      {status}
+   341→    </Badge>
+   342→  )
+   343→
+   344→  // ── Render: Create Order dialog ─────────────────────────────────────────
+   345→  const renderCreateDialog = () => (
+   346→    <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+   347→      <DialogContent className="sm:max-w-lg">
+   348→        <DialogHeader>
+   349→          <DialogTitle>Create Order</DialogTitle>
+   350→          <DialogDescription>
+   351→            Fill in the details to create a new order.
+   352→          </DialogDescription>
+   353→        </DialogHeader>
+   354→
+   355→        <div className="grid gap-4 py-2">
+   356→          {/* Customer */}
+   357→          <div className="grid gap-2">
+   358→            <Label htmlFor="order-customer">
+   359→              Customer <span className="text-destructive">*</span>
+   360→            </Label>
+   361→            <Select
+   362→              value={formData.customerId}
+   363→              onValueChange={(val) => handleFormChange('customerId', val)}
+   364→            >
+   365→              <SelectTrigger className="w-full">
+   366→                <SelectValue placeholder="Select customer" />
+   367→              </SelectTrigger>
+   368→              <SelectContent>
+   369→                {customers.map((customer) => (
+   370→                  <SelectItem key={customer.id} value={customer.id}>
+   371→                    {customer.name}
+   372→                  </SelectItem>
+   373→                ))}
+   374→              </SelectContent>
+   375→            </Select>
+   376→          </div>
+   377→
+   378→          {/* Brick Type */}
+   379→          <div className="grid gap-2">
+   380→            <Label htmlFor="order-brick">
+   381→              Brick Type <span className="text-destructive">*</span>
+   382→            </Label>
+   383→            <Select
+   384→              value={formData.brickType}
+   385→              onValueChange={(val) => handleFormChange('brickType', val)}
+   386→            >
+   387→              <SelectTrigger className="w-full">
+   388→                <SelectValue placeholder="Select brick type" />
+   389→              </SelectTrigger>
+   390→              <SelectContent>
+   391→                {BRICK_TYPES.map((type) => (
+   392→                  <SelectItem key={type} value={type}>
+   393→                    {type}
+   394→                  </SelectItem>
+   395→                ))}
+   396→              </SelectContent>
+   397→            </Select>
+   398→          </div>
+   399→
+   400→          {/* Quantity & Rate */}
+   401→          <div className="grid grid-cols-2 gap-4">
+   402→            <div className="grid gap-2">
+   403→              <Label htmlFor="order-qty">
+   404→                Quantity <span className="text-destructive">*</span>
+   405→              </Label>
+   406→              <Input
+   407→                id="order-qty"
+   408→                type="number"
+   409→                placeholder="0"
+   410→                min="1"
+   411→                value={formData.quantity}
+   412→                onChange={(e) => handleFormChange('quantity', e.target.value)}
+   413→              />
+   414→            </div>
+   415→            <div className="grid gap-2">
+   416→              <Label htmlFor="order-rate">
+   417→                Rate (₹) <span className="text-destructive">*</span>
+   418→              </Label>
+   419→              <div className="relative">
+   420→                <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   421→                <Input
+   422→                  id="order-rate"
+   423→                  type="number"
+   424→                  placeholder="0"
+   425→                  min="1"
+   426→                  className="pl-9"
+   427→                  value={formData.rate}
+   428→                  onChange={(e) => handleFormChange('rate', e.target.value)}
+   429→                />
+   430→              </div>
+   431→            </div>
+   432→          </div>
+   433→
+   434→          {/* Amount (auto-calculated) */}
+   435→          <div className="grid gap-2">
+   436→            <Label>Amount (₹)</Label>
+   437→            <div className="flex h-9 items-center rounded-md border bg-muted/50 px-3 text-sm font-medium">
+   438→              {formatCurrency(computedAmount)}
+   439→            </div>
+   440→          </div>
+   441→
+   442→          {/* Delivery Date */}
+   443→          <div className="grid gap-2">
+   444→            <Label htmlFor="order-date">
+   445→              Delivery Date <span className="text-destructive">*</span>
+   446→            </Label>
+   447→            <Input
+   448→              id="order-date"
+   449→              type="date"
+   450→              value={formData.deliveryDate}
+   451→              onChange={(e) => handleFormChange('deliveryDate', e.target.value)}
+   452→            />
+   453→          </div>
+   454→
+   455→          {/* Status */}
+   456→          <div className="grid gap-2">
+   457→            <Label htmlFor="order-status">Status</Label>
+   458→            <Select
+   459→              value={formData.status}
+   460→              onValueChange={(val) => handleFormChange('status', val)}
+   461→            >
+   462→              <SelectTrigger className="w-full">
+   463→                <SelectValue placeholder="Select status" />
+   464→              </SelectTrigger>
+   465→              <SelectContent>
+   466→                {ORDER_STATUSES.map((status) => (
+   467→                  <SelectItem key={status} value={status}>
+   468→                    {status}
+   469→                  </SelectItem>
+   470→                ))}
+   471→              </SelectContent>
+   472→            </Select>
+   473→          </div>
+   474→        </div>
+   475→
+   476→        <DialogFooter>
+   477→          <Button
+   478→            variant="outline"
+   479→            onClick={() => setCreateOpen(false)}
+   480→            disabled={formSubmitting}
+   481→          >
+   482→            Cancel
+   483→          </Button>
+   484→          <Button
+   485→            onClick={handleCreateSubmit}
+   486→            disabled={formSubmitting}
+   487→            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   488→          >
+   489→            {formSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+   490→            Create Order
+   491→          </Button>
+   492→        </DialogFooter>
+   493→      </DialogContent>
+   494→    </Dialog>
+   495→  )
+   496→
+   497→  // ── Render: Edit Status dialog ──────────────────────────────────────────
+   498→  const renderEditStatusDialog = () => (
+   499→    <Dialog open={editStatusOpen} onOpenChange={setEditStatusOpen}>
+   500→      <DialogContent className="sm:max-w-md">
+   501→        <DialogHeader>
+   502→          <DialogTitle>Update Order Status</DialogTitle>
+   503→          <DialogDescription>
+   504→            Change the status for order <strong>{editTarget?.orderNumber}</strong>
+   505→          </DialogDescription>
+   506→        </DialogHeader>
+   507→
+   508→        <div className="grid gap-4 py-2">
+   509→          <div className="grid gap-2">
+   510→            <Label>Current Status</Label>
+   511→            <div>{editTarget ? renderStatusBadge(editTarget.status) : null}</div>
+   512→          </div>
+   513→          <div className="grid gap-2">
+   514→            <Label htmlFor="edit-status">New Status</Label>
+   515→            <Select value={editStatus} onValueChange={setEditStatus}>
+   516→              <SelectTrigger className="w-full">
+   517→                <SelectValue placeholder="Select status" />
+   518→              </SelectTrigger>
+   519→              <SelectContent>
+   520→                {ORDER_STATUSES.map((status) => (
+   521→                  <SelectItem key={status} value={status}>
+   522→                    {status}
+   523→                  </SelectItem>
+   524→                ))}
+   525→              </SelectContent>
+   526→            </Select>
+   527→          </div>
+   528→        </div>
+   529→
+   530→        <DialogFooter>
+   531→          <Button
+   532→            variant="outline"
+   533→            onClick={() => setEditStatusOpen(false)}
+   534→            disabled={editSubmitting}
+   535→          >
+   536→            Cancel
+   537→          </Button>
+   538→          <Button
+   539→            onClick={handleEditStatusSubmit}
+   540→            disabled={editSubmitting}
+   541→            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   542→          >
+   543→            {editSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+   544→            Update Status
+   545→          </Button>
+   546→        </DialogFooter>
+   547→      </DialogContent>
+   548→    </Dialog>
+   549→  )
+   550→
+   551→  // ── Render: Delete confirmation ─────────────────────────────────────────
+   552→  const renderDeleteDialog = () => (
+   553→    <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+   554→      <AlertDialogContent>
+   555→        <AlertDialogHeader>
+   556→          <AlertDialogTitle>Delete Order</AlertDialogTitle>
+   557→          <AlertDialogDescription>
+   558→            Are you sure you want to delete order <strong>{deleteTarget?.orderNumber}</strong>? This
+   559→            action cannot be undone.
+   560→          </AlertDialogDescription>
+   561→        </AlertDialogHeader>
+   562→        <AlertDialogFooter>
+   563→          <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+   564→          <AlertDialogAction
+   565→            onClick={handleDelete}
+   566→            disabled={deleting}
+   567→            className="bg-destructive text-white hover:bg-destructive/90"
+   568→          >
+   569→            {deleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+   570→            Delete
+   571→          </AlertDialogAction>
+   572→        </AlertDialogFooter>
+   573→      </AlertDialogContent>
+   574→    </AlertDialog>
+   575→  )
+   576→
+   577→  // ── Render: Main ────────────────────────────────────────────────────────
+   578→  return (
+   579→    <div className="space-y-6">
+   580→      {/* Header */}
+   581→      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   582→        <div className="flex items-center gap-3">
+   583→          <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+   584→            <ClipboardList className="size-5" />
+   585→          </div>
+   586→          <div>
+   587→            <h2 className="text-2xl font-bold tracking-tight">Order Management</h2>
+   588→            <p className="text-sm text-muted-foreground">
+   589→              Track and manage customer orders
+   590→            </p>
+   591→          </div>
+   592→        </div>
+   593→        <div className="flex gap-2 w-full sm:w-auto">
+   594→          <Button
+   595→            variant="outline"
+   596→            onClick={() => setImportOpen(true)}
+   597→            className="w-full sm:w-auto"
+   598→          >
+   599→            <Upload className="size-4 mr-2" />
+   600→            Import Excel
+   601→          </Button>
+   602→          <Button
+   603→            onClick={openCreateDialog}
+   604→            className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
+   605→          >
+   606→            <Plus className="size-4" />
+   607→            Create Order
+   608→          </Button>
+   609→        </div>
+   610→      </div>
+   611→
+   612→      {/* Search */}
+   613→      <Card>
+   614→        <CardContent className="pt-6">
+   615→          <div className="relative">
+   616→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   617→            <Input
+   618→              placeholder="Search across all fields (date, name, remarks, etc.)..."
+   619→              value={search}
+   620→              onChange={(e) => setSearch(e.target.value)}
+   621→              className="pl-9"
+   622→            />
+   623→          </div>
+   624→        </CardContent>
+   625→      </Card>
+   626→
+   627→      {/* Table */}
+   628→      <Card>
+   629→        <CardHeader>
+   630→          <CardTitle className="flex items-center justify-between">
+   631→            <span>Orders</span>
+   632→            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+   633→              {filteredOrders.length} of {orders.length} record{orders.length !== 1 ? 's' : ''}
+   634→            </Badge>
+   635→          </CardTitle>
+   636→        </CardHeader>
+   637→        <CardContent>
+   638→          <div className="max-h-[60vh] overflow-auto rounded-md border">
+   639→            <Table>
+   640→              <TableHeader className="sticky top-0 bg-background z-10">
+   641→                <TableRow>
+   642→                  <TableHead>Order No.</TableHead>
+   643→                  <TableHead>Customer</TableHead>
+   644→                  <TableHead>Brick Type</TableHead>
+   645→                  <TableHead className="text-right">Quantity</TableHead>
+   646→                  <TableHead className="text-right">Rate (₹)</TableHead>
+   647→                  <TableHead className="text-right">Amount (₹)</TableHead>
+   648→                  <TableHead>Delivery Date</TableHead>
+   649→                  <TableHead>Status</TableHead>
+   650→                  <TableHead className="text-right">Actions</TableHead>
+   651→                </TableRow>
+   652→              </TableHeader>
+   653→              <TableBody>
+   654→                {loading ? (
+   655→                  renderSkeletons()
+   656→                ) : filteredOrders.length === 0 ? (
+   657→                  <TableRow>
+   658→                    <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
+   659→                      No orders yet. Click &quot;Create Order&quot; to get started.
+   660→                    </TableCell>
+   661→                  </TableRow>
+   662→                ) : (
+   663→                  filteredOrders.map((order) => (
+   664→                    <TableRow key={order.id}>
+   665→                      <TableCell className="font-medium whitespace-nowrap">
+   666→                        {order.orderNumber}
+   667→                      </TableCell>
+   668→                      <TableCell>{order.customer?.name || '—'}</TableCell>
+   669→                      <TableCell>
+   670→                        <Badge variant="outline">{order.brickType}</Badge>
+   671→                      </TableCell>
+   672→                      <TableCell className="text-right">
+   673→                        {new Intl.NumberFormat('en-IN').format(order.quantity)}
+   674→                      </TableCell>
+   675→                      <TableCell className="text-right whitespace-nowrap">
+   676→                        {formatCurrency(order.rate)}
+   677→                      </TableCell>
+   678→                      <TableCell className="text-right font-medium whitespace-nowrap">
+   679→                        {formatCurrency(order.amount)}
+   680→                      </TableCell>
+   681→                      <TableCell className="whitespace-nowrap">
+   682→                        {formatDate(order.deliveryDate)}
+   683→                      </TableCell>
+   684→                      <TableCell>{renderStatusBadge(order.status)}</TableCell>
+   685→                      <TableCell className="text-right">
+   686→                        <div className="flex items-center justify-end gap-1">
+   687→                          <Button
+   688→                            variant="ghost"
+   689→                            size="icon"
+   690→                            onClick={() => openEditStatusDialog(order)}
+   691→                            title="Edit Status"
+   692→                            className="text-sky-600 hover:text-sky-700 hover:bg-sky-50"
+   693→                          >
+   694→                            <Pencil className="size-4" />
+   695→                          </Button>
+   696→                          <Button
+   697→                            variant="ghost"
+   698→                            size="icon"
+   699→                            onClick={() => setDeleteTarget(order)}
+   700→                            title="Delete Order"
+   701→                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+   702→                          >
+   703→                            <Trash2 className="size-4" />
+   704→                          </Button>
+   705→                        </div>
+   706→                      </TableCell>
+   707→                    </TableRow>
+   708→                  ))
+   709→                )}
+   710→              </TableBody>
+   711→            </Table>
+   712→          </div>
+   713→        </CardContent>
+   714→      </Card>
+   715→
+   716→      {/* Dialogs */}
+   717→      {renderCreateDialog()}
+   718→      {renderEditStatusDialog()}
+   719→      {renderDeleteDialog()}
+   720→
+   721→      <ExcelImport module="orders" open={importOpen} onClose={() => setImportOpen(false)} onSuccess={fetchOrders} />
+   722→    </div>
+   723→  )
+   724→}
+   725→
+   726→export default OrderModule
+   727→

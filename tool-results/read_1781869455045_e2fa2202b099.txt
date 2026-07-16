@@ -1,0 +1,1023 @@
+     1→'use client'
+     2→
+     3→import * as React from 'react'
+     4→import { api } from '@/lib/api'
+     5→import { useAppStore } from '@/lib/store'
+     6→import { toast } from '@/hooks/use-toast'
+     7→import { Button } from '@/components/ui/button'
+     8→import { Input } from '@/components/ui/input'
+     9→import { Label } from '@/components/ui/label'
+    10→import { Badge } from '@/components/ui/badge'
+    11→import { Skeleton } from '@/components/ui/skeleton'
+    12→import { Textarea } from '@/components/ui/textarea'
+    13→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+    14→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    15→import { Separator } from '@/components/ui/separator'
+    16→import { ScrollArea } from '@/components/ui/scroll-area'
+    17→import {
+    18→  Select,
+    19→  SelectContent,
+    20→  SelectItem,
+    21→  SelectTrigger,
+    22→  SelectValue,
+    23→} from '@/components/ui/select'
+    24→import {
+    25→  Table,
+    26→  TableBody,
+    27→  TableCell,
+    28→  TableHead,
+    29→  TableHeader,
+    30→  TableRow,
+    31→} from '@/components/ui/table'
+    32→import {
+    33→  Dialog,
+    34→  DialogContent,
+    35→  DialogDescription,
+    36→  DialogFooter,
+    37→  DialogHeader,
+    38→  DialogTitle,
+    39→} from '@/components/ui/dialog'
+    40→import {
+    41→  AlertDialog,
+    42→  AlertDialogAction,
+    43→  AlertDialogCancel,
+    44→  AlertDialogContent,
+    45→  AlertDialogDescription,
+    46→  AlertDialogFooter,
+    47→  AlertDialogHeader,
+    48→  AlertDialogTitle,
+    49→} from '@/components/ui/alert-dialog'
+    50→import {
+    51→  ShieldCheck,
+    52→  Building2,
+    53→  Upload,
+    54→  ImagePlus,
+    55→  Trash2,
+    56→  Save,
+    57→  Loader2,
+    58→  Download,
+    59→  Database,
+    60→  Users,
+    61→  Palette,
+    62→  FileSpreadsheet,
+    63→  Eye,
+    64→  Power,
+    65→  PowerOff,
+    66→  Pencil,
+    67→  AlertTriangle,
+    68→  CheckCircle2,
+    69→  AlertCircle,
+    70→  X,
+    71→  Check,
+    72→} from 'lucide-react'
+    73→
+    74→// ── Types ───────────────────────────────────────────────────────────────────
+    75→
+    76→interface CompanyForm {
+    77→  name: string
+    78→  tagline: string
+    79→  phone: string
+    80→  email: string
+    81→  address: string
+    82→  city: string
+    83→  state: string
+    84→  pincode: string
+    85→  gstNumber: string
+    86→  panNumber: string
+    87→  bankName: string
+    88→  bankAccount: string
+    89→  bankIfsc: string
+    90→  invoicePrefix: string
+    91→  dispatchPrefix: string
+    92→  orderPrefix: string
+    93→  terms: string
+    94→  signatureName: string
+    95→  logoUrl: string
+    96→  primaryColor: string
+    97→}
+    98→
+    99→interface UserItem {
+   100→  id: string
+   101→  name: string
+   102→  email: string
+   103→  role: string
+   104→  active: boolean
+   105→  createdAt: string
+   106→}
+   107→
+   108→interface UserFormData {
+   109→  name: string
+   110→  email: string
+   111→  password: string
+   112→  role: string
+   113→}
+   114→
+   115→const ROLES = ['admin', 'operator', 'accountant'] as const
+   116→
+   117→const ROLE_LABELS: Record<string, string> = {
+   118→  admin: 'Admin',
+   119→  operator: 'Operator',
+   120→  accountant: 'Accountant',
+   121→}
+   122→
+   123→const ROLE_BADGE_STYLES: Record<string, string> = {
+   124→  admin: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800',
+   125→  operator: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800',
+   126→  accountant: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800',
+   127→}
+   128→
+   129→const ROLE_PERMISSIONS: Record<string, { modules: string[]; description: string }> = {
+   130→  admin: {
+   131→    modules: ['Dashboard', 'Customers', 'Production', 'Stock', 'Orders', 'Dispatch', 'Payments', 'Expenses', 'Reports', 'Users', 'Settings', 'Admin Panel'],
+   132→    description: 'Full access to all modules and features. Can manage users, company settings, and data.',
+   133→  },
+   134→  operator: {
+   135→    modules: ['Dashboard', 'Production', 'Dispatch', 'Stock'],
+   136→    description: 'Access to production, dispatch, and stock modules. Can create and update entries but cannot delete.',
+   137→  },
+   138→  accountant: {
+   139→    modules: ['Dashboard', 'Payments', 'Expenses', 'Reports'],
+   140→    description: 'Access to payments, expenses, and reports. Can manage financial records and generate reports.',
+   141→  },
+   142→}
+   143→
+   144→const emptyCompanyForm: CompanyForm = {
+   145→  name: '',
+   146→  tagline: '',
+   147→  phone: '',
+   148→  email: '',
+   149→  address: '',
+   150→  city: '',
+   151→  state: '',
+   152→  pincode: '',
+   153→  gstNumber: '',
+   154→  panNumber: '',
+   155→  bankName: '',
+   156→  bankAccount: '',
+   157→  bankIfsc: '',
+   158→  invoicePrefix: 'INV',
+   159→  dispatchPrefix: 'DSP',
+   160→  orderPrefix: 'ORD',
+   161→  terms: '',
+   162→  signatureName: '',
+   163→  logoUrl: '',
+   164→  primaryColor: '#059669',
+   165→}
+   166→
+   167→const emptyUserForm: UserFormData = {
+   168→  name: '',
+   169→  email: '',
+   170→  password: '',
+   171→  role: 'operator',
+   172→}
+   173→
+   174→// ── Component ───────────────────────────────────────────────────────────────
+   175→
+   176→export default function AdminPanelModule() {
+   177→  const { company, setCompany, user: currentUser } = useAppStore()
+   178→
+   179→  // Company form state
+   180→  const [companyForm, setCompanyForm] = React.useState<CompanyForm>(emptyCompanyForm)
+   181→  const [savingCompany, setSavingCompany] = React.useState(false)
+   182→  const [uploadingLogo, setUploadingLogo] = React.useState(false)
+   183→
+   184→  // User management state
+   185→  const [users, setUsers] = React.useState<UserItem[]>([])
+   186→  const [loadingUsers, setLoadingUsers] = React.useState(true)
+   187→  const [formOpen, setFormOpen] = React.useState(false)
+   188→  const [editingUser, setEditingUser] = React.useState<UserItem | null>(null)
+   189→  const [formData, setFormData] = React.useState<UserFormData>(emptyUserForm)
+   190→  const [formSubmitting, setFormSubmitting] = React.useState(false)
+   191→  const [deleteTarget, setDeleteTarget] = React.useState<UserItem | null>(null)
+   192→  const [deleting, setDeleting] = React.useState(false)
+   193→  const [togglingId, setTogglingId] = React.useState<string | null>(null)
+   194→
+   195→  // Database management
+   196→  const [dbAction, setDbAction] = React.useState<'clear' | null>(null)
+   197→  const [dbLoading, setDbLoading] = React.useState(false)
+   198→
+   199→  // Load company data
+   200→  React.useEffect(() => {
+   201→    if (company) {
+   202→      setCompanyForm({
+   203→        name: company.name || '',
+   204→        tagline: company.tagline || '',
+   205→        phone: company.phone || '',
+   206→        email: company.email || '',
+   207→        address: company.address || '',
+   208→        city: company.city || '',
+   209→        state: company.state || '',
+   210→        pincode: company.pincode || '',
+   211→        gstNumber: company.gstNumber || '',
+   212→        panNumber: company.panNumber || '',
+   213→        bankName: company.bankName || '',
+   214→        bankAccount: company.bankAccount || '',
+   215→        bankIfsc: company.bankIfsc || '',
+   216→        invoicePrefix: company.invoicePrefix || 'INV',
+   217→        dispatchPrefix: company.dispatchPrefix || 'DSP',
+   218→        orderPrefix: company.orderPrefix || 'ORD',
+   219→        terms: company.terms || '',
+   220→        signatureName: company.signatureName || '',
+   221→        logoUrl: company.logoUrl || '',
+   222→        primaryColor: company.primaryColor || '#059669',
+   223→      })
+   224→    }
+   225→  }, [company])
+   226→
+   227→  // Fetch users
+   228→  const fetchUsers = React.useCallback(async () => {
+   229→    setLoadingUsers(true)
+   230→    try {
+   231→      const res = await api.getUsers()
+   232→      setUsers(res.users as UserItem[])
+   233→    } catch (err) {
+   234→      toast({ title: 'Error', description: 'Failed to fetch users', variant: 'destructive' })
+   235→    } finally {
+   236→      setLoadingUsers(false)
+   237→    }
+   238→  }, [])
+   239→
+   240→  React.useEffect(() => {
+   241→    fetchUsers()
+   242→  }, [fetchUsers])
+   243→
+   244→  // ── Company save ─────────────────────────────────────────────────────────
+   245→  const handleSaveCompany = async () => {
+   246→    if (!companyForm.name.trim()) {
+   247→      toast({ title: 'Error', description: 'Company name is required', variant: 'destructive' })
+   248→      return
+   249→    }
+   250→    setSavingCompany(true)
+   251→    try {
+   252→      const result = await api.updateCompany({
+   253→        ...companyForm,
+   254→        setupComplete: true,
+   255→      })
+   256→      setCompany(result.company as Parameters<typeof setCompany>[0])
+   257→      toast({ title: 'Success', description: 'Company settings saved successfully' })
+   258→    } catch (err) {
+   259→      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to save', variant: 'destructive' })
+   260→    } finally {
+   261→      setSavingCompany(false)
+   262→    }
+   263→  }
+   264→
+   265→  // ── Logo upload ──────────────────────────────────────────────────────────
+   266→  const logoInputRef = React.useRef<HTMLInputElement>(null)
+   267→
+   268→  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+   269→    const file = e.target.files?.[0]
+   270→    if (!file) return
+   271→
+   272→    if (!file.type.startsWith('image/')) {
+   273→      toast({ title: 'Invalid file', description: 'Please upload an image file', variant: 'destructive' })
+   274→      return
+   275→    }
+   276→
+   277→    if (file.size > 2 * 1024 * 1024) {
+   278→      toast({ title: 'File too large', description: 'Logo must be under 2MB', variant: 'destructive' })
+   279→      return
+   280→    }
+   281→
+   282→    setUploadingLogo(true)
+   283→    try {
+   284→      const reader = new FileReader()
+   285→      reader.onload = async () => {
+   286→        const base64 = reader.result as string
+   287→        const result = await api.updateCompany({ logoUrl: base64, setupComplete: true })
+   288→        setCompany(result.company as Parameters<typeof setCompany>[0])
+   289→        setCompanyForm((prev) => ({ ...prev, logoUrl: base64 }))
+   290→        toast({ title: 'Logo updated', description: 'Company logo has been updated' })
+   291→        setUploadingLogo(false)
+   292→      }
+   293→      reader.readAsDataURL(file)
+   294→    } catch (err) {
+   295→      toast({ title: 'Upload failed', description: 'Could not upload logo', variant: 'destructive' })
+   296→      setUploadingLogo(false)
+   297→    }
+   298→  }
+   299→
+   300→  const handleRemoveLogo = async () => {
+   301→    try {
+   302→      const result = await api.updateCompany({ logoUrl: '', setupComplete: true })
+   303→      setCompany(result.company as Parameters<typeof setCompany>[0])
+   304→      setCompanyForm((prev) => ({ ...prev, logoUrl: '' }))
+   305→      toast({ title: 'Logo removed', description: 'Company logo has been removed' })
+   306→    } catch (err) {
+   307→      toast({ title: 'Error', description: 'Failed to remove logo', variant: 'destructive' })
+   308→    }
+   309→  }
+   310→
+   311→  // ── Use Veda default logo ────────────────────────────────────────────────
+   312→  const handleUseVedaLogo = async () => {
+   313→    try {
+   314→      // Convert the SVG to a data URL
+   315→      const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none"><rect width="200" height="200" rx="40" fill="#059669"/><path d="M100 30L40 75v15h20v55h30v-35h20v35h30V90h20V75L100 30z" fill="white" opacity="0.95"/><rect x="85" y="95" width="30" height="20" rx="2" fill="white" opacity="0.6"/><path d="M35 155h130v10a10 10 0 01-10 10H45a10 10 0 01-10-10v-10z" fill="white" opacity="0.8"/><text x="100" y="192" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" opacity="0.9">VEDA</text></svg>`
+   316→      const dataUrl = `data:image/svg+xml;base64,${btoa(svgContent)}`
+   317→      const result = await api.updateCompany({ logoUrl: dataUrl, setupComplete: true })
+   318→      setCompany(result.company as Parameters<typeof setCompany>[0])
+   319→      setCompanyForm((prev) => ({ ...prev, logoUrl: dataUrl }))
+   320→      toast({ title: 'Veda logo applied', description: 'Default Veda Enterprises logo has been set' })
+   321→    } catch (err) {
+   322→      toast({ title: 'Error', description: 'Failed to set Veda logo', variant: 'destructive' })
+   323→    }
+   324→  }
+   325→
+   326→  // ── User form handlers ──────────────────────────────────────────────────
+   327→  const openAddDialog = () => {
+   328→    setEditingUser(null)
+   329→    setFormData(emptyUserForm)
+   330→    setFormOpen(true)
+   331→  }
+   332→
+   333→  const openEditDialog = (user: UserItem) => {
+   334→    setEditingUser(user)
+   335→    setFormData({ name: user.name, email: user.email, password: '', role: user.role })
+   336→    setFormOpen(true)
+   337→  }
+   338→
+   339→  const handleSubmitUser = async () => {
+   340→    if (!formData.name.trim() || !formData.email.trim()) {
+   341→      toast({ title: 'Error', description: 'Name and email are required', variant: 'destructive' })
+   342→      return
+   343→    }
+   344→    if (!editingUser && !formData.password.trim()) {
+   345→      toast({ title: 'Error', description: 'Password is required for new users', variant: 'destructive' })
+   346→      return
+   347→    }
+   348→
+   349→    setFormSubmitting(true)
+   350→    try {
+   351→      if (editingUser) {
+   352→        const payload: Record<string, unknown> = {
+   353→          name: formData.name.trim(),
+   354→          email: formData.email.trim(),
+   355→          role: formData.role,
+   356→          active: editingUser.active,
+   357→        }
+   358→        if (formData.password.trim()) payload.password = formData.password.trim()
+   359→        await api.updateUser(editingUser.id, payload)
+   360→        toast({ title: 'Success', description: 'User updated' })
+   361→      } else {
+   362→        await api.createUser({
+   363→          name: formData.name.trim(),
+   364→          email: formData.email.trim(),
+   365→          password: formData.password.trim(),
+   366→          role: formData.role,
+   367→        })
+   368→        toast({ title: 'Success', description: 'User created' })
+   369→      }
+   370→      setFormOpen(false)
+   371→      fetchUsers()
+   372→    } catch (err) {
+   373→      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed', variant: 'destructive' })
+   374→    } finally {
+   375→      setFormSubmitting(false)
+   376→    }
+   377→  }
+   378→
+   379→  const handleToggleActive = async (user: UserItem) => {
+   380→    setTogglingId(user.id)
+   381→    try {
+   382→      await api.updateUser(user.id, { name: user.name, email: user.email, role: user.role, active: !user.active })
+   383→      toast({ title: 'Success', description: `User ${!user.active ? 'activated' : 'deactivated'}` })
+   384→      fetchUsers()
+   385→    } catch (err) {
+   386→      toast({ title: 'Error', description: 'Failed to toggle user', variant: 'destructive' })
+   387→    } finally {
+   388→      setTogglingId(null)
+   389→    }
+   390→  }
+   391→
+   392→  const handleDeleteUser = async () => {
+   393→    if (!deleteTarget) return
+   394→    if (deleteTarget.id === currentUser?.id) {
+   395→      toast({ title: 'Error', description: 'Cannot delete your own account', variant: 'destructive' })
+   396→      setDeleteTarget(null)
+   397→      return
+   398→    }
+   399→    setDeleting(true)
+   400→    try {
+   401→      await api.deleteUser(deleteTarget.id)
+   402→      toast({ title: 'Success', description: 'User deleted' })
+   403→      setDeleteTarget(null)
+   404→      fetchUsers()
+   405→    } catch (err) {
+   406→      toast({ title: 'Error', description: 'Failed to delete user', variant: 'destructive' })
+   407→    } finally {
+   408→      setDeleting(false)
+   409→    }
+   410→  }
+   411→
+   412→  // ── Database management ─────────────────────────────────────────────────
+   413→  const handleExportBackup = async () => {
+   414→    setDbLoading(true)
+   415→    try {
+   416→      const data = await api.exportBackup()
+   417→      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+   418→      const url = URL.createObjectURL(blob)
+   419→      const a = document.createElement('a')
+   420→      a.href = url
+   421→      a.download = `veda-erp-backup-${new Date().toISOString().split('T')[0]}.json`
+   422→      a.click()
+   423→      URL.revokeObjectURL(url)
+   424→      toast({ title: 'Backup exported', description: 'Database backup has been downloaded' })
+   425→    } catch (err) {
+   426→      toast({ title: 'Export failed', description: 'Could not export backup', variant: 'destructive' })
+   427→    } finally {
+   428→      setDbLoading(false)
+   429→    }
+   430→  }
+   431→
+   432→  const handleClearData = async () => {
+   433→    setDbLoading(true)
+   434→    try {
+   435→      await api.clearData()
+   436→      toast({ title: 'Data cleared', description: 'All data has been cleared from the system' })
+   437→    } catch (err) {
+   438→      toast({ title: 'Error', description: 'Failed to clear data', variant: 'destructive' })
+   439→    } finally {
+   440→      setDbLoading(false)
+   441→      setDbAction(null)
+   442→    }
+   443→  }
+   444→
+   445→  const handleRestoreBackup = async () => {
+   446→    const input = document.createElement('input')
+   447→    input.type = 'file'
+   448→    input.accept = '.json'
+   449→    input.onchange = async (e) => {
+   450→      const file = (e.target as HTMLInputElement).files?.[0]
+   451→      if (!file) return
+   452→      setDbLoading(true)
+   453→      try {
+   454→        const text = await file.text()
+   455→        const data = JSON.parse(text)
+   456→        await api.restoreBackup(data)
+   457→        toast({ title: 'Backup restored', description: 'Database has been restored from backup' })
+   458→      } catch (err) {
+   459→        toast({ title: 'Restore failed', description: 'Could not restore backup', variant: 'destructive' })
+   460→      } finally {
+   461→        setDbLoading(false)
+   462→      }
+   463→    }
+   464→    input.click()
+   465→  }
+   466→
+   467→  // ── Render ───────────────────────────────────────────────────────────────
+   468→  return (
+   469→    <div className="space-y-6">
+   470→      {/* Header */}
+   471→      <div className="flex items-center gap-3">
+   472→        <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+   473→          <ShieldCheck className="size-5" />
+   474→        </div>
+   475→        <div>
+   476→          <h2 className="text-2xl font-bold tracking-tight">Admin Panel</h2>
+   477→          <p className="text-sm text-muted-foreground">
+   478→            Full control over company settings, users, roles, and system data
+   479→          </p>
+   480→        </div>
+   481→      </div>
+   482→
+   483→      {/* Main Tabs */}
+   484→      <Tabs defaultValue="company" className="space-y-6">
+   485→        <TabsList className="grid w-full grid-cols-4">
+   486→          <TabsTrigger value="company" className="gap-2">
+   487→            <Building2 className="h-4 w-4" /> Company
+   488→          </TabsTrigger>
+   489→          <TabsTrigger value="logo" className="gap-2">
+   490→            <ImagePlus className="h-4 w-4" /> Logo & Branding
+   491→          </TabsTrigger>
+   492→          <TabsTrigger value="users" className="gap-2">
+   493→            <Users className="h-4 w-4" /> Users & Access
+   494→          </TabsTrigger>
+   495→          <TabsTrigger value="database" className="gap-2">
+   496→            <Database className="h-4 w-4" /> Database
+   497→          </TabsTrigger>
+   498→        </TabsList>
+   499→
+   500→        {/* ── Company Settings Tab ──────────────────────────────────────── */}
+   501→        <TabsContent value="company" className="space-y-6">
+   502→          <Card>
+   503→            <CardHeader>
+   504→              <CardTitle className="flex items-center gap-2">
+   505→                <Building2 className="h-5 w-5 text-emerald-600" />
+   506→                Company Details
+   507→              </CardTitle>
+   508→              <CardDescription>
+   509→                Update your company information. These details appear on invoices, reports, and documents.
+   510→              </CardDescription>
+   511→            </CardHeader>
+   512→            <CardContent className="space-y-6">
+   513→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   514→                <div className="space-y-2 sm:col-span-2">
+   515→                  <Label>Company Name <span className="text-destructive">*</span></Label>
+   516→                  <Input value={companyForm.name} onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })} placeholder="Enter company name" />
+   517→                </div>
+   518→                <div className="space-y-2 sm:col-span-2">
+   519→                  <Label>Tagline</Label>
+   520→                  <Input value={companyForm.tagline} onChange={(e) => setCompanyForm({ ...companyForm, tagline: e.target.value })} placeholder="e.g. Building the future, one brick at a time" />
+   521→                </div>
+   522→                <div className="space-y-2">
+   523→                  <Label>Phone <span className="text-destructive">*</span></Label>
+   524→                  <Input value={companyForm.phone} onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })} placeholder="+91 98765 43210" />
+   525→                </div>
+   526→                <div className="space-y-2">
+   527→                  <Label>Email</Label>
+   528→                  <Input type="email" value={companyForm.email} onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })} placeholder="info@company.com" />
+   529→                </div>
+   530→                <div className="space-y-2 sm:col-span-2">
+   531→                  <Label>Address</Label>
+   532→                  <Input value={companyForm.address} onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })} placeholder="Enter full address" />
+   533→                </div>
+   534→                <div className="space-y-2">
+   535→                  <Label>City</Label>
+   536→                  <Input value={companyForm.city} onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })} placeholder="City" />
+   537→                </div>
+   538→                <div className="space-y-2">
+   539→                  <Label>State</Label>
+   540→                  <Input value={companyForm.state} onChange={(e) => setCompanyForm({ ...companyForm, state: e.target.value })} placeholder="State" />
+   541→                </div>
+   542→                <div className="space-y-2">
+   543→                  <Label>Pincode</Label>
+   544→                  <Input value={companyForm.pincode} onChange={(e) => setCompanyForm({ ...companyForm, pincode: e.target.value })} placeholder="000000" />
+   545→                </div>
+   546→                <div className="space-y-2">
+   547→                  <Label>GST Number</Label>
+   548→                  <Input value={companyForm.gstNumber} onChange={(e) => setCompanyForm({ ...companyForm, gstNumber: e.target.value.toUpperCase() })} placeholder="22AAAAA0000A1Z5" />
+   549→                </div>
+   550→                <div className="space-y-2">
+   551→                  <Label>PAN Number</Label>
+   552→                  <Input value={companyForm.panNumber} onChange={(e) => setCompanyForm({ ...companyForm, panNumber: e.target.value.toUpperCase() })} placeholder="AAAAA0000A" />
+   553→                </div>
+   554→              </div>
+   555→
+   556→              <Separator />
+   557→
+   558→              <div>
+   559→                <h4 className="font-medium mb-3 flex items-center gap-2">
+   560→                  <Palette className="h-4 w-4" /> Business Settings
+   561→                </h4>
+   562→                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   563→                  <div className="space-y-2">
+   564→                    <Label>Invoice Prefix</Label>
+   565→                    <Input value={companyForm.invoicePrefix} onChange={(e) => setCompanyForm({ ...companyForm, invoicePrefix: e.target.value.toUpperCase() })} placeholder="INV" />
+   566→                  </div>
+   567→                  <div className="space-y-2">
+   568→                    <Label>Dispatch Prefix</Label>
+   569→                    <Input value={companyForm.dispatchPrefix} onChange={(e) => setCompanyForm({ ...companyForm, dispatchPrefix: e.target.value.toUpperCase() })} placeholder="DSP" />
+   570→                  </div>
+   571→                  <div className="space-y-2">
+   572→                    <Label>Order Prefix</Label>
+   573→                    <Input value={companyForm.orderPrefix} onChange={(e) => setCompanyForm({ ...companyForm, orderPrefix: e.target.value.toUpperCase() })} placeholder="ORD" />
+   574→                  </div>
+   575→                </div>
+   576→              </div>
+   577→
+   578→              <Separator />
+   579→
+   580→              <div>
+   581→                <h4 className="font-medium mb-3 flex items-center gap-2">
+   582→                  Bank Details
+   583→                </h4>
+   584→                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   585→                  <div className="space-y-2">
+   586→                    <Label>Bank Name</Label>
+   587→                    <Input value={companyForm.bankName} onChange={(e) => setCompanyForm({ ...companyForm, bankName: e.target.value })} placeholder="Enter bank name" />
+   588→                  </div>
+   589→                  <div className="space-y-2">
+   590→                    <Label>Account Number</Label>
+   591→                    <Input value={companyForm.bankAccount} onChange={(e) => setCompanyForm({ ...companyForm, bankAccount: e.target.value })} placeholder="Enter account number" />
+   592→                  </div>
+   593→                  <div className="space-y-2">
+   594→                    <Label>IFSC Code</Label>
+   595→                    <Input value={companyForm.bankIfsc} onChange={(e) => setCompanyForm({ ...companyForm, bankIfsc: e.target.value.toUpperCase() })} placeholder="Enter IFSC code" />
+   596→                  </div>
+   597→                </div>
+   598→              </div>
+   599→
+   600→              <Separator />
+   601→
+   602→              <div className="space-y-4">
+   603→                <div className="space-y-2">
+   604→                  <Label>Terms & Conditions</Label>
+   605→                  <Textarea value={companyForm.terms} onChange={(e) => setCompanyForm({ ...companyForm, terms: e.target.value })} placeholder="Default terms for invoices..." rows={3} />
+   606→                </div>
+   607→                <div className="space-y-2">
+   608→                  <Label>Authorized Signatory Name</Label>
+   609→                  <Input value={companyForm.signatureName} onChange={(e) => setCompanyForm({ ...companyForm, signatureName: e.target.value })} placeholder="Name of authorized signatory" />
+   610→                </div>
+   611→              </div>
+   612→
+   613→              <div className="flex justify-end pt-2">
+   614→                <Button onClick={handleSaveCompany} disabled={savingCompany} className="bg-emerald-600 hover:bg-emerald-700 min-w-[160px]">
+   615→                  {savingCompany ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Saving...</> : <><Save className="h-4 w-4 mr-2" />Save Settings</>}
+   616→                </Button>
+   617→              </div>
+   618→            </CardContent>
+   619→          </Card>
+   620→        </TabsContent>
+   621→
+   622→        {/* ── Logo & Branding Tab ───────────────────────────────────────── */}
+   623→        <TabsContent value="logo" className="space-y-6">
+   624→          <Card>
+   625→            <CardHeader>
+   626→              <CardTitle className="flex items-center gap-2">
+   627→                <ImagePlus className="h-5 w-5 text-emerald-600" />
+   628→                Company Logo & Branding
+   629→              </CardTitle>
+   630→              <CardDescription>
+   631→                Upload or change your company logo. This logo appears on the sidebar, login page, and all generated documents.
+   632→              </CardDescription>
+   633→            </CardHeader>
+   634→            <CardContent className="space-y-6">
+   635→              {/* Current Logo Preview */}
+   636→              <div className="flex flex-col items-center gap-4 p-6 border-2 border-dashed rounded-xl">
+   637→                {companyForm.logoUrl ? (
+   638→                  <div className="relative group">
+   639→                    <img src={companyForm.logoUrl} alt="Company Logo" className="w-32 h-32 rounded-2xl object-cover border-2 border-emerald-200 dark:border-emerald-800 shadow-lg" />
+   640→                    <button
+   641→                      onClick={handleRemoveLogo}
+   642→                      className="absolute -top-2 -right-2 w-7 h-7 bg-destructive text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+   643→                    >
+   644→                      <X className="h-4 w-4" />
+   645→                    </button>
+   646→                  </div>
+   647→                ) : (
+   648→                  <div className="w-32 h-32 rounded-2xl bg-muted flex items-center justify-center border-2 border-dashed">
+   649→                    <ImagePlus className="h-12 w-12 text-muted-foreground" />
+   650→                  </div>
+   651→                )}
+   652→                <p className="text-sm text-muted-foreground text-center">
+   653→                  {companyForm.logoUrl ? 'Current company logo' : 'No logo uploaded yet'}
+   654→                </p>
+   655→              </div>
+   656→
+   657→              {/* Action buttons */}
+   658→              <div className="flex flex-wrap gap-3 justify-center">
+   659→                <Button variant="outline" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}>
+   660→                  {uploadingLogo ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Uploading...</> : <><Upload className="h-4 w-4 mr-2" />Upload Logo</>}
+   661→                </Button>
+   662→                <Button variant="outline" onClick={handleUseVedaLogo} className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/20">
+   663→                  <Building2 className="h-4 w-4 mr-2" />
+   664→                  Use Veda Logo
+   665→                </Button>
+   666→                {companyForm.logoUrl && (
+   667→                  <Button variant="outline" onClick={handleRemoveLogo} className="text-destructive hover:bg-destructive/10">
+   668→                    <Trash2 className="h-4 w-4 mr-2" />Remove Logo
+   669→                  </Button>
+   670→                )}
+   671→                <input
+   672→                  ref={logoInputRef}
+   673→                  type="file"
+   674→                  accept="image/*"
+   675→                  className="hidden"
+   676→                  onChange={handleLogoUpload}
+   677→                />
+   678→              </div>
+   679→
+   680→              <p className="text-xs text-muted-foreground text-center">
+   681→                Supported formats: PNG, JPG, SVG, WEBP. Maximum size: 2MB. Recommended: 200x200px square.
+   682→              </p>
+   683→
+   684→              <Separator />
+   685→
+   686→              {/* Primary Color */}
+   687→              <div className="space-y-3">
+   688→                <Label className="text-base font-medium">Brand Color</Label>
+   689→                <div className="flex items-center gap-3">
+   690→                  <input
+   691→                    type="color"
+   692→                    value={companyForm.primaryColor}
+   693→                    onChange={(e) => setCompanyForm({ ...companyForm, primaryColor: e.target.value })}
+   694→                    className="w-12 h-12 rounded-lg border-2 border-border cursor-pointer"
+   695→                  />
+   696→                  <div className="flex-1">
+   697→                    <Input
+   698→                      value={companyForm.primaryColor}
+   699→                      onChange={(e) => setCompanyForm({ ...companyForm, primaryColor: e.target.value })}
+   700→                      placeholder="#059669"
+   701→                      className="font-mono"
+   702→                    />
+   703→                  </div>
+   704→                  <Button
+   705→                    variant="outline"
+   706→                    onClick={() => {
+   707→                      setCompanyForm({ ...companyForm, primaryColor: '#059669' })
+   708→                    }}
+   709→                  >
+   710→                    Reset to Emerald
+   711→                  </Button>
+   712→                </div>
+   713→                <p className="text-xs text-muted-foreground">
+   714→                  This color is used for accents, buttons, and highlights across the ERP system.
+   715→                </p>
+   716→              </div>
+   717→
+   718→              <div className="flex justify-end">
+   719→                <Button onClick={handleSaveCompany} disabled={savingCompany} className="bg-emerald-600 hover:bg-emerald-700">
+   720→                  {savingCompany ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Saving...</> : <><Save className="h-4 w-4 mr-2" />Save Branding</>}
+   721→                </Button>
+   722→              </div>
+   723→            </CardContent>
+   724→          </Card>
+   725→        </TabsContent>
+   726→
+   727→        {/* ── Users & Access Tab ────────────────────────────────────────── */}
+   728→        <TabsContent value="users" className="space-y-6">
+   729→          {/* Role Overview Cards */}
+   730→          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   731→            {ROLES.map((role) => (
+   732→              <Card key={role} className="border-l-4" style={{ borderLeftColor: role === 'admin' ? '#059669' : role === 'operator' ? '#d97706' : '#0284c7' }}>
+   733→                <CardHeader className="pb-2">
+   734→                  <CardTitle className="text-lg flex items-center gap-2">
+   735→                    <Badge className={ROLE_BADGE_STYLES[role]}>{ROLE_LABELS[role] || role}</Badge>
+   736→                  </CardTitle>
+   737→                </CardHeader>
+   738→                <CardContent className="space-y-2">
+   739→                  <p className="text-xs text-muted-foreground">{ROLE_PERMISSIONS[role].description}</p>
+   740→                  <div className="flex flex-wrap gap-1">
+   741→                    {ROLE_PERMISSIONS[role].modules.map((mod) => (
+   742→                      <Badge key={mod} variant="outline" className="text-[10px]">{mod}</Badge>
+   743→                    ))}
+   744→                  </div>
+   745→                  <p className="text-xs font-medium">
+   746→                    {users.filter((u) => u.role === role).length} user{users.filter((u) => u.role === role).length !== 1 ? 's' : ''} with this role
+   747→                  </p>
+   748→                </CardContent>
+   749→              </Card>
+   750→            ))}
+   751→          </div>
+   752→
+   753→          {/* User Management Table */}
+   754→          <Card>
+   755→            <CardHeader>
+   756→              <div className="flex items-center justify-between">
+   757→                <CardTitle className="flex items-center gap-2">
+   758→                  <Users className="h-5 w-5 text-emerald-600" />
+   759→                  User Management
+   760→                </CardTitle>
+   761→                <Button onClick={openAddDialog} className="bg-emerald-600 hover:bg-emerald-700">
+   762→                  Add User
+   763→                </Button>
+   764→              </div>
+   765→            </CardHeader>
+   766→            <CardContent>
+   767→              <div className="overflow-x-auto">
+   768→                <Table>
+   769→                  <TableHeader>
+   770→                    <TableRow>
+   771→                      <TableHead>Name</TableHead>
+   772→                      <TableHead>Email</TableHead>
+   773→                      <TableHead>Role</TableHead>
+   774→                      <TableHead>Status</TableHead>
+   775→                      <TableHead>Access</TableHead>
+   776→                      <TableHead className="text-right">Actions</TableHead>
+   777→                    </TableRow>
+   778→                  </TableHeader>
+   779→                  <TableBody>
+   780→                    {loadingUsers ? (
+   781→                      Array.from({ length: 3 }).map((_, i) => (
+   782→                        <TableRow key={i}>
+   783→                          <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+   784→                          <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+   785→                          <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+   786→                          <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+   787→                          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+   788→                          <TableCell><Skeleton className="h-8 w-28" /></TableCell>
+   789→                        </TableRow>
+   790→                      ))
+   791→                    ) : users.length === 0 ? (
+   792→                      <TableRow>
+   793→                        <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+   794→                          No users yet. Click &quot;Add User&quot; to create one.
+   795→                        </TableCell>
+   796→                      </TableRow>
+   797→                    ) : (
+   798→                      users.map((u) => {
+   799→                        const isSelf = u.id === currentUser?.id
+   800→                        const perms = ROLE_PERMISSIONS[u.role]
+   801→                        return (
+   802→                          <TableRow key={u.id}>
+   803→                            <TableCell className="font-medium">
+   804→                              <div className="flex items-center gap-2">
+   805→                                {u.name}
+   806→                                {isSelf && <Badge variant="outline" className="text-[10px] px-1.5 py-0">You</Badge>}
+   807→                              </div>
+   808→                            </TableCell>
+   809→                            <TableCell className="text-muted-foreground">{u.email}</TableCell>
+   810→                            <TableCell>
+   811→                              <Badge className={ROLE_BADGE_STYLES[u.role] || ''}>{ROLE_LABELS[u.role] || u.role}</Badge>
+   812→                            </TableCell>
+   813→                            <TableCell>
+   814→                              <Badge className={u.active ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' : 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800'}>
+   815→                                {u.active ? 'Active' : 'Inactive'}
+   816→                              </Badge>
+   817→                            </TableCell>
+   818→                            <TableCell>
+   819→                              <span className="text-xs text-muted-foreground">{perms?.modules.length || 0} modules</span>
+   820→                            </TableCell>
+   821→                            <TableCell className="text-right">
+   822→                              <div className="flex items-center justify-end gap-1">
+   823→                                <Button variant="ghost" size="icon" onClick={() => openEditDialog(u)} title="Edit User">
+   824→                                  <Pencil className="size-4" />
+   825→                                </Button>
+   826→                                <Button
+   827→                                  variant="ghost"
+   828→                                  size="icon"
+   829→                                  onClick={() => handleToggleActive(u)}
+   830→                                  disabled={togglingId === u.id}
+   831→                                  title={u.active ? 'Deactivate' : 'Activate'}
+   832→                                  className={u.active ? 'text-amber-600 hover:text-amber-700' : 'text-green-600 hover:text-green-700'}
+   833→                                >
+   834→                                  {togglingId === u.id ? <Loader2 className="size-4 animate-spin" /> : u.active ? <PowerOff className="size-4" /> : <Power className="size-4" />}
+   835→                                </Button>
+   836→                                <Button
+   837→                                  variant="ghost"
+   838→                                  size="icon"
+   839→                                  onClick={() => setDeleteTarget(u)}
+   840→                                  title="Delete User"
+   841→                                  className="text-destructive hover:text-destructive"
+   842→                                >
+   843→                                  <Trash2 className="size-4" />
+   844→                                </Button>
+   845→                              </div>
+   846→                            </TableCell>
+   847→                          </TableRow>
+   848→                        )
+   849→                      })
+   850→                    )}
+   851→                  </TableBody>
+   852→                </Table>
+   853→              </div>
+   854→            </CardContent>
+   855→          </Card>
+   856→        </TabsContent>
+   857→
+   858→        {/* ── Database Tab ──────────────────────────────────────────────── */}
+   859→        <TabsContent value="database" className="space-y-6">
+   860→          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   861→            <Card>
+   862→              <CardHeader>
+   863→                <CardTitle className="flex items-center gap-2 text-base">
+   864→                  <Download className="h-5 w-5 text-emerald-600" />
+   865→                  Export Backup
+   866→                </CardTitle>
+   867→                <CardDescription>Download a complete backup of all your ERP data as a JSON file.</CardDescription>
+   868→              </CardHeader>
+   869→              <CardContent>
+   870→                <Button onClick={handleExportBackup} disabled={dbLoading} className="w-full bg-emerald-600 hover:bg-emerald-700">
+   871→                  {dbLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+   872→                  Export Backup
+   873→                </Button>
+   874→              </CardContent>
+   875→            </Card>
+   876→
+   877→            <Card>
+   878→              <CardHeader>
+   879→                <CardTitle className="flex items-center gap-2 text-base">
+   880→                  <Upload className="h-5 w-5 text-blue-600" />
+   881→                  Restore Backup
+   882→                </CardTitle>
+   883→                <CardDescription>Restore data from a previously exported backup JSON file.</CardDescription>
+   884→              </CardHeader>
+   885→              <CardContent>
+   886→                <Button onClick={handleRestoreBackup} disabled={dbLoading} variant="outline" className="w-full">
+   887→                  {dbLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+   888→                  Restore Backup
+   889→                </Button>
+   890→              </CardContent>
+   891→            </Card>
+   892→
+   893→            <Card className="border-destructive/30">
+   894→              <CardHeader>
+   895→                <CardTitle className="flex items-center gap-2 text-base text-destructive">
+   896→                  <AlertTriangle className="h-5 w-5" />
+   897→                  Clear All Data
+   898→                </CardTitle>
+   899→                <CardDescription>Permanently delete all data from the system. This cannot be undone.</CardDescription>
+   900→              </CardHeader>
+   901→              <CardContent>
+   902→                <Button onClick={() => setDbAction('clear')} disabled={dbLoading} variant="destructive" className="w-full">
+   903→                  <Trash2 className="h-4 w-4 mr-2" />
+   904→                  Clear All Data
+   905→                </Button>
+   906→              </CardContent>
+   907→            </Card>
+   908→          </div>
+   909→        </TabsContent>
+   910→      </Tabs>
+   911→
+   912→      {/* ── User Form Dialog ──────────────────────────────────────────────── */}
+   913→      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+   914→        <DialogContent className="sm:max-w-md">
+   915→          <DialogHeader>
+   916→            <DialogTitle>{editingUser ? 'Edit User' : 'Add User'}</DialogTitle>
+   917→            <DialogDescription>
+   918→              {editingUser ? 'Update user details and role assignment.' : 'Create a new user with appropriate role and access level.'}
+   919→            </DialogDescription>
+   920→          </DialogHeader>
+   921→          <div className="grid gap-4 py-2">
+   922→            <div className="grid gap-2">
+   923→              <Label>Name <span className="text-destructive">*</span></Label>
+   924→              <Input placeholder="Enter full name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+   925→            </div>
+   926→            <div className="grid gap-2">
+   927→              <Label>Email <span className="text-destructive">*</span></Label>
+   928→              <Input type="email" placeholder="Enter email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+   929→            </div>
+   930→            <div className="grid gap-2">
+   931→              <Label>
+   932→                Password{' '}
+   933→                {editingUser ? <span className="text-muted-foreground font-normal">(leave blank to keep existing)</span> : <span className="text-destructive">*</span>}
+   934→              </Label>
+   935→              <Input type="password" placeholder={editingUser ? 'Leave blank to keep existing' : 'Enter password'} value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} />
+   936→            </div>
+   937→            <div className="grid gap-2">
+   938→              <Label>Role</Label>
+   939→              <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+   940→                <SelectTrigger className="w-full">
+   941→                  <SelectValue placeholder="Select role" />
+   942→                </SelectTrigger>
+   943→                <SelectContent>
+   944→                  {ROLES.map((role) => (
+   945→                    <SelectItem key={role} value={role}>
+   946→                      <div className="flex flex-col">
+   947→                        <span>{role}</span>
+   948→                        <span className="text-xs text-muted-foreground">{ROLE_PERMISSIONS[role].description.slice(0, 60)}...</span>
+   949→                      </div>
+   950→                    </SelectItem>
+   951→                  ))}
+   952→                </SelectContent>
+   953→              </Select>
+   954→            </div>
+   955→
+   956→            {/* Show access preview */}
+   957→            {formData.role && ROLE_PERMISSIONS[formData.role] && (
+   958→              <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+   959→                <p className="text-sm font-medium">Access Preview:</p>
+   960→                <div className="flex flex-wrap gap-1">
+   961→                  {ROLE_PERMISSIONS[formData.role].modules.map((mod) => (
+   962→                    <Badge key={mod} variant="outline" className="text-xs">{mod}</Badge>
+   963→                  ))}
+   964→                </div>
+   965→                <p className="text-xs text-muted-foreground">{ROLE_PERMISSIONS[formData.role].description}</p>
+   966→              </div>
+   967→            )}
+   968→          </div>
+   969→          <DialogFooter>
+   970→            <Button variant="outline" onClick={() => setFormOpen(false)} disabled={formSubmitting}>Cancel</Button>
+   971→            <Button onClick={handleSubmitUser} disabled={formSubmitting} className="bg-emerald-600 hover:bg-emerald-700">
+   972→              {formSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+   973→              {editingUser ? 'Update User' : 'Create User'}
+   974→            </Button>
+   975→          </DialogFooter>
+   976→        </DialogContent>
+   977→      </Dialog>
+   978→
+   979→      {/* ── Delete User Confirmation ──────────────────────────────────────── */}
+   980→      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+   981→        <AlertDialogContent>
+   982→          <AlertDialogHeader>
+   983→            <AlertDialogTitle>Delete User</AlertDialogTitle>
+   984→            <AlertDialogDescription>
+   985→              Are you sure you want to delete <strong>{deleteTarget?.name}</strong>? This action cannot be undone.
+   986→            </AlertDialogDescription>
+   987→          </AlertDialogHeader>
+   988→          <AlertDialogFooter>
+   989→            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+   990→            <AlertDialogAction onClick={handleDeleteUser} disabled={deleting} className="bg-destructive text-white hover:bg-destructive/90">
+   991→              {deleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+   992→              Delete
+   993→            </AlertDialogAction>
+   994→          </AlertDialogFooter>
+   995→        </AlertDialogContent>
+   996→      </AlertDialog>
+   997→
+   998→      {/* ── Clear Data Confirmation ───────────────────────────────────────── */}
+   999→      <AlertDialog open={dbAction === 'clear'} onOpenChange={(open) => !open && setDbAction(null)}>
+  1000→        <AlertDialogContent>
+  1001→          <AlertDialogHeader>
+  1002→            <AlertDialogTitle className="flex items-center gap-2">
+  1003→              <AlertTriangle className="h-5 w-5 text-destructive" />
+  1004→              Clear All Data
+  1005→            </AlertDialogTitle>
+  1006→            <AlertDialogDescription>
+  1007→              This will permanently delete all customers, productions, orders, dispatches, payments, expenses, and stock data.
+  1008→              <strong className="block mt-2">This action cannot be undone. Consider exporting a backup first.</strong>
+  1009→            </AlertDialogDescription>
+  1010→          </AlertDialogHeader>
+  1011→          <AlertDialogFooter>
+  1012→            <AlertDialogCancel disabled={dbLoading}>Cancel</AlertDialogCancel>
+  1013→            <AlertDialogAction onClick={handleClearData} disabled={dbLoading} className="bg-destructive text-white hover:bg-destructive/90">
+  1014→              {dbLoading && <Loader2 className="mr-2 size-4 animate-spin" />}
+  1015→              Clear All Data
+  1016→            </AlertDialogAction>
+  1017→          </AlertDialogFooter>
+  1018→        </AlertDialogContent>
+  1019→      </AlertDialog>
+  1020→    </div>
+  1021→  )
+  1022→}
+  1023→

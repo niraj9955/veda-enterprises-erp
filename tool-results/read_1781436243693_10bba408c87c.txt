@@ -1,0 +1,1002 @@
+     1→'use client'
+     2→
+     3→import * as React from 'react'
+     4→import { api } from '@/lib/api'
+     5→import { useAppStore } from '@/lib/store'
+     6→import { toast } from '@/hooks/use-toast'
+     7→import { Button } from '@/components/ui/button'
+     8→import { Input } from '@/components/ui/input'
+     9→import { Label } from '@/components/ui/label'
+    10→import { Skeleton } from '@/components/ui/skeleton'
+    11→import { Textarea } from '@/components/ui/textarea'
+    12→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+    13→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    14→import { Separator } from '@/components/ui/separator'
+    15→import {
+    16→  AlertDialog,
+    17→  AlertDialogAction,
+    18→  AlertDialogCancel,
+    19→  AlertDialogContent,
+    20→  AlertDialogDescription,
+    21→  AlertDialogFooter,
+    22→  AlertDialogHeader,
+    23→  AlertDialogTitle,
+    24→} from '@/components/ui/alert-dialog'
+    25→import {
+    26→  Building2,
+    27→  Palette,
+    28→  Database,
+    29→  Save,
+    30→  Loader2,
+    31→  Download,
+    32→  Upload,
+    33→  Trash2,
+    34→  MapPin,
+    35→  Scale,
+    36→  Landmark,
+    37→  FileText,
+    38→  UserCheck,
+    39→  AlertTriangle,
+    40→  Eye,
+    41→} from 'lucide-react'
+    42→
+    43→// ── Types ───────────────────────────────────────────────────────────────────
+    44→
+    45→interface CompanyForm {
+    46→  name: string
+    47→  tagline: string
+    48→  phone: string
+    49→  email: string
+    50→  address: string
+    51→  city: string
+    52→  state: string
+    53→  pincode: string
+    54→  gstNumber: string
+    55→  panNumber: string
+    56→  bankName: string
+    57→  bankAccount: string
+    58→  bankIfsc: string
+    59→  invoicePrefix: string
+    60→  dispatchPrefix: string
+    61→  orderPrefix: string
+    62→  terms: string
+    63→  signatureName: string
+    64→  logoUrl: string
+    65→  primaryColor: string
+    66→}
+    67→
+    68→// ── Component ───────────────────────────────────────────────────────────────
+    69→
+    70→export default function SettingsModule() {
+    71→  const { company, setCompany } = useAppStore()
+    72→
+    73→  // Loading state for initial fetch
+    74→  const [loading, setLoading] = React.useState(true)
+    75→  const [saving, setSaving] = React.useState(false)
+    76→
+    77→  // Company form data
+    78→  const [form, setForm] = React.useState<CompanyForm>({
+    79→    name: '',
+    80→    tagline: '',
+    81→    phone: '',
+    82→    email: '',
+    83→    address: '',
+    84→    city: '',
+    85→    state: '',
+    86→    pincode: '',
+    87→    gstNumber: '',
+    88→    panNumber: '',
+    89→    bankName: '',
+    90→    bankAccount: '',
+    91→    bankIfsc: '',
+    92→    invoicePrefix: 'INV',
+    93→    dispatchPrefix: 'DSP',
+    94→    orderPrefix: 'ORD',
+    95→    terms: '',
+    96→    signatureName: '',
+    97→    logoUrl: '',
+    98→    primaryColor: '#059669',
+    99→  })
+   100→
+   101→  // Database management states
+   102→  const [exporting, setExporting] = React.useState(false)
+   103→  const [importing, setImporting] = React.useState(false)
+   104→  const [clearDialogOpen, setClearDialogOpen] = React.useState(false)
+   105→  const [clearing, setClearing] = React.useState(false)
+   106→
+   107→  // File input ref for import
+   108→  const fileInputRef = React.useRef<HTMLInputElement>(null)
+   109→
+   110→  // ── Fetch company data on mount ──────────────────────────────────────────
+   111→
+   112→  React.useEffect(() => {
+   113→    const fetchCompany = async () => {
+   114→      try {
+   115→        setLoading(true)
+   116→        const data = await api.getCompany()
+   117→        const c = data.company as Record<string, unknown>
+   118→        if (c) {
+   119→          setForm({
+   120→            name: (c.name as string) || '',
+   121→            tagline: (c.tagline as string) || '',
+   122→            phone: (c.phone as string) || '',
+   123→            email: (c.email as string) || '',
+   124→            address: (c.address as string) || '',
+   125→            city: (c.city as string) || '',
+   126→            state: (c.state as string) || '',
+   127→            pincode: (c.pincode as string) || '',
+   128→            gstNumber: (c.gstNumber as string) || '',
+   129→            panNumber: (c.panNumber as string) || '',
+   130→            bankName: (c.bankName as string) || '',
+   131→            bankAccount: (c.bankAccount as string) || '',
+   132→            bankIfsc: (c.bankIfsc as string) || '',
+   133→            invoicePrefix: (c.invoicePrefix as string) || 'INV',
+   134→            dispatchPrefix: (c.dispatchPrefix as string) || 'DSP',
+   135→            orderPrefix: (c.orderPrefix as string) || 'ORD',
+   136→            terms: (c.terms as string) || '',
+   137→            signatureName: (c.signatureName as string) || '',
+   138→            logoUrl: (c.logoUrl as string) || '',
+   139→            primaryColor: (c.primaryColor as string) || '#059669',
+   140→          })
+   141→        }
+   142→      } catch {
+   143→        toast({ title: 'Error', description: 'Failed to load company settings', variant: 'destructive' })
+   144→      } finally {
+   145→        setLoading(false)
+   146→      }
+   147→    }
+   148→    fetchCompany()
+   149→  }, [])
+   150→
+   151→  // ── Update form field helper ─────────────────────────────────────────────
+   152→
+   153→  const updateField = (field: keyof CompanyForm, value: string) => {
+   154→    setForm((prev) => ({ ...prev, [field]: value }))
+   155→  }
+   156→
+   157→  // ── Save company profile ─────────────────────────────────────────────────
+   158→
+   159→  const handleSaveProfile = async () => {
+   160→    if (!form.name.trim()) {
+   161→      toast({ title: 'Validation Error', description: 'Company Name is required', variant: 'destructive' })
+   162→      return
+   163→    }
+   164→
+   165→    try {
+   166→      setSaving(true)
+   167→      const data = await api.updateCompany(form as unknown as Record<string, unknown>)
+   168→      const updated = data.company as Record<string, unknown>
+   169→      if (updated && company) {
+   170→        setCompany({
+   171→          ...company,
+   172→          ...(updated as typeof company),
+   173→        })
+   174→      }
+   175→      toast({ title: 'Success', description: 'Company profile saved successfully' })
+   176→    } catch {
+   177→      toast({ title: 'Error', description: 'Failed to save company profile', variant: 'destructive' })
+   178→    } finally {
+   179→      setSaving(false)
+   180→    }
+   181→  }
+   182→
+   183→  // ── Save branding ────────────────────────────────────────────────────────
+   184→
+   185→  const handleSaveBranding = async () => {
+   186→    try {
+   187→      setSaving(true)
+   188→      const data = await api.updateCompany({
+   189→        primaryColor: form.primaryColor,
+   190→        logoUrl: form.logoUrl,
+   191→      } as unknown as Record<string, unknown>)
+   192→      const updated = data.company as Record<string, unknown>
+   193→      if (updated && company) {
+   194→        setCompany({
+   195→          ...company,
+   196→          ...(updated as typeof company),
+   197→        })
+   198→      }
+   199→      toast({ title: 'Success', description: 'Branding settings saved successfully' })
+   200→    } catch {
+   201→      toast({ title: 'Error', description: 'Failed to save branding settings', variant: 'destructive' })
+   202→    } finally {
+   203→      setSaving(false)
+   204→    }
+   205→  }
+   206→
+   207→  // ── Export backup ────────────────────────────────────────────────────────
+   208→
+   209→  const handleExport = async () => {
+   210→    try {
+   211→      setExporting(true)
+   212→      const data = await api.exportBackup()
+   213→      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+   214→      const url = URL.createObjectURL(blob)
+   215→      const a = document.createElement('a')
+   216→      a.href = url
+   217→      a.download = `erp-backup-${new Date().toISOString().split('T')[0]}.json`
+   218→      document.body.appendChild(a)
+   219→      a.click()
+   220→      document.body.removeChild(a)
+   221→      URL.revokeObjectURL(url)
+   222→      toast({ title: 'Success', description: 'Backup exported and downloaded successfully' })
+   223→    } catch {
+   224→      toast({ title: 'Error', description: 'Failed to export backup', variant: 'destructive' })
+   225→    } finally {
+   226→      setExporting(false)
+   227→    }
+   228→  }
+   229→
+   230→  // ── Import backup ────────────────────────────────────────────────────────
+   231→
+   232→  const handleImportClick = () => {
+   233→    fileInputRef.current?.click()
+   234→  }
+   235→
+   236→  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+   237→    const file = e.target.files?.[0]
+   238→    if (!file) return
+   239→
+   240→    try {
+   241→      setImporting(true)
+   242→      const text = await file.text()
+   243→      const data = JSON.parse(text)
+   244→      const result = await api.restoreBackup(data)
+   245→      const counts = result.counts as Record<string, number>
+   246→      const summary = Object.entries(counts)
+   247→        .map(([key, val]) => `${key}: ${val}`)
+   248→        .join(', ')
+   249→      toast({
+   250→        title: 'Backup Restored',
+   251→        description: summary || result.message,
+   252→      })
+   253→    } catch (err) {
+   254→      if (err instanceof SyntaxError) {
+   255→        toast({ title: 'Invalid File', description: 'The selected file is not valid JSON', variant: 'destructive' })
+   256→      } else {
+   257→        toast({ title: 'Error', description: 'Failed to restore backup', variant: 'destructive' })
+   258→      }
+   259→    } finally {
+   260→      setImporting(false)
+   261→      // Reset file input so the same file can be re-selected
+   262→      if (fileInputRef.current) {
+   263→        fileInputRef.current.value = ''
+   264→      }
+   265→    }
+   266→  }
+   267→
+   268→  // ── Clear all data ───────────────────────────────────────────────────────
+   269→
+   270→  const handleClearData = async () => {
+   271→    try {
+   272→      setClearing(true)
+   273→      await api.clearData()
+   274→      toast({ title: 'Success', description: 'All data has been cleared' })
+   275→      setClearDialogOpen(false)
+   276→    } catch {
+   277→      toast({ title: 'Error', description: 'Failed to clear data', variant: 'destructive' })
+   278→    } finally {
+   279→      setClearing(false)
+   280→    }
+   281→  }
+   282→
+   283→  // ── Loading skeleton ─────────────────────────────────────────────────────
+   284→
+   285→  if (loading) {
+   286→    return (
+   287→      <div className="space-y-6">
+   288→        <div>
+   289→          <Skeleton className="h-8 w-48" />
+   290→          <Skeleton className="mt-2 h-4 w-72" />
+   291→        </div>
+   292→        <Skeleton className="h-10 w-96" />
+   293→        <div className="grid gap-6 md:grid-cols-2">
+   294→          <Card>
+   295→            <CardHeader>
+   296→              <Skeleton className="h-5 w-32" />
+   297→            </CardHeader>
+   298→            <CardContent className="space-y-4">
+   299→              {Array.from({ length: 4 }).map((_, i) => (
+   300→                <div key={i} className="space-y-2">
+   301→                  <Skeleton className="h-4 w-24" />
+   302→                  <Skeleton className="h-9 w-full" />
+   303→                </div>
+   304→              ))}
+   305→            </CardContent>
+   306→          </Card>
+   307→          <Card>
+   308→            <CardHeader>
+   309→              <Skeleton className="h-5 w-32" />
+   310→            </CardHeader>
+   311→            <CardContent className="space-y-4">
+   312→              {Array.from({ length: 4 }).map((_, i) => (
+   313→                <div key={i} className="space-y-2">
+   314→                  <Skeleton className="h-4 w-24" />
+   315→                  <Skeleton className="h-9 w-full" />
+   316→                </div>
+   317→              ))}
+   318→            </CardContent>
+   319→          </Card>
+   320→        </div>
+   321→      </div>
+   322→    )
+   323→  }
+   324→
+   325→  // ── Render ──────────────────────────────────────────────────────────────
+   326→
+   327→  return (
+   328→    <div className="space-y-6">
+   329→      {/* ── Header ──────────────────────────────────────────────────────── */}
+   330→      <div>
+   331→        <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
+   332→        <p className="text-muted-foreground text-sm">Manage your company profile, branding, and database</p>
+   333→      </div>
+   334→
+   335→      {/* ── Tabs ────────────────────────────────────────────────────────── */}
+   336→      <Tabs defaultValue="profile" className="space-y-6">
+   337→        <TabsList className="w-full sm:w-auto">
+   338→          <TabsTrigger value="profile" className="gap-1.5">
+   339→            <Building2 className="h-4 w-4" />
+   340→            <span className="hidden sm:inline">Company Profile</span>
+   341→            <span className="sm:hidden">Profile</span>
+   342→          </TabsTrigger>
+   343→          <TabsTrigger value="branding" className="gap-1.5">
+   344→            <Palette className="h-4 w-4" />
+   345→            <span className="hidden sm:inline">Branding</span>
+   346→            <span className="sm:hidden">Brand</span>
+   347→          </TabsTrigger>
+   348→          <TabsTrigger value="database" className="gap-1.5">
+   349→            <Database className="h-4 w-4" />
+   350→            <span className="hidden sm:inline">Database</span>
+   351→            <span className="sm:hidden">Data</span>
+   352→          </TabsTrigger>
+   353→        </TabsList>
+   354→
+   355→        {/* ═══════════════════ Tab 1: Company Profile ═══════════════════ */}
+   356→        <TabsContent value="profile" className="space-y-6">
+   357→          <div className="grid gap-6 md:grid-cols-2">
+   358→            {/* ── Business Details ─────────────────────────────────────── */}
+   359→            <Card>
+   360→              <CardHeader className="pb-4">
+   361→                <div className="flex items-center gap-2">
+   362→                  <Building2 className="h-4 w-4 text-emerald-600" />
+   363→                  <CardTitle className="text-base">Business Details</CardTitle>
+   364→                </div>
+   365→              </CardHeader>
+   366→              <CardContent className="space-y-4">
+   367→                <div className="space-y-2">
+   368→                  <Label htmlFor="company-name">
+   369→                    Company Name <span className="text-destructive">*</span>
+   370→                  </Label>
+   371→                  <Input
+   372→                    id="company-name"
+   373→                    placeholder="Enter company name"
+   374→                    value={form.name}
+   375→                    onChange={(e) => updateField('name', e.target.value)}
+   376→                  />
+   377→                </div>
+   378→                <div className="space-y-2">
+   379→                  <Label htmlFor="company-tagline">Tagline</Label>
+   380→                  <Input
+   381→                    id="company-tagline"
+   382→                    placeholder="Your company tagline"
+   383→                    value={form.tagline}
+   384→                    onChange={(e) => updateField('tagline', e.target.value)}
+   385→                  />
+   386→                </div>
+   387→                <div className="space-y-2">
+   388→                  <Label htmlFor="company-phone">Phone</Label>
+   389→                  <Input
+   390→                    id="company-phone"
+   391→                    type="tel"
+   392→                    placeholder="+91 9876543210"
+   393→                    value={form.phone}
+   394→                    onChange={(e) => updateField('phone', e.target.value)}
+   395→                  />
+   396→                </div>
+   397→                <div className="space-y-2">
+   398→                  <Label htmlFor="company-email">Email</Label>
+   399→                  <Input
+   400→                    id="company-email"
+   401→                    type="email"
+   402→                    placeholder="contact@company.com"
+   403→                    value={form.email}
+   404→                    onChange={(e) => updateField('email', e.target.value)}
+   405→                  />
+   406→                </div>
+   407→              </CardContent>
+   408→            </Card>
+   409→
+   410→            {/* ── Address ──────────────────────────────────────────────── */}
+   411→            <Card>
+   412→              <CardHeader className="pb-4">
+   413→                <div className="flex items-center gap-2">
+   414→                  <MapPin className="h-4 w-4 text-emerald-600" />
+   415→                  <CardTitle className="text-base">Address</CardTitle>
+   416→                </div>
+   417→              </CardHeader>
+   418→              <CardContent className="space-y-4">
+   419→                <div className="space-y-2">
+   420→                  <Label htmlFor="company-address">Address</Label>
+   421→                  <Input
+   422→                    id="company-address"
+   423→                    placeholder="Street address"
+   424→                    value={form.address}
+   425→                    onChange={(e) => updateField('address', e.target.value)}
+   426→                  />
+   427→                </div>
+   428→                <div className="grid grid-cols-2 gap-4">
+   429→                  <div className="space-y-2">
+   430→                    <Label htmlFor="company-city">City</Label>
+   431→                    <Input
+   432→                      id="company-city"
+   433→                      placeholder="City"
+   434→                      value={form.city}
+   435→                      onChange={(e) => updateField('city', e.target.value)}
+   436→                    />
+   437→                  </div>
+   438→                  <div className="space-y-2">
+   439→                    <Label htmlFor="company-state">State</Label>
+   440→                    <Input
+   441→                      id="company-state"
+   442→                      placeholder="State"
+   443→                      value={form.state}
+   444→                      onChange={(e) => updateField('state', e.target.value)}
+   445→                    />
+   446→                  </div>
+   447→                </div>
+   448→                <div className="space-y-2">
+   449→                  <Label htmlFor="company-pincode">Pincode</Label>
+   450→                  <Input
+   451→                    id="company-pincode"
+   452→                    placeholder="000000"
+   453→                    value={form.pincode}
+   454→                    onChange={(e) => updateField('pincode', e.target.value)}
+   455→                  />
+   456→                </div>
+   457→              </CardContent>
+   458→            </Card>
+   459→
+   460→            {/* ── Tax & Legal ──────────────────────────────────────────── */}
+   461→            <Card>
+   462→              <CardHeader className="pb-4">
+   463→                <div className="flex items-center gap-2">
+   464→                  <Scale className="h-4 w-4 text-emerald-600" />
+   465→                  <CardTitle className="text-base">Tax &amp; Legal</CardTitle>
+   466→                </div>
+   467→              </CardHeader>
+   468→              <CardContent className="space-y-4">
+   469→                <div className="space-y-2">
+   470→                  <Label htmlFor="company-gst">GST Number</Label>
+   471→                  <Input
+   472→                    id="company-gst"
+   473→                    placeholder="22AAAAA0000A1Z5"
+   474→                    value={form.gstNumber}
+   475→                    onChange={(e) => updateField('gstNumber', e.target.value.toUpperCase())}
+   476→                    className="uppercase"
+   477→                  />
+   478→                </div>
+   479→                <div className="space-y-2">
+   480→                  <Label htmlFor="company-pan">PAN Number</Label>
+   481→                  <Input
+   482→                    id="company-pan"
+   483→                    placeholder="AAAAA0000A"
+   484→                    value={form.panNumber}
+   485→                    onChange={(e) => updateField('panNumber', e.target.value.toUpperCase())}
+   486→                    className="uppercase"
+   487→                  />
+   488→                </div>
+   489→              </CardContent>
+   490→            </Card>
+   491→
+   492→            {/* ── Bank Details ─────────────────────────────────────────── */}
+   493→            <Card>
+   494→              <CardHeader className="pb-4">
+   495→                <div className="flex items-center gap-2">
+   496→                  <Landmark className="h-4 w-4 text-emerald-600" />
+   497→                  <CardTitle className="text-base">Bank Details</CardTitle>
+   498→                </div>
+   499→              </CardHeader>
+   500→              <CardContent className="space-y-4">
+   501→                <div className="space-y-2">
+   502→                  <Label htmlFor="company-bank-name">Bank Name</Label>
+   503→                  <Input
+   504→                    id="company-bank-name"
+   505→                    placeholder="Bank name"
+   506→                    value={form.bankName}
+   507→                    onChange={(e) => updateField('bankName', e.target.value)}
+   508→                  />
+   509→                </div>
+   510→                <div className="space-y-2">
+   511→                  <Label htmlFor="company-bank-account">Account Number</Label>
+   512→                  <Input
+   513→                    id="company-bank-account"
+   514→                    placeholder="000000000000"
+   515→                    value={form.bankAccount}
+   516→                    onChange={(e) => updateField('bankAccount', e.target.value)}
+   517→                  />
+   518→                </div>
+   519→                <div className="space-y-2">
+   520→                  <Label htmlFor="company-bank-ifsc">IFSC Code</Label>
+   521→                  <Input
+   522→                    id="company-bank-ifsc"
+   523→                    placeholder="BANK0000000"
+   524→                    value={form.bankIfsc}
+   525→                    onChange={(e) => updateField('bankIfsc', e.target.value.toUpperCase())}
+   526→                    className="uppercase"
+   527→                  />
+   528→                </div>
+   529→              </CardContent>
+   530→            </Card>
+   531→
+   532→            {/* ── Document Prefixes ────────────────────────────────────── */}
+   533→            <Card>
+   534→              <CardHeader className="pb-4">
+   535→                <div className="flex items-center gap-2">
+   536→                  <FileText className="h-4 w-4 text-emerald-600" />
+   537→                  <CardTitle className="text-base">Document Prefixes</CardTitle>
+   538→                </div>
+   539→                <CardDescription className="text-xs">
+   540→                  Used to auto-generate document numbers like INV-001, DSP-001
+   541→                </CardDescription>
+   542→              </CardHeader>
+   543→              <CardContent className="space-y-4">
+   544→                <div className="grid grid-cols-3 gap-4">
+   545→                  <div className="space-y-2">
+   546→                    <Label htmlFor="company-invoice-prefix">Invoice</Label>
+   547→                    <Input
+   548→                      id="company-invoice-prefix"
+   549→                      placeholder="INV"
+   550→                      value={form.invoicePrefix}
+   551→                      onChange={(e) => updateField('invoicePrefix', e.target.value.toUpperCase())}
+   552→                      className="uppercase"
+   553→                    />
+   554→                  </div>
+   555→                  <div className="space-y-2">
+   556→                    <Label htmlFor="company-dispatch-prefix">Dispatch</Label>
+   557→                    <Input
+   558→                      id="company-dispatch-prefix"
+   559→                      placeholder="DSP"
+   560→                      value={form.dispatchPrefix}
+   561→                      onChange={(e) => updateField('dispatchPrefix', e.target.value.toUpperCase())}
+   562→                      className="uppercase"
+   563→                    />
+   564→                  </div>
+   565→                  <div className="space-y-2">
+   566→                    <Label htmlFor="company-order-prefix">Order</Label>
+   567→                    <Input
+   568→                      id="company-order-prefix"
+   569→                      placeholder="ORD"
+   570→                      value={form.orderPrefix}
+   571→                      onChange={(e) => updateField('orderPrefix', e.target.value.toUpperCase())}
+   572→                      className="uppercase"
+   573→                    />
+   574→                  </div>
+   575→                </div>
+   576→              </CardContent>
+   577→            </Card>
+   578→
+   579→            {/* ── Other ────────────────────────────────────────────────── */}
+   580→            <Card>
+   581→              <CardHeader className="pb-4">
+   582→                <div className="flex items-center gap-2">
+   583→                  <UserCheck className="h-4 w-4 text-emerald-600" />
+   584→                  <CardTitle className="text-base">Other</CardTitle>
+   585→                </div>
+   586→              </CardHeader>
+   587→              <CardContent className="space-y-4">
+   588→                <div className="space-y-2">
+   589→                  <Label htmlFor="company-terms">Terms &amp; Conditions</Label>
+   590→                  <Textarea
+   591→                    id="company-terms"
+   592→                    placeholder="Standard terms & conditions for invoices and documents..."
+   593→                    rows={5}
+   594→                    value={form.terms}
+   595→                    onChange={(e) => updateField('terms', e.target.value)}
+   596→                  />
+   597→                </div>
+   598→                <div className="space-y-2">
+   599→                  <Label htmlFor="company-signature">Authorized Signatory Name</Label>
+   600→                  <Input
+   601→                    id="company-signature"
+   602→                    placeholder="Name of the authorized signatory"
+   603→                    value={form.signatureName}
+   604→                    onChange={(e) => updateField('signatureName', e.target.value)}
+   605→                  />
+   606→                </div>
+   607→              </CardContent>
+   608→            </Card>
+   609→          </div>
+   610→
+   611→          {/* ── Save Button ──────────────────────────────────────────────── */}
+   612→          <div className="flex justify-end">
+   613→            <Button
+   614→              onClick={handleSaveProfile}
+   615→              disabled={saving}
+   616→              className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[140px]"
+   617→            >
+   618→              {saving ? (
+   619→                <>
+   620→                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+   621→                  Saving...
+   622→                </>
+   623→              ) : (
+   624→                <>
+   625→                  <Save className="mr-2 h-4 w-4" />
+   626→                  Save Profile
+   627→                </>
+   628→              )}
+   629→            </Button>
+   630→          </div>
+   631→        </TabsContent>
+   632→
+   633→        {/* ═══════════════════ Tab 2: Branding & Appearance ═════════════ */}
+   634→        <TabsContent value="branding" className="space-y-6">
+   635→          <div className="grid gap-6 lg:grid-cols-2">
+   636→            {/* ── Branding Settings ────────────────────────────────────── */}
+   637→            <Card>
+   638→              <CardHeader className="pb-4">
+   639→                <div className="flex items-center gap-2">
+   640→                  <Palette className="h-4 w-4 text-emerald-600" />
+   641→                  <CardTitle className="text-base">Branding Settings</CardTitle>
+   642→                </div>
+   643→                <CardDescription>
+   644→                  Customize how your brand appears across the ERP system and printed documents
+   645→                </CardDescription>
+   646→              </CardHeader>
+   647→              <CardContent className="space-y-6">
+   648→                {/* Primary Color */}
+   649→                <div className="space-y-2">
+   650→                  <Label htmlFor="primary-color">Primary Color</Label>
+   651→                  <div className="flex items-center gap-3">
+   652→                    <div className="relative">
+   653→                      <input
+   654→                        type="color"
+   655→                        value={form.primaryColor}
+   656→                        onChange={(e) => updateField('primaryColor', e.target.value)}
+   657→                        className="h-10 w-12 cursor-pointer rounded-md border border-input p-0.5"
+   658→                      />
+   659→                    </div>
+   660→                    <Input
+   661→                      id="primary-color"
+   662→                      type="text"
+   663→                      placeholder="#059669"
+   664→                      value={form.primaryColor}
+   665→                      onChange={(e) => {
+   666→                        const val = e.target.value
+   667→                        updateField('primaryColor', val.startsWith('#') ? val : `#${val}`)
+   668→                      }}
+   669→                      className="flex-1 font-mono"
+   670→                      maxLength={7}
+   671→                    />
+   672→                    <div
+   673→                      className="h-10 w-10 rounded-md border border-input shrink-0"
+   674→                      style={{ backgroundColor: form.primaryColor || '#059669' }}
+   675→                    />
+   676→                  </div>
+   677→                  <p className="text-muted-foreground text-xs">
+   678→                    Used for buttons, headers, and accents throughout the system
+   679→                  </p>
+   680→                </div>
+   681→
+   682→                <Separator />
+   683→
+   684→                {/* Logo URL */}
+   685→                <div className="space-y-2">
+   686→                  <Label htmlFor="company-logo-url">Company Logo URL</Label>
+   687→                  <Input
+   688→                    id="company-logo-url"
+   689→                    type="url"
+   690→                    placeholder="https://example.com/logo.png"
+   691→                    value={form.logoUrl}
+   692→                    onChange={(e) => updateField('logoUrl', e.target.value)}
+   693→                  />
+   694→                  <p className="text-muted-foreground text-xs">
+   695→                    Enter a URL for your company logo. This will appear on invoices and reports.
+   696→                  </p>
+   697→                </div>
+   698→
+   699→                <div className="flex justify-end">
+   700→                  <Button
+   701→                    onClick={handleSaveBranding}
+   702→                    disabled={saving}
+   703→                    className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[140px]"
+   704→                  >
+   705→                    {saving ? (
+   706→                      <>
+   707→                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+   708→                        Saving...
+   709→                      </>
+   710→                    ) : (
+   711→                      <>
+   712→                        <Save className="mr-2 h-4 w-4" />
+   713→                        Save Branding
+   714→                      </>
+   715→                    )}
+   716→                  </Button>
+   717→                </div>
+   718→              </CardContent>
+   719→            </Card>
+   720→
+   721→            {/* ── Preview ──────────────────────────────────────────────── */}
+   722→            <Card>
+   723→              <CardHeader className="pb-4">
+   724→                <div className="flex items-center gap-2">
+   725→                  <Eye className="h-4 w-4 text-emerald-600" />
+   726→                  <CardTitle className="text-base">Preview</CardTitle>
+   727→                </div>
+   728→                <CardDescription>
+   729→                  See how your branding will look on documents
+   730→                </CardDescription>
+   731→              </CardHeader>
+   732→              <CardContent>
+   733→                <div className="rounded-lg border bg-white p-6 dark:bg-gray-950">
+   734→                  {/* Header area with logo and company info */}
+   735→                  <div className="flex items-start gap-4">
+   736→                    {form.logoUrl ? (
+   737→                      <img
+   738→                        src={form.logoUrl}
+   739→                        alt="Company logo preview"
+   740→                        className="h-16 w-16 rounded-md object-contain border border-gray-200 dark:border-gray-700"
+   741→                        onError={(e) => {
+   742→                          ;(e.target as HTMLImageElement).style.display = 'none'
+   743→                        }}
+   744→                      />
+   745→                    ) : (
+   746→                      <div
+   747→                        className="flex h-16 w-16 items-center justify-center rounded-md text-xl font-bold text-white shrink-0"
+   748→                        style={{ backgroundColor: form.primaryColor || '#059669' }}
+   749→                      >
+   750→                        {(form.name || 'C').charAt(0).toUpperCase()}
+   751→                      </div>
+   752→                    )}
+   753→                    <div className="min-w-0 flex-1">
+   754→                      <h3
+   755→                        className="text-xl font-bold truncate"
+   756→                        style={{ color: form.primaryColor || '#059669' }}
+   757→                      >
+   758→                        {form.name || 'Company Name'}
+   759→                      </h3>
+   760→                      {form.tagline && (
+   761→                        <p className="text-muted-foreground text-sm mt-0.5 truncate">
+   762→                          {form.tagline}
+   763→                        </p>
+   764→                      )}
+   765→                      {(form.address || form.city) && (
+   766→                        <p className="text-muted-foreground text-xs mt-1 truncate">
+   767→                          {[form.address, form.city, form.state].filter(Boolean).join(', ')}
+   768→                          {form.pincode ? ` - ${form.pincode}` : ''}
+   769→                        </p>
+   770→                      )}
+   771→                    </div>
+   772→                  </div>
+   773→
+   774→                  <Separator className="my-4" />
+   775→
+   776→                  {/* Mini invoice preview */}
+   777→                  <div className="space-y-2">
+   778→                    <div className="flex items-center justify-between">
+   779→                      <span
+   780→                        className="text-xs font-semibold uppercase tracking-wider"
+   781→                        style={{ color: form.primaryColor || '#059669' }}
+   782→                      >
+   783→                        Tax Invoice
+   784→                      </span>
+   785→                      <span className="text-muted-foreground text-xs">
+   786→                        {form.invoicePrefix || 'INV'}-001
+   787→                      </span>
+   788→                    </div>
+   789→                    <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+   790→                      <div>Date: {new Date().toLocaleDateString('en-IN')}</div>
+   791→                      <div>GST: {form.gstNumber || '—'}</div>
+   792→                    </div>
+   793→                  </div>
+   794→
+   795→                  <Separator className="my-4" />
+   796→
+   797→                  {/* Footer with terms */}
+   798→                  {form.terms && (
+   799→                    <div className="space-y-1">
+   800→                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+   801→                        Terms &amp; Conditions
+   802→                      </p>
+   803→                      <p className="text-muted-foreground text-[10px] line-clamp-2">
+   804→                        {form.terms}
+   805→                      </p>
+   806→                    </div>
+   807→                  )}
+   808→
+   809→                  {/* Signature */}
+   810→                  {form.signatureName && (
+   811→                    <div className="mt-4 flex justify-end">
+   812→                      <div className="text-right">
+   813→                        <div className="border-t border-gray-300 pt-1 text-xs">
+   814→                          {form.signatureName}
+   815→                        </div>
+   816→                        <p className="text-[10px] text-muted-foreground">Authorized Signatory</p>
+   817→                      </div>
+   818→                    </div>
+   819→                  )}
+   820→                </div>
+   821→              </CardContent>
+   822→            </Card>
+   823→          </div>
+   824→        </TabsContent>
+   825→
+   826→        {/* ═══════════════════ Tab 3: Database Management ═══════════════ */}
+   827→        <TabsContent value="database" className="space-y-6">
+   828→          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+   829→            {/* ── Export Backup ─────────────────────────────────────────── */}
+   830→            <Card>
+   831→              <CardHeader className="pb-4">
+   832→                <div className="flex items-center gap-2">
+   833→                  <Download className="h-4 w-4 text-emerald-600" />
+   834→                  <CardTitle className="text-base">Export Backup</CardTitle>
+   835→                </div>
+   836→              </CardHeader>
+   837→              <CardContent className="space-y-4">
+   838→                <p className="text-muted-foreground text-sm">
+   839→                  Download a complete backup of all your ERP data as a JSON file. This includes
+   840→                  company settings, users, customers, production records, stock, orders, dispatches,
+   841→                  payments, and expenses.
+   842→                </p>
+   843→                <Button
+   844→                  onClick={handleExport}
+   845→                  disabled={exporting}
+   846→                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+   847→                >
+   848→                  {exporting ? (
+   849→                    <>
+   850→                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+   851→                      Exporting...
+   852→                    </>
+   853→                  ) : (
+   854→                    <>
+   855→                      <Download className="mr-2 h-4 w-4" />
+   856→                      Export Backup
+   857→                    </>
+   858→                  )}
+   859→                </Button>
+   860→              </CardContent>
+   861→            </Card>
+   862→
+   863→            {/* ── Import Backup ─────────────────────────────────────────── */}
+   864→            <Card>
+   865→              <CardHeader className="pb-4">
+   866→                <div className="flex items-center gap-2">
+   867→                  <Upload className="h-4 w-4 text-emerald-600" />
+   868→                  <CardTitle className="text-base">Import Backup</CardTitle>
+   869→                </div>
+   870→              </CardHeader>
+   871→              <CardContent className="space-y-4">
+   872→                <p className="text-muted-foreground text-sm">
+   873→                  Restore data from a previously exported JSON backup file. This will merge the
+   874→                  backup data with your existing data. Make sure the file was exported from this
+   875→                  ERP system.
+   876→                </p>
+   877→                <input
+   878→                  ref={fileInputRef}
+   879→                  type="file"
+   880→                  accept=".json"
+   881→                  onChange={handleFileChange}
+   882→                  className="hidden"
+   883→                  aria-label="Select backup file"
+   884→                />
+   885→                <Button
+   886→                  onClick={handleImportClick}
+   887→                  disabled={importing}
+   888→                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+   889→                >
+   890→                  {importing ? (
+   891→                    <>
+   892→                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+   893→                      Importing...
+   894→                    </>
+   895→                  ) : (
+   896→                    <>
+   897→                      <Upload className="mr-2 h-4 w-4" />
+   898→                      Import Backup
+   899→                    </>
+   900→                  )}
+   901→                </Button>
+   902→              </CardContent>
+   903→            </Card>
+   904→
+   905→            {/* ── Clear All Data ────────────────────────────────────────── */}
+   906→            <Card className="border-destructive/30">
+   907→              <CardHeader className="pb-4">
+   908→                <div className="flex items-center gap-2 text-destructive">
+   909→                  <Trash2 className="h-4 w-4" />
+   910→                  <CardTitle className="text-base text-destructive">Clear All Data</CardTitle>
+   911→                </div>
+   912→              </CardHeader>
+   913→              <CardContent className="space-y-4">
+   914→                <p className="text-muted-foreground text-sm">
+   915→                  Permanently delete all business data from the system. This includes customers,
+   916→                  production, stock, orders, dispatches, payments, and expenses. Company settings
+   917→                  and user accounts will be preserved.
+   918→                </p>
+   919→                <div className="flex items-start gap-2 rounded-md bg-destructive/5 p-3 border border-destructive/20">
+   920→                  <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+   921→                  <p className="text-destructive text-xs font-medium">
+   922→                    This action cannot be undone. Please export a backup before clearing data.
+   923→                  </p>
+   924→                </div>
+   925→                <Button
+   926→                  variant="destructive"
+   927→                  onClick={() => setClearDialogOpen(true)}
+   928→                  className="w-full"
+   929→                >
+   930→                  <Trash2 className="mr-2 h-4 w-4" />
+   931→                  Clear All Data
+   932→                </Button>
+   933→              </CardContent>
+   934→            </Card>
+   935→          </div>
+   936→
+   937→          {/* ── Additional Warning ────────────────────────────────────────── */}
+   938→          <Card>
+   939→            <CardContent className="pt-6">
+   940→              <div className="flex items-start gap-3">
+   941→                <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+   942→                <div className="space-y-1">
+   943→                  <p className="text-sm font-medium">Important Notes</p>
+   944→                  <ul className="text-muted-foreground text-sm space-y-1 list-disc list-inside">
+   945→                    <li>
+   946→                      <strong>Export Backup</strong> — Creates a snapshot of all data. Safe to use anytime.
+   947→                    </li>
+   948→                    <li>
+   949→                      <strong>Import Backup</strong> — Merges backup data into the existing database. Existing records
+   950→                      with the same ID will be overwritten.
+   951→                    </li>
+   952→                    <li>
+   953→                      <strong>Clear All Data</strong> — Irreversibly removes all business data. Always export a backup
+   954→                      first as a safety measure.
+   955→                    </li>
+   956→                  </ul>
+   957→                </div>
+   958→              </div>
+   959→            </CardContent>
+   960→          </Card>
+   961→        </TabsContent>
+   962→      </Tabs>
+   963→
+   964→      {/* ── Clear Data Confirmation Dialog ──────────────────────────────── */}
+   965→      <AlertDialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
+   966→        <AlertDialogContent>
+   967→          <AlertDialogHeader>
+   968→            <AlertDialogTitle className="text-destructive">Clear All Data</AlertDialogTitle>
+   969→            <AlertDialogDescription>
+   970→              This will permanently delete all customers, production records, stock entries, orders,
+   971→              dispatches, payments, and expenses. Company settings and user accounts will be kept.
+   972→              <br />
+   973→              <br />
+   974→              <strong>This action cannot be undone.</strong> Have you exported a backup?
+   975→            </AlertDialogDescription>
+   976→          </AlertDialogHeader>
+   977→          <AlertDialogFooter>
+   978→            <AlertDialogCancel disabled={clearing}>Cancel</AlertDialogCancel>
+   979→            <AlertDialogAction
+   980→              onClick={handleClearData}
+   981→              disabled={clearing}
+   982→              className="bg-destructive text-white hover:bg-destructive/90"
+   983→            >
+   984→              {clearing ? (
+   985→                <>
+   986→                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+   987→                  Clearing...
+   988→                </>
+   989→              ) : (
+   990→                <>
+   991→                  <Trash2 className="mr-2 h-4 w-4" />
+   992→                  Yes, Clear All Data
+   993→                </>
+   994→              )}
+   995→            </AlertDialogAction>
+   996→          </AlertDialogFooter>
+   997→        </AlertDialogContent>
+   998→      </AlertDialog>
+   999→    </div>
+  1000→  )
+  1001→}
+  1002→

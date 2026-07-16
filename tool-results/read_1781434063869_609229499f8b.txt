@@ -1,0 +1,766 @@
+     1→'use client'
+     2→
+     3→import * as React from 'react'
+     4→import { api } from '@/lib/api'
+     5→import { toast } from '@/hooks/use-toast'
+     6→import { Button } from '@/components/ui/button'
+     7→import { Input } from '@/components/ui/input'
+     8→import { Label } from '@/components/ui/label'
+     9→import { Badge } from '@/components/ui/badge'
+    10→import { Skeleton } from '@/components/ui/skeleton'
+    11→import { Textarea } from '@/components/ui/textarea'
+    12→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    13→import {
+    14→  Select,
+    15→  SelectContent,
+    16→  SelectItem,
+    17→  SelectTrigger,
+    18→  SelectValue,
+    19→} from '@/components/ui/select'
+    20→import {
+    21→  Table,
+    22→  TableBody,
+    23→  TableCell,
+    24→  TableHead,
+    25→  TableHeader,
+    26→  TableRow,
+    27→} from '@/components/ui/table'
+    28→import {
+    29→  Dialog,
+    30→  DialogContent,
+    31→  DialogDescription,
+    32→  DialogFooter,
+    33→  DialogHeader,
+    34→  DialogTitle,
+    35→} from '@/components/ui/dialog'
+    36→import {
+    37→  AlertDialog,
+    38→  AlertDialogAction,
+    39→  AlertDialogCancel,
+    40→  AlertDialogContent,
+    41→  AlertDialogDescription,
+    42→  AlertDialogFooter,
+    43→  AlertDialogHeader,
+    44→  AlertDialogTitle,
+    45→} from '@/components/ui/alert-dialog'
+    46→import {
+    47→  Wallet,
+    48→  Plus,
+    49→  Pencil,
+    50→  Trash2,
+    51→  Loader2,
+    52→  IndianRupee,
+    53→  Banknote,
+    54→  Smartphone,
+    55→  Landmark,
+    56→  Users,
+    57→} from 'lucide-react'
+    58→
+    59→// ── Types ───────────────────────────────────────────────────────────────────
+    60→
+    61→interface Customer {
+    62→  id: string
+    63→  name: string
+    64→}
+    65→
+    66→interface Payment {
+    67→  id: string
+    68→  customerId: string
+    69→  paymentType: string
+    70→  amount: number
+    71→  date: string
+    72→  remarks: string
+    73→  createdAt: string
+    74→  customer: { id: string; name: string }
+    75→}
+    76→
+    77→interface Order {
+    78→  id: string
+    79→  customerId: string
+    80→  amount: number
+    81→  status: string
+    82→  createdAt: string
+    83→  customer: { id: string; name: string }
+    84→}
+    85→
+    86→interface PaymentFormData {
+    87→  customerId: string
+    88→  paymentType: string
+    89→  amount: number | string
+    90→  date: string
+    91→  remarks: string
+    92→}
+    93→
+    94→interface OutstandingEntry {
+    95→  customerId: string
+    96→  customerName: string
+    97→  totalOrderAmount: number
+    98→  totalPayments: number
+    99→  outstanding: number
+   100→}
+   101→
+   102→// ── Constants ───────────────────────────────────────────────────────────────
+   103→
+   104→const PAYMENT_TYPES = ['Cash', 'UPI', 'Bank Transfer'] as const
+   105→
+   106→const PAYMENT_TYPE_COLORS: Record<string, string> = {
+   107→  Cash: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+   108→  UPI: 'bg-sky-100 text-sky-700 border-sky-200',
+   109→  'Bank Transfer': 'bg-amber-100 text-amber-700 border-amber-200',
+   110→}
+   111→
+   112→const PAYMENT_TYPE_ICONS: Record<string, React.ReactNode> = {
+   113→  Cash: <Banknote className="size-3" />,
+   114→  UPI: <Smartphone className="size-3" />,
+   115→  'Bank Transfer': <Landmark className="size-3" />,
+   116→}
+   117→
+   118→// ── Helpers ─────────────────────────────────────────────────────────────────
+   119→
+   120→const formatCurrency = (amount: number): string =>
+   121→  new Intl.NumberFormat('en-IN', {
+   122→    style: 'currency',
+   123→    currency: 'INR',
+   124→    minimumFractionDigits: 0,
+   125→    maximumFractionDigits: 2,
+   126→  }).format(amount)
+   127→
+   128→const formatDate = (dateStr: string): string =>
+   129→  new Date(dateStr).toLocaleDateString('en-IN', {
+   130→    day: '2-digit',
+   131→    month: 'short',
+   132→    year: 'numeric',
+   133→  })
+   134→
+   135→const emptyForm: PaymentFormData = {
+   136→  customerId: '',
+   137→  paymentType: '',
+   138→  amount: '',
+   139→  date: '',
+   140→  remarks: '',
+   141→}
+   142→
+   143→// ── Component ───────────────────────────────────────────────────────────────
+   144→
+   145→export function PaymentModule() {
+   146→  // State
+   147→  const [payments, setPayments] = React.useState<Payment[]>([])
+   148→  const [customers, setCustomers] = React.useState<Customer[]>([])
+   149→  const [orders, setOrders] = React.useState<Order[]>([])
+   150→  const [loading, setLoading] = React.useState(true)
+   151→
+   152→  // Dialog states
+   153→  const [dialogOpen, setDialogOpen] = React.useState(false)
+   154→  const [editingPayment, setEditingPayment] = React.useState<Payment | null>(null)
+   155→  const [formData, setFormData] = React.useState<PaymentFormData>(emptyForm)
+   156→  const [formSubmitting, setFormSubmitting] = React.useState(false)
+   157→
+   158→  // Delete confirmation
+   159→  const [deleteTarget, setDeleteTarget] = React.useState<Payment | null>(null)
+   160→  const [deleting, setDeleting] = React.useState(false)
+   161→
+   162→  // ── Computed: Summary values ─────────────────────────────────────────────
+   163→  const totalReceived = React.useMemo(
+   164→    () => payments.reduce((sum, p) => sum + Number(p.amount), 0),
+   165→    [payments]
+   166→  )
+   167→
+   168→  const cashPayments = React.useMemo(
+   169→    () =>
+   170→      payments
+   171→        .filter((p) => p.paymentType === 'Cash')
+   172→        .reduce((sum, p) => sum + Number(p.amount), 0),
+   173→    [payments]
+   174→  )
+   175→
+   176→  const upiBankPayments = React.useMemo(
+   177→    () =>
+   178→      payments
+   179→        .filter((p) => p.paymentType === 'UPI' || p.paymentType === 'Bank Transfer')
+   180→        .reduce((sum, p) => sum + Number(p.amount), 0),
+   181→    [payments]
+   182→  )
+   183→
+   184→  // ── Computed: Customer outstanding ───────────────────────────────────────
+   185→  const outstandingEntries = React.useMemo<OutstandingEntry[]>(() => {
+   186→    const map = new Map<string, OutstandingEntry>()
+   187→
+   188→    // Sum order amounts per customer (exclude Cancelled)
+   189→    for (const order of orders) {
+   190→      if (order.status === 'Cancelled') continue
+   191→      const existing = map.get(order.customerId)
+   192→      if (existing) {
+   193→        existing.totalOrderAmount += Number(order.amount)
+   194→      } else {
+   195→        map.set(order.customerId, {
+   196→          customerId: order.customerId,
+   197→          customerName: order.customer?.name || 'Unknown',
+   198→          totalOrderAmount: Number(order.amount),
+   199→          totalPayments: 0,
+   200→          outstanding: 0,
+   201→        })
+   202→      }
+   203→    }
+   204→
+   205→    // Sum payments per customer
+   206→    for (const payment of payments) {
+   207→      const existing = map.get(payment.customerId)
+   208→      if (existing) {
+   209→        existing.totalPayments += Number(payment.amount)
+   210→      } else {
+   211→        map.set(payment.customerId, {
+   212→          customerId: payment.customerId,
+   213→          customerName: payment.customer?.name || 'Unknown',
+   214→          totalOrderAmount: 0,
+   215→          totalPayments: Number(payment.amount),
+   216→          outstanding: 0,
+   217→        })
+   218→      }
+   219→    }
+   220→
+   221→    // Calculate outstanding
+   222→    for (const entry of map.values()) {
+   223→      entry.outstanding = entry.totalOrderAmount - entry.totalPayments
+   224→    }
+   225→
+   226→    // Return only customers with outstanding > 0, sorted by outstanding descending
+   227→    return Array.from(map.values())
+   228→      .filter((e) => e.outstanding > 0.01)
+   229→      .sort((a, b) => b.outstanding - a.outstanding)
+   230→  }, [orders, payments])
+   231→
+   232→  // ── Fetch data ───────────────────────────────────────────────────────────
+   233→  const fetchPayments = React.useCallback(async () => {
+   234→    setLoading(true)
+   235→    try {
+   236→      const res = await api.getPayments()
+   237→      const paymentList = (res.payments as Payment[]).sort(
+   238→        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+   239→      )
+   240→      setPayments(paymentList)
+   241→    } catch (err) {
+   242→      toast({
+   243→        title: 'Error',
+   244→        description: err instanceof Error ? err.message : 'Failed to fetch payments',
+   245→        variant: 'destructive',
+   246→      })
+   247→    } finally {
+   248→      setLoading(false)
+   249→    }
+   250→  }, [])
+   251→
+   252→  const fetchCustomers = React.useCallback(async () => {
+   253→    try {
+   254→      const res = await api.getCustomers()
+   255→      setCustomers(res.customers as Customer[])
+   256→    } catch {
+   257→      // Silently fail — customer dropdown will just be empty
+   258→    }
+   259→  }, [])
+   260→
+   261→  const fetchOrders = React.useCallback(async () => {
+   262→    try {
+   263→      const res = await api.getOrders()
+   264→      setOrders(res.orders as Order[])
+   265→    } catch {
+   266→      // Silently fail — outstanding section will just be empty
+   267→    }
+   268→  }, [])
+   269→
+   270→  React.useEffect(() => {
+   271→    fetchPayments()
+   272→    fetchCustomers()
+   273→    fetchOrders()
+   274→  }, [fetchPayments, fetchCustomers, fetchOrders])
+   275→
+   276→  // ── Form handlers ────────────────────────────────────────────────────────
+   277→  const openCreateDialog = () => {
+   278→    setEditingPayment(null)
+   279→    setFormData(emptyForm)
+   280→    setDialogOpen(true)
+   281→  }
+   282→
+   283→  const openEditDialog = (payment: Payment) => {
+   284→    setEditingPayment(payment)
+   285→    setFormData({
+   286→      customerId: payment.customerId,
+   287→      paymentType: payment.paymentType,
+   288→      amount: payment.amount,
+   289→      date: payment.date,
+   290→      remarks: payment.remarks,
+   291→    })
+   292→    setDialogOpen(true)
+   293→  }
+   294→
+   295→  const handleFormChange = (field: keyof PaymentFormData, value: string) => {
+   296→    setFormData((prev) => ({ ...prev, [field]: value }))
+   297→  }
+   298→
+   299→  const handleSubmit = async () => {
+   300→    // Validation
+   301→    if (!formData.customerId) {
+   302→      toast({ title: 'Validation Error', description: 'Please select a customer', variant: 'destructive' })
+   303→      return
+   304→    }
+   305→    if (!formData.paymentType) {
+   306→      toast({ title: 'Validation Error', description: 'Please select a payment type', variant: 'destructive' })
+   307→      return
+   308→    }
+   309→    if (!formData.amount || Number(formData.amount) <= 0) {
+   310→      toast({ title: 'Validation Error', description: 'Amount must be greater than 0', variant: 'destructive' })
+   311→      return
+   312→    }
+   313→    if (!formData.date) {
+   314→      toast({ title: 'Validation Error', description: 'Date is required', variant: 'destructive' })
+   315→      return
+   316→    }
+   317→
+   318→    setFormSubmitting(true)
+   319→    try {
+   320→      const payload = {
+   321→        customerId: formData.customerId,
+   322→        paymentType: formData.paymentType,
+   323→        amount: Number(formData.amount),
+   324→        date: formData.date,
+   325→        remarks: formData.remarks,
+   326→      }
+   327→
+   328→      if (editingPayment) {
+   329→        await api.updatePayment(editingPayment.id, payload)
+   330→        toast({ title: 'Success', description: 'Payment updated successfully' })
+   331→      } else {
+   332→        await api.createPayment(payload)
+   333→        toast({ title: 'Success', description: 'Payment recorded successfully' })
+   334→      }
+   335→
+   336→      setDialogOpen(false)
+   337→      setEditingPayment(null)
+   338→      setFormData(emptyForm)
+   339→      fetchPayments()
+   340→      fetchOrders() // Refresh for outstanding calculations
+   341→    } catch (err) {
+   342→      toast({
+   343→        title: 'Error',
+   344→        description: err instanceof Error ? err.message : `Failed to ${editingPayment ? 'update' : 'record'} payment`,
+   345→        variant: 'destructive',
+   346→      })
+   347→    } finally {
+   348→      setFormSubmitting(false)
+   349→    }
+   350→  }
+   351→
+   352→  // ── Delete handler ──────────────────────────────────────────────────────
+   353→  const handleDelete = async () => {
+   354→    if (!deleteTarget) return
+   355→    setDeleting(true)
+   356→    try {
+   357→      await api.deletePayment(deleteTarget.id)
+   358→      toast({ title: 'Success', description: 'Payment deleted successfully' })
+   359→      setDeleteTarget(null)
+   360→      fetchPayments()
+   361→      fetchOrders()
+   362→    } catch (err) {
+   363→      toast({
+   364→        title: 'Error',
+   365→        description: err instanceof Error ? err.message : 'Failed to delete payment',
+   366→        variant: 'destructive',
+   367→      })
+   368→    } finally {
+   369→      setDeleting(false)
+   370→    }
+   371→  }
+   372→
+   373→  // ── Render: Loading skeletons ───────────────────────────────────────────
+   374→  const renderSkeletons = () =>
+   375→    Array.from({ length: 5 }).map((_, i) => (
+   376→      <TableRow key={i}>
+   377→        <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+   378→        <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+   379→        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+   380→        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+   381→        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+   382→        <TableCell><Skeleton className="h-8 w-20" /></TableCell>
+   383→      </TableRow>
+   384→    ))
+   385→
+   386→  // ── Render: Payment type badge ──────────────────────────────────────────
+   387→  const renderPaymentTypeBadge = (type: string) => (
+   388→    <Badge className={`${PAYMENT_TYPE_COLORS[type] || 'bg-gray-100 text-gray-700 border-gray-200'} gap-1`}>
+   389→      {PAYMENT_TYPE_ICONS[type]}
+   390→      {type}
+   391→    </Badge>
+   392→  )
+   393→
+   394→  // ── Render: Payment dialog ──────────────────────────────────────────────
+   395→  const renderPaymentDialog = () => (
+   396→    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+   397→      <DialogContent className="sm:max-w-lg">
+   398→        <DialogHeader>
+   399→          <DialogTitle>
+   400→            {editingPayment ? 'Edit Payment' : 'Receive Payment'}
+   401→          </DialogTitle>
+   402→          <DialogDescription>
+   403→            {editingPayment
+   404→              ? 'Update the payment details below.'
+   405→              : 'Fill in the details to record a new payment.'}
+   406→          </DialogDescription>
+   407→        </DialogHeader>
+   408→
+   409→        <div className="grid gap-4 py-2">
+   410→          {/* Customer */}
+   411→          <div className="grid gap-2">
+   412→            <Label htmlFor="payment-customer">
+   413→              Customer <span className="text-destructive">*</span>
+   414→            </Label>
+   415→            <Select
+   416→              value={formData.customerId}
+   417→              onValueChange={(val) => handleFormChange('customerId', val)}
+   418→            >
+   419→              <SelectTrigger className="w-full">
+   420→                <SelectValue placeholder="Select customer" />
+   421→              </SelectTrigger>
+   422→              <SelectContent>
+   423→                {customers.map((customer) => (
+   424→                  <SelectItem key={customer.id} value={customer.id}>
+   425→                    {customer.name}
+   426→                  </SelectItem>
+   427→                ))}
+   428→              </SelectContent>
+   429→            </Select>
+   430→          </div>
+   431→
+   432→          {/* Payment Type */}
+   433→          <div className="grid gap-2">
+   434→            <Label htmlFor="payment-type">
+   435→              Payment Type <span className="text-destructive">*</span>
+   436→            </Label>
+   437→            <Select
+   438→              value={formData.paymentType}
+   439→              onValueChange={(val) => handleFormChange('paymentType', val)}
+   440→            >
+   441→              <SelectTrigger className="w-full">
+   442→                <SelectValue placeholder="Select payment type" />
+   443→              </SelectTrigger>
+   444→              <SelectContent>
+   445→                {PAYMENT_TYPES.map((type) => (
+   446→                  <SelectItem key={type} value={type}>
+   447→                    {type}
+   448→                  </SelectItem>
+   449→                ))}
+   450→              </SelectContent>
+   451→            </Select>
+   452→          </div>
+   453→
+   454→          {/* Amount */}
+   455→          <div className="grid gap-2">
+   456→            <Label htmlFor="payment-amount">
+   457→              Amount (₹) <span className="text-destructive">*</span>
+   458→            </Label>
+   459→            <div className="relative">
+   460→              <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   461→              <Input
+   462→                id="payment-amount"
+   463→                type="number"
+   464→                placeholder="0"
+   465→                min="1"
+   466→                className="pl-9"
+   467→                value={formData.amount}
+   468→                onChange={(e) => handleFormChange('amount', e.target.value)}
+   469→              />
+   470→            </div>
+   471→          </div>
+   472→
+   473→          {/* Date */}
+   474→          <div className="grid gap-2">
+   475→            <Label htmlFor="payment-date">
+   476→              Date <span className="text-destructive">*</span>
+   477→            </Label>
+   478→            <Input
+   479→              id="payment-date"
+   480→              type="date"
+   481→              value={formData.date}
+   482→              onChange={(e) => handleFormChange('date', e.target.value)}
+   483→            />
+   484→          </div>
+   485→
+   486→          {/* Remarks */}
+   487→          <div className="grid gap-2">
+   488→            <Label htmlFor="payment-remarks">Remarks</Label>
+   489→            <Textarea
+   490→              id="payment-remarks"
+   491→              placeholder="Optional remarks about this payment..."
+   492→              value={formData.remarks}
+   493→              onChange={(e) => handleFormChange('remarks', e.target.value)}
+   494→              className="min-h-[80px] resize-none"
+   495→            />
+   496→          </div>
+   497→        </div>
+   498→
+   499→        <DialogFooter>
+   500→          <Button
+   501→            variant="outline"
+   502→            onClick={() => setDialogOpen(false)}
+   503→            disabled={formSubmitting}
+   504→          >
+   505→            Cancel
+   506→          </Button>
+   507→          <Button
+   508→            onClick={handleSubmit}
+   509→            disabled={formSubmitting}
+   510→            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   511→          >
+   512→            {formSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+   513→            {editingPayment ? 'Update Payment' : 'Record Payment'}
+   514→          </Button>
+   515→        </DialogFooter>
+   516→      </DialogContent>
+   517→    </Dialog>
+   518→  )
+   519→
+   520→  // ── Render: Delete confirmation ─────────────────────────────────────────
+   521→  const renderDeleteDialog = () => (
+   522→    <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+   523→      <AlertDialogContent>
+   524→        <AlertDialogHeader>
+   525→          <AlertDialogTitle>Delete Payment</AlertDialogTitle>
+   526→          <AlertDialogDescription>
+   527→            Are you sure you want to delete this payment of{' '}
+   528→            <strong>{deleteTarget ? formatCurrency(Number(deleteTarget.amount)) : ''}</strong>{' '}
+   529→            from <strong>{deleteTarget?.customer?.name || 'this customer'}</strong>? This action
+   530→            cannot be undone.
+   531→          </AlertDialogDescription>
+   532→        </AlertDialogHeader>
+   533→        <AlertDialogFooter>
+   534→          <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+   535→          <AlertDialogAction
+   536→            onClick={handleDelete}
+   537→            disabled={deleting}
+   538→            className="bg-destructive text-white hover:bg-destructive/90"
+   539→          >
+   540→            {deleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+   541→            Delete
+   542→          </AlertDialogAction>
+   543→        </AlertDialogFooter>
+   544→      </AlertDialogContent>
+   545→    </AlertDialog>
+   546→  )
+   547→
+   548→  // ── Render: Main ────────────────────────────────────────────────────────
+   549→  return (
+   550→    <div className="space-y-6">
+   551→      {/* Header */}
+   552→      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   553→        <div className="flex items-center gap-3">
+   554→          <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+   555→            <Wallet className="size-5" />
+   556→          </div>
+   557→          <div>
+   558→            <h2 className="text-2xl font-bold tracking-tight">Payment Management</h2>
+   559→            <p className="text-sm text-muted-foreground">
+   560→              Track and manage customer payments
+   561→            </p>
+   562→          </div>
+   563→        </div>
+   564→        <Button
+   565→          onClick={openCreateDialog}
+   566→          className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
+   567→        >
+   568→          <Plus className="size-4" />
+   569→          Receive Payment
+   570→        </Button>
+   571→      </div>
+   572→
+   573→      {/* Summary Cards */}
+   574→      <div className="grid gap-4 sm:grid-cols-3">
+   575→        <Card>
+   576→          <CardHeader className="flex flex-row items-center justify-between pb-2">
+   577→            <CardTitle className="text-sm font-medium text-muted-foreground">
+   578→              Total Received
+   579→            </CardTitle>
+   580→            <IndianRupee className="size-4 text-emerald-600" />
+   581→          </CardHeader>
+   582→          <CardContent>
+   583→            {loading ? (
+   584→              <Skeleton className="h-8 w-32" />
+   585→            ) : (
+   586→              <p className="text-2xl font-bold">{formatCurrency(totalReceived)}</p>
+   587→            )}
+   588→          </CardContent>
+   589→        </Card>
+   590→
+   591→        <Card>
+   592→          <CardHeader className="flex flex-row items-center justify-between pb-2">
+   593→            <CardTitle className="text-sm font-medium text-muted-foreground">
+   594→              Cash Payments
+   595→            </CardTitle>
+   596→            <Banknote className="size-4 text-emerald-600" />
+   597→          </CardHeader>
+   598→          <CardContent>
+   599→            {loading ? (
+   600→              <Skeleton className="h-8 w-32" />
+   601→            ) : (
+   602→              <p className="text-2xl font-bold">{formatCurrency(cashPayments)}</p>
+   603→            )}
+   604→          </CardContent>
+   605→        </Card>
+   606→
+   607→        <Card>
+   608→          <CardHeader className="flex flex-row items-center justify-between pb-2">
+   609→            <CardTitle className="text-sm font-medium text-muted-foreground">
+   610→              UPI + Bank
+   611→            </CardTitle>
+   612→            <Landmark className="size-4 text-sky-600" />
+   613→          </CardHeader>
+   614→          <CardContent>
+   615→            {loading ? (
+   616→              <Skeleton className="h-8 w-32" />
+   617→            ) : (
+   618→              <p className="text-2xl font-bold">{formatCurrency(upiBankPayments)}</p>
+   619→            )}
+   620→          </CardContent>
+   621→        </Card>
+   622→      </div>
+   623→
+   624→      {/* Payment Table */}
+   625→      <Card>
+   626→        <CardHeader>
+   627→          <CardTitle className="flex items-center justify-between">
+   628→            <span>Payments</span>
+   629→            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200">
+   630→              {payments.length} record{payments.length !== 1 ? 's' : ''}
+   631→            </Badge>
+   632→          </CardTitle>
+   633→        </CardHeader>
+   634→        <CardContent>
+   635→          <div className="overflow-x-auto">
+   636→            <Table>
+   637→              <TableHeader>
+   638→                <TableRow>
+   639→                  <TableHead>Customer Name</TableHead>
+   640→                  <TableHead>Payment Type</TableHead>
+   641→                  <TableHead className="text-right">Amount (₹)</TableHead>
+   642→                  <TableHead>Date</TableHead>
+   643→                  <TableHead>Remarks</TableHead>
+   644→                  <TableHead className="text-right">Actions</TableHead>
+   645→                </TableRow>
+   646→              </TableHeader>
+   647→              <TableBody>
+   648→                {loading ? (
+   649→                  renderSkeletons()
+   650→                ) : payments.length === 0 ? (
+   651→                  <TableRow>
+   652→                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+   653→                      No payments yet. Click &quot;Receive Payment&quot; to get started.
+   654→                    </TableCell>
+   655→                  </TableRow>
+   656→                ) : (
+   657→                  payments.map((payment) => (
+   658→                    <TableRow key={payment.id}>
+   659→                      <TableCell className="font-medium whitespace-nowrap">
+   660→                        {payment.customer?.name || '—'}
+   661→                      </TableCell>
+   662→                      <TableCell>{renderPaymentTypeBadge(payment.paymentType)}</TableCell>
+   663→                      <TableCell className="text-right font-medium whitespace-nowrap">
+   664→                        {formatCurrency(Number(payment.amount))}
+   665→                      </TableCell>
+   666→                      <TableCell className="whitespace-nowrap">
+   667→                        {formatDate(payment.date)}
+   668→                      </TableCell>
+   669→                      <TableCell className="max-w-[200px] truncate text-muted-foreground">
+   670→                        {payment.remarks || '—'}
+   671→                      </TableCell>
+   672→                      <TableCell className="text-right">
+   673→                        <div className="flex items-center justify-end gap-1">
+   674→                          <Button
+   675→                            variant="ghost"
+   676→                            size="icon"
+   677→                            onClick={() => openEditDialog(payment)}
+   678→                            title="Edit Payment"
+   679→                            className="text-sky-600 hover:text-sky-700 hover:bg-sky-50"
+   680→                          >
+   681→                            <Pencil className="size-4" />
+   682→                          </Button>
+   683→                          <Button
+   684→                            variant="ghost"
+   685→                            size="icon"
+   686→                            onClick={() => setDeleteTarget(payment)}
+   687→                            title="Delete Payment"
+   688→                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+   689→                          >
+   690→                            <Trash2 className="size-4" />
+   691→                          </Button>
+   692→                        </div>
+   693→                      </TableCell>
+   694→                    </TableRow>
+   695→                  ))
+   696→                )}
+   697→              </TableBody>
+   698→            </Table>
+   699→          </div>
+   700→        </CardContent>
+   701→      </Card>
+   702→
+   703→      {/* Customer Outstanding Section */}
+   704→      <Card>
+   705→        <CardHeader>
+   706→          <CardTitle className="flex items-center gap-2">
+   707→            <Users className="size-5" />
+   708→            <span>Customer Outstanding Balances</span>
+   709→          </CardTitle>
+   710→        </CardHeader>
+   711→        <CardContent>
+   712→          {loading ? (
+   713→            <div className="space-y-3">
+   714→              {Array.from({ length: 3 }).map((_, i) => (
+   715→                <Skeleton key={i} className="h-10 w-full" />
+   716→              ))}
+   717→            </div>
+   718→          ) : outstandingEntries.length === 0 ? (
+   719→            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+   720→              <Users className="size-10 mb-2 opacity-40" />
+   721→              <p className="text-sm">No outstanding balances. All customers are paid up!</p>
+   722→            </div>
+   723→          ) : (
+   724→            <div className="overflow-x-auto">
+   725→              <Table>
+   726→                <TableHeader>
+   727→                  <TableRow>
+   728→                    <TableHead>Customer</TableHead>
+   729→                    <TableHead className="text-right">Total Orders (₹)</TableHead>
+   730→                    <TableHead className="text-right">Total Paid (₹)</TableHead>
+   731→                    <TableHead className="text-right">Outstanding (₹)</TableHead>
+   732→                  </TableRow>
+   733→                </TableHeader>
+   734→                <TableBody>
+   735→                  {outstandingEntries.map((entry) => (
+   736→                    <TableRow key={entry.customerId}>
+   737→                      <TableCell className="font-medium whitespace-nowrap">
+   738→                        {entry.customerName}
+   739→                      </TableCell>
+   740→                      <TableCell className="text-right whitespace-nowrap">
+   741→                        {formatCurrency(entry.totalOrderAmount)}
+   742→                      </TableCell>
+   743→                      <TableCell className="text-right whitespace-nowrap">
+   744→                        {formatCurrency(entry.totalPayments)}
+   745→                      </TableCell>
+   746→                      <TableCell className="text-right font-medium whitespace-nowrap">
+   747→                        <span className="text-rose-600">{formatCurrency(entry.outstanding)}</span>
+   748→                      </TableCell>
+   749→                    </TableRow>
+   750→                  ))}
+   751→                </TableBody>
+   752→              </Table>
+   753→            </div>
+   754→          )}
+   755→        </CardContent>
+   756→      </Card>
+   757→
+   758→      {/* Dialogs */}
+   759→      {renderPaymentDialog()}
+   760→      {renderDeleteDialog()}
+   761→    </div>
+   762→  )
+   763→}
+   764→
+   765→export default PaymentModule
+   766→
