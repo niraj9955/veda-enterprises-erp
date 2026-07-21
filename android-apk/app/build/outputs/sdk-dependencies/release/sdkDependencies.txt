@@ -17,10 +17,10 @@ library {
   maven_library {
     groupId: "androidx.activity"
     artifactId: "activity"
-    version: "1.8.0"
+    version: "1.8.2"
   }
   digests {
-    sha256: "\323\246vp\235\352\004\362\250Pn*\350PR\377\367c\333Rj\307\361k\004\336P\375\320[\a "
+    sha256: "\354\301\031&%0\246\342\371\363s ~G-Gc\006\276\323\324\262\026\376a\261\352B\343\276\366\210"
   }
   repo_index {
   }
@@ -608,10 +608,10 @@ library {
   maven_library {
     groupId: "androidx.constraintlayout"
     artifactId: "constraintlayout"
-    version: "2.0.1"
+    version: "2.1.4"
   }
   digests {
-    sha256: "\354\025\265\324\242\357\360x\210\274\024\231\316.,n\376$\300\355`\314W\260\214\235\304\266\375<!\211"
+    sha256: "\r\367\024\300\265\036Tq\016\277tn\264i\3233\027k\273<\262\237\200w]\303\312N\263\026%\022"
   }
   repo_index {
   }
@@ -619,11 +619,11 @@ library {
 library {
   maven_library {
     groupId: "androidx.constraintlayout"
-    artifactId: "constraintlayout-solver"
-    version: "2.0.1"
+    artifactId: "constraintlayout-core"
+    version: "1.0.4"
   }
   digests {
-    sha256: "\26272\355\2735\021\3317\376\241\377\357\004{\016l\000\033P\301\222\037\r\225\237\303\204\327\006\354j"
+    sha256: ">G\177M\3421\345\213%\365\251\222\363\276E\351}3,4\243\232\236>}Kx\256\n\302%o"
   }
   repo_index {
   }
@@ -726,24 +726,12 @@ library {
 }
 library {
   maven_library {
-    groupId: "com.google.androidbrowserhelper"
-    artifactId: "androidbrowserhelper"
-    version: "2.5.0"
+    groupId: "androidx.webkit"
+    artifactId: "webkit"
+    version: "1.9.0"
   }
   digests {
-    sha256: "\203\r,\355\0251k9BA\323#\302!&\n\277a\343\203\270\n\266\212kFZV^$\373\275"
-  }
-  repo_index {
-  }
-}
-library {
-  maven_library {
-    groupId: "androidx.browser"
-    artifactId: "browser"
-    version: "1.4.0"
-  }
-  digests {
-    sha256: "\341\220o\204Q/\036\245\344\311&\333\271\025x\232\330\367IO\244\356\232\322E\026?v\030\\\354\332"
+    sha256: "\'\274 15\360[\230O\302\030\325\251\307\t\360\224\232\031\244\210a_#I\353\334\331\346\367\"\242"
   }
   repo_index {
   }
@@ -817,11 +805,11 @@ library_dependencies {
   library_dep_index: 30
   library_dep_index: 6
   library_dep_index: 14
-  library_dep_index: 21
   library_dep_index: 22
   library_dep_index: 23
   library_dep_index: 26
   library_dep_index: 27
+  library_dep_index: 21
 }
 library_dependencies {
   library_index: 12
@@ -928,11 +916,11 @@ library_dependencies {
   library_dep_index: 2
   library_dep_index: 6
   library_dep_index: 14
-  library_dep_index: 21
   library_dep_index: 22
   library_dep_index: 23
   library_dep_index: 11
   library_dep_index: 27
+  library_dep_index: 21
 }
 library_dependencies {
   library_index: 27
@@ -944,11 +932,11 @@ library_dependencies {
   library_dep_index: 6
   library_dep_index: 15
   library_dep_index: 14
-  library_dep_index: 21
   library_dep_index: 22
   library_dep_index: 23
   library_dep_index: 11
   library_dep_index: 26
+  library_dep_index: 21
 }
 library_dependencies {
   library_index: 28
@@ -1160,21 +1148,13 @@ library_dependencies {
   library_index: 60
   library_dep_index: 2
   library_dep_index: 4
-  library_dep_index: 61
-}
-library_dependencies {
-  library_index: 61
-  library_dep_index: 3
-  library_dep_index: 9
-  library_dep_index: 35
-  library_dep_index: 4
-  library_dep_index: 2
-  library_dep_index: 10
 }
 module_dependencies {
   module_name: "base"
   dependency_index: 0
   dependency_index: 45
+  dependency_index: 50
+  dependency_index: 1
   dependency_index: 60
 }
 repositories {

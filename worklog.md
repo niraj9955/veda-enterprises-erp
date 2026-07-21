@@ -1939,3 +1939,34 @@ Stage Summary:
     * scripts/generate-ios-splash.py
     * public/icons/apple-splash-{320x568,375x667,414x736,375x812,414x896,390x844,428x926,768x1024,834x1194,1024x1366}.png
 - Files modified: src/app/layout.tsx (added PWA component imports + render, expanded startupImage array)
+
+---
+Task ID: APK-BUILD-FINAL
+Agent: Main Agent
+Task: Build proper signed APK using Gradle (Android Studio jaisa process)
+
+Work Log:
+- Cleaned previous TWA-based APK project (was using dead URL veda-enterprises-erp.vercel.app)
+- Installed Gradle 8.7 (supports Java 21, downloaded from services.gradle.org)
+- Used existing Temurin JDK 17 at /home/z/jdk17/ (Gradle 8.1.1 was incompatible with Java 21)
+- Created proper native Android WebView app:
+  * MainActivity.java - WebView with splash screen, error handling, file upload, geolocation, cookies
+  * SettingsActivity.java - User-configurable server URL (so APK works with ANY deployment)
+  * activity_main.xml - WebView + ProgressBar + error layout (Hindi text)
+  * activity_settings.xml - URL input form
+  * splash_background.xml - Splash screen with Veda logo
+  * network_security_config.xml - Allows HTTP + HTTPS (cleartext enabled)
+- Updated AndroidManifest.xml with proper permissions (INTERNET, CAMERA, LOCATION, STORAGE, etc.)
+- Configured build.gradle with signing config (veda-release.keystore, alias=veda-key, pass=veda1234)
+- Build successful: 40 tasks executed in 20s
+- APK signed with APK Signature Scheme v2 (verified via apksigner)
+- Final APK: /home/z/my-project/download/Veda-ERP.apk (4.5 MB, versionCode=2, versionName=1.0.1)
+
+Stage Summary:
+- Proper signed APK delivered at /home/z/my-project/download/Veda-ERP.apk
+- Package: com.veda.enterprises
+- minSdk 24 (Android 7.0+), targetSdk 34 (Android 14)
+- WebView-based (not TWA) - more flexible, works with any HTTP/HTTPS URL
+- User can change server URL from in-app Settings (no rebuild needed)
+- Default URL: http://21.0.2.217:81/ (network IP - works on same WiFi as server)
+- Keystore: /home/z/my-project/android-apk/veda-release.keystore (valid until 2053)

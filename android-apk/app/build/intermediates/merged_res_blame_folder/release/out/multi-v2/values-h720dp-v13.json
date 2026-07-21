@@ -1,10 +1,10 @@
 {
     "logs": [
         {
-            "outputFile": "com.veda.enterprises.app-mergeReleaseResources-31:/values-h720dp-v13/values-h720dp-v13.xml",
+            "outputFile": "com.veda.enterprises.app-mergeReleaseResources-30:/values-h720dp-v13/values-h720dp-v13.xml",
             "map": [
                 {
-                    "source": "/home/z/.gradle/caches/transforms-3/6910768e5944eb7816d11bafaf5b2765/transformed/appcompat-1.6.1/res/values-h720dp-v13/values-h720dp-v13.xml",
+                    "source": "/home/z/.gradle/caches/transforms-4/60cd596aafa3b3e4afd0c6b6ffb24cd5/transformed/appcompat-1.6.1/res/values-h720dp-v13/values-h720dp-v13.xml",
                     "from": {
                         "startLines": "2",
                         "startColumns": "4",

@@ -1,10 +1,10 @@
 {
     "logs": [
         {
-            "outputFile": "com.veda.enterprises.app-mergeReleaseResources-31:/values-w600dp-land-v13/values-w600dp-land-v13.xml",
+            "outputFile": "com.veda.enterprises.app-mergeReleaseResources-30:/values-w600dp-land-v13/values-w600dp-land-v13.xml",
             "map": [
                 {
-                    "source": "/home/z/.gradle/caches/transforms-3/8a83ebf0a5250ba96536b5b6ea999e06/transformed/material-1.11.0/res/values-w600dp-land-v13/values-w600dp-land-v13.xml",
+                    "source": "/home/z/.gradle/caches/transforms-4/1a3d76d3f7504fd8e3837d8552c16362/transformed/material-1.11.0/res/values-w600dp-land-v13/values-w600dp-land-v13.xml",
                     "from": {
                         "startLines": "2",
                         "startColumns": "4",

@@ -5,7 +5,7 @@
     targetSdkVersion="34"
     mergedManifest="build/intermediates/merged_manifest/release/AndroidManifest.xml"
     manifestMergeReport="build/outputs/logs/manifest-merger-release-report.txt"
-    proguardFiles="build/intermediates/default_proguard_files/global/proguard-android.txt-8.1.0"
+    proguardFiles="build/intermediates/default_proguard_files/global/proguard-android-optimize.txt-8.1.0:proguard-rules.pro"
     partialResultsDir="build/intermediates/lint_vital_partial_results/release/out">
   <buildFeatures
       namespacing="REQUIRED"/>
@@ -23,8 +23,8 @@
   <mainArtifact
       classOutputs="build/intermediates/javac/release/classes:build/intermediates/compile_and_runtime_not_namespaced_r_class_jar/release/R.jar"
       applicationId="com.veda.enterprises"
-      generatedSourceFolders="build/generated/ap_generated_sources/release/out"
+      generatedSourceFolders="build/generated/ap_generated_sources/release/out:build/generated/source/buildConfig/release"
       generatedResourceFolders="build/generated/res/resValues/release"
-      desugaredMethodsFiles="/home/z/.gradle/caches/transforms-3/6e195cfe0031eb6a39ad5fd0632982ee/transformed/D8BackportedDesugaredMethods.txt">
+      desugaredMethodsFiles="/home/z/.gradle/caches/transforms-4/6253192282af48ad5b64d81d83cab2be/transformed/D8BackportedDesugaredMethods.txt">
   </mainArtifact>
 </variant>
