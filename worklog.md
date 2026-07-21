@@ -1907,3 +1907,35 @@ Stage Summary:
   • MODIFIED: src/lib/api.ts (added requestOtp, verifyOtp, resetPassword methods)
   • MODIFIED: src/app/api/auth/init/route.ts (admin email → dataanalogydirector@gmail.com)
   • MODIFIED: src/components/erp/login-page.tsx (multi-step forgot password UI)
+
+---
+Task ID: pwa-add-to-home-screen
+Agent: main-agent
+Task: Add PWA "Add to Home Screen" support for both Android and iOS (replacing the APK approach)
+
+Work Log:
+- Audited existing PWA setup: manifest.ts, PWA icons (192/256/384/512/maskable), apple-touch-icon, layout.tsx iOS meta tags already present
+- Identified missing piece: no service worker (Android Chrome requires SW before firing beforeinstallprompt)
+- Created /public/sw.js — NetworkFirst for API & navigations, StaleWhileRevalidate for static assets, CacheFirst for images, precaches critical shell
+- Created /src/components/pwa/register-sw.tsx — registers SW in production only (after window load)
+- Created /src/components/pwa/install-prompt.tsx — dual-mode install prompt:
+    * Android: captures beforeinstallprompt event, shows custom banner with Install/Dismiss buttons, dismiss count limits nagging to 2 dismissals
+    * iOS: detects iOS Safari, shows Sheet with 3-step instructions (Share → Add to Home Screen → Add), auto-opens once per device via localStorage
+    * Standalone check: if already installed, renders nothing
+- Wired <RegisterSW /> and <InstallPrompt /> into layout.tsx body
+- Created /scripts/generate-ios-splash.py — generates 10 iOS apple-touch-startup-image splash screens (iPhone SE/5/6/7/8/+/X/XR/12/13/14 + iPad mini/Air/Pro 11"/Pro 12.9")
+- Updated layout.tsx appleWebApp.startupImage array with all 10 splash screens + correct media queries per device
+- Build verified successful (bun run build → ✓ Compiled successfully in 14.5s)
+- Local server test confirmed: manifest.webmanifest, sw.js, apple-touch-icon, splash screens all serve 200 OK
+
+Stage Summary:
+- PWA fully ready: works on Android (Chrome install prompt) and iOS (Safari → Share → Add to Home Screen)
+- No APK needed — single codebase, single backend, works on both platforms
+- Offline support via service worker (NetworkFirst for API, fallback to cached HTML when offline)
+- Files added:
+    * public/sw.js
+    * src/components/pwa/register-sw.tsx
+    * src/components/pwa/install-prompt.tsx
+    * scripts/generate-ios-splash.py
+    * public/icons/apple-splash-{320x568,375x667,414x736,375x812,414x896,390x844,428x926,768x1024,834x1194,1024x1366}.png
+- Files modified: src/app/layout.tsx (added PWA component imports + render, expanded startupImage array)
