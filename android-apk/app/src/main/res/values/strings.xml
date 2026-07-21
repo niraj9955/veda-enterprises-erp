@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="appName">Veda ERP</string>
+    <string name="launchUrl">https://veda-enterprises-erp.vercel.app</string>
+    <string name="assetStatements">
+        [{
+          \"relation\": [\"delegate_permission/common.handle_all_urls\"],
+          \"target\": {
+            \"namespace\": \"web\",
+            \"site\": \"https://veda-enterprises-erp.vercel.app\"
+          }
+        }]
+    </string>
+</resources>

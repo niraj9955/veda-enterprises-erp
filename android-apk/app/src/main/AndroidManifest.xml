@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/appName"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.LauncherActivity"
+        tools:targetApi="31">
+
+        <meta-data
+            android:name="asset_statements"
+            android:resource="@string/assetStatements" />
+
+        <activity
+            android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+            android:exported="true"
+            android:label="@string/appName">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.support.customapps.trusted.DEFAULT_URL"
+                android:value="@string/launchUrl" />
+
+            <meta-data
+                android:name="android.support.customapps.trusted.STATUS_BAR_COLOR"
+                android:resource="@color/colorPrimary" />
+
+            <meta-data
+                android:name="android.support.customapps.trusted.NAVIGATION_BAR_COLOR"
+                android:resource="@color/colorPrimary" />
+        </activity>
+    </application>
+</manifest>
