@@ -1,0 +1,936 @@
+     1→import { NextResponse } from 'next/server'
+     2→import { connectDB, toObject } from '@/lib/db'
+     3→import {
+     4→  Customer, Production, Stock, Order, Dispatch, Payment, Expense,
+     5→  DailySell, CustomerPayment, LabourPayment, TractorPayment,
+     6→  DustPurchase, CementPurchase, Hardner, Electricity, FactoryStuff,
+     7→} from '@/lib/models'
+     8→import { syncStockForDates } from '@/lib/sync-stock'
+     9→import { requireRole } from '@/lib/auth'
+    10→
+    11→// Force dynamic — this route must never be cached/previewed as a static asset.
+    12→export const dynamic = 'force-dynamic'
+    13→
+    14→// Max rows per import call — prevents abuse / OOM on huge files
+    15→const MAX_IMPORT_ROWS = 5000
+    16→
+    17→// ─── Server-side date normalization ─────────────────────────────────────────
+    18→//
+    19→// The client (excel-import.tsx) already normalizes dates to YYYY-MM-DD, but
+    20→// we re-normalize here as defense-in-depth so a direct API call (or a future
+    21→// caller that bypasses the Excel wizard) is still safe.
+    22→//
+    23→// Supported input formats (any separator among - / . or space):
+    24→//   • YYYY-MM-DD          (already canonical)
+    25→//   • DD-MM-YYYY  DD/MM/YYYY  DD.MM.YYYY   (day-first, Indian format)
+    26→//   • DD-MM-YY    DD/MM/YY    DD.MM.YY     (short year, prefixed with 20)
+    27→//   • MM/DD/YYYY  (only when first number > 12, e.g. 13/01/2024 -> Jan 13)
+    28→//   • Datetime strings like "2024-01-15 10:30:00" (time part stripped)
+    29→//   • Excel serial numbers (e.g. 46178)
+    30→//   • Fallback: native Date parsing, then the raw string unchanged.
+    31→function normalizeDate(value: unknown): string {
+    32→  if (value == null) return ''
+    33→  if (value instanceof Date && !isNaN(value.getTime())) {
+    34→    return value.toISOString().split('T')[0]
+    35→  }
+    36→  if (typeof value === 'number' && Number.isFinite(value) && value > 59 && value < 60000) {
+    37→    // Excel serial date: days since 1899-12-30
+    38→    const ms = Math.round((value - 25569) * 86400 * 1000)
+    39→    const d = new Date(ms)
+    40→    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0]
+    41→  }
+    42→  const raw = String(value ?? '').trim()
+    43→  if (raw === '') return ''
+    44→
+    45→  // Strip time portion
+    46→  const trimmed = raw
+    47→    .replace(/[Tt]\s*\d{1,2}:\d{2}.*$/, '')
+    48→    .replace(/\s+\d{1,2}:\d{2}.*$/, '')
+    49→    .trim()
+    50→  if (trimmed === '') return raw
+    51→
+    52→  // YYYY-MM-DD
+    53→  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmed)) {
+    54→    const [y, m, d] = trimmed.split('-')
+    55→    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+    56→  }
+    57→  // YYYY/MM/DD or YYYY.MM.DD
+    58→  const ymdMatch = trimmed.match(/^(\d{4})[/.\s](\d{1,2})[/.\s](\d{1,2})$/)
+    59→  if (ymdMatch) {
+    60→    const [, y, m, d] = ymdMatch
+    61→    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+    62→  }
+    63→  // DD-MM-YYYY / DD/MM/YYYY / DD.MM.YYYY (with US fallback if second > 12)
+    64→  const dmyMatch = trimmed.match(/^(\d{1,2})[/.\s-](\d{1,2})[/.\s-](\d{4})$/)
+    65→  if (dmyMatch) {
+    66→    const [, a, b, y] = dmyMatch
+    67→    const d = Number(b) > 12 && Number(a) <= 12 ? b : a
+    68→    const m = Number(b) > 12 && Number(a) <= 12 ? a : b
+    69→    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+    70→  }
+    71→  // DD-MM-YY / DD/MM/YY / DD.MM.YY
+    72→  const dmyShortMatch = trimmed.match(/^(\d{1,2})[/.\s-](\d{1,2})[/.\s-](\d{2})$/)
+    73→  if (dmyShortMatch) {
+    74→    const [, a, b, y] = dmyShortMatch
+    75→    const d = Number(b) > 12 && Number(a) <= 12 ? b : a
+    76→    const m = Number(b) > 12 && Number(a) <= 12 ? a : b
+    77→    return `20${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+    78→  }
+    79→  // Native Date fallback
+    80→  try {
+    81→    const date = new Date(trimmed)
+    82→    if (!isNaN(date.getTime())) return date.toISOString().split('T')[0]
+    83→  } catch {}
+    84→  return raw
+    85→}
+    86→
+    87→// Normalize every date-like field on a row before validation/insert.
+    88→// This keeps the per-module switch statement below simple.
+    89→function normalizeRowDates(row: Record<string, unknown>): void {
+    90→  if ('date' in row) row.date = normalizeDate(row.date)
+    91→  if ('deliveryDate' in row) row.deliveryDate = normalizeDate(row.deliveryDate)
+    92→}
+    93→
+    94→// ─── Duplicate detection ────────────────────────────────────────────────────
+    95→//
+    96→// Per user request: "jo duplicate ho use skip kre or uska mess de but jo
+    97→// duplicate nhi h usko import kre record me" — when an Excel row matches an
+    98→// existing record in the DB (by a natural key), SKIP it with a clear message
+    99→// but still IMPORT every non-duplicate row.
+   100→//
+   101→// To keep this fast, for each module we run ONE batched `find()` that
+   102→// returns every existing row whose date falls within the dates seen in
+   103→// the import payload, then build a Set of natural-key strings. Per-row
+   104→// lookup then becomes an O(1) Set.has() check instead of a findOne().
+   105→//
+   106→// APPEND-ONLY semantics are preserved — we never wipe existing rows.
+   107→
+   108→// Build a stable natural-key string for a row, per module.
+   109→function rowKey(module: string, row: Record<string, unknown>): string {
+   110→  const s = (v: unknown) => String(v ?? '').trim().toLowerCase()
+   111→  switch (module) {
+   112→    case 'customers':
+   113→      return s(row.mobile)
+   114→    case 'production':
+   115→      // One production entry per date — same date = duplicate (matches stock semantics)
+   116→      return s(row.date)
+   117→    case 'stock':
+   118→      // One stock entry per date — same date = duplicate
+   119→      return s(row.date)
+   120→    case 'dailySell':
+   121→      return `${s(row.date)}|${s(row.customerName)}|${s(row.amount)}`
+   122→    case 'customerPayment':
+   123→      return `${s(row.date)}|${s(row.name)}|${s(row.amount)}`
+   124→    case 'labourPayment':
+   125→      return `${s(row.date)}|${s(row.name)}|${s(row.amount)}`
+   126→    case 'tractorPayment':
+   127→      return `${s(row.date)}|${s(row.vendorName)}|${s(row.quantityTon)}|${s(row.rate)}`
+   128→    case 'dustPurchase':
+   129→      return `${s(row.date)}|${s(row.vendorName)}|${s(row.quantity)}|${s(row.rate)}`
+   130→    case 'cementPurchase':
+   131→      return `${s(row.date)}|${s(row.vendorName)}|${s(row.itemName)}|${s(row.quantity)}|${s(row.rate)}`
+   132→    case 'hardner':
+   133→      // Only date+amount available — same date AND same amount = duplicate
+   134→      return `${s(row.date)}|${s(row.amount)}`
+   135→    case 'electricity':
+   136→      return `${s(row.date)}|${s(row.name)}|${s(row.work)}|${s(row.amount)}`
+   137→    case 'factoryStuff':
+   138→      return `${s(row.date)}|${s(row.itemName)}|${s(row.amount)}`
+   139→    case 'orders':
+   140→      return `${s(row.customerId)}|${s(row.brickType)}|${s(row.quantity)}|${s(row.rate)}|${s(row.deliveryDate || row.date)}`
+   141→    case 'dispatch':
+   142→      return `${s(row.customerId)}|${s(row.truckNumber)}|${s(row.brickType)}|${s(row.quantity)}|${s(row.date)}`
+   143→    case 'payments':
+   144→      return `${s(row.customerId)}|${s(row.paymentType)}|${s(row.amount)}|${s(row.date)}`
+   145→    case 'expenses':
+   146→      return `${s(row.category)}|${s(row.amount)}|${s(row.date)}|${s(row.description)}`
+   147→    default:
+   148→      return ''
+   149→  }
+   150→}
+   151→
+   152→// Map a DB record back into the same natural-key shape as a row.
+   153→// IMPORTANT: this MUST mirror rowKey() exactly — if rowKey uses just `date`
+   154→// for production, dbKey must also use just `date` for production. A mismatch
+   155→// here means existingKeys will contain keys like "2026-06-21||" while the
+   156→// incoming row key is "2026-06-21", so the duplicate check NEVER matches and
+   157→// duplicates get imported. This was the root cause of duplicate production
+   158→// entries being imported.
+   159→function dbKey(module: string, doc: Record<string, unknown>): string {
+   160→  const s = (v: unknown) => String(v ?? '').trim().toLowerCase()
+   161→  switch (module) {
+   162→    case 'customers':
+   163→      return s(doc.mobile)
+   164→    case 'production':
+   165→      // One production entry per date — matches rowKey('production')
+   166→      return s(doc.date)
+   167→    case 'stock':
+   168→      return s(doc.date)
+   169→    case 'dailySell':
+   170→      return `${s(doc.date)}|${s(doc.customerName)}|${s(doc.amount)}`
+   171→    case 'customerPayment':
+   172→      return `${s(doc.date)}|${s(doc.name)}|${s(doc.amount)}`
+   173→    case 'labourPayment':
+   174→      return `${s(doc.date)}|${s(doc.name)}|${s(doc.amount)}`
+   175→    case 'tractorPayment':
+   176→      return `${s(doc.date)}|${s(doc.vendorName)}|${s(doc.quantityTon)}|${s(doc.rate)}`
+   177→    case 'dustPurchase':
+   178→      return `${s(doc.date)}|${s(doc.vendorName)}|${s(doc.quantity)}|${s(doc.rate)}`
+   179→    case 'cementPurchase':
+   180→      return `${s(doc.date)}|${s(doc.vendorName)}|${s(doc.itemName)}|${s(doc.quantity)}|${s(doc.rate)}`
+   181→    case 'hardner':
+   182→      return `${s(doc.date)}|${s(doc.amount)}`
+   183→    case 'electricity':
+   184→      return `${s(doc.date)}|${s(doc.name)}|${s(doc.work)}|${s(doc.amount)}`
+   185→    case 'factoryStuff':
+   186→      return `${s(doc.date)}|${s(doc.itemName)}|${s(doc.amount)}`
+   187→    case 'orders':
+   188→      return `${s(doc.customerId)}|${s(doc.brickType)}|${s(doc.quantity)}|${s(doc.rate)}|${s(doc.deliveryDate)}`
+   189→    case 'dispatch':
+   190→      return `${s(doc.customerId)}|${s(doc.truckNumber)}|${s(doc.brickType)}|${s(doc.quantity)}|${s(doc.date)}`
+   191→    case 'payments':
+   192→      return `${s(doc.customerId)}|${s(doc.paymentType)}|${s(doc.amount)}|${s(doc.date)}`
+   193→    case 'expenses':
+   194→      return `${s(doc.category)}|${s(doc.amount)}|${s(doc.date)}|${s(doc.description)}`
+   195→    default:
+   196→      return ''
+   197→  }
+   198→}
+   199→
+   200→// Pre-fetch existing DB records that could collide with any row in `data`.
+   201→// Returns a Set of natural-key strings.
+   202→async function buildExistingKeys(module: string, data: Record<string, unknown>[]): Promise<Set<string>> {
+   203→  const keys = new Set<string>()
+   204→  if (data.length === 0) return keys
+   205→
+   206→  // Collect unique dates and customerIds from the import payload so we can
+   207→  // narrow the DB query. This keeps the result set small.
+   208→  const dates = new Set<string>()
+   209→  const mobiles = new Set<string>()
+   210→  const customerIds = new Set<string>()
+   211→  for (const row of data) {
+   212→    const d = String(row.date ?? '').split('T')[0]
+   213→    if (d) dates.add(d)
+   214→    const dd = String(row.deliveryDate ?? '').split('T')[0]
+   215→    if (dd) dates.add(dd)
+   216→    const m = String(row.mobile ?? '').trim()
+   217→    if (m) mobiles.add(m)
+   218→    const cid = String(row.customerId ?? '').trim()
+   219→    if (cid) customerIds.add(cid)
+   220→  }
+   221→
+   222→  let docs: Record<string, unknown>[] = []
+   223→
+   224→  switch (module) {
+   225→    case 'customers':
+   226→      docs = mobiles.size > 0
+   227→        ? await Customer.find({ mobile: { $in: Array.from(mobiles) } }).lean() as any
+   228→        : []
+   229→      break
+   230→    case 'production':
+   231→      docs = dates.size > 0
+   232→        ? await Production.find({ date: { $in: Array.from(dates) } }).lean() as any
+   233→        : []
+   234→      break
+   235→    case 'stock':
+   236→      docs = dates.size > 0
+   237→        ? await Stock.find({ date: { $in: Array.from(dates) } }).lean() as any
+   238→        : []
+   239→      break
+   240→    case 'dailySell':
+   241→      docs = dates.size > 0
+   242→        ? await DailySell.find({ date: { $in: Array.from(dates) } }).lean() as any
+   243→        : []
+   244→      break
+   245→    case 'customerPayment':
+   246→      docs = dates.size > 0
+   247→        ? await CustomerPayment.find({ date: { $in: Array.from(dates) } }).lean() as any
+   248→        : []
+   249→      break
+   250→    case 'labourPayment':
+   251→      docs = dates.size > 0
+   252→        ? await LabourPayment.find({ date: { $in: Array.from(dates) } }).lean() as any
+   253→        : []
+   254→      break
+   255→    case 'tractorPayment':
+   256→      docs = dates.size > 0
+   257→        ? await TractorPayment.find({ date: { $in: Array.from(dates) } }).lean() as any
+   258→        : []
+   259→      break
+   260→    case 'dustPurchase':
+   261→      docs = dates.size > 0
+   262→        ? await DustPurchase.find({ date: { $in: Array.from(dates) } }).lean() as any
+   263→        : []
+   264→      break
+   265→    case 'cementPurchase':
+   266→      docs = dates.size > 0
+   267→        ? await CementPurchase.find({ date: { $in: Array.from(dates) } }).lean() as any
+   268→        : []
+   269→      break
+   270→    case 'hardner':
+   271→      docs = dates.size > 0
+   272→        ? await Hardner.find({ date: { $in: Array.from(dates) } }).lean() as any
+   273→        : []
+   274→      break
+   275→    case 'electricity':
+   276→      docs = dates.size > 0
+   277→        ? await Electricity.find({ date: { $in: Array.from(dates) } }).lean() as any
+   278→        : []
+   279→      break
+   280→    case 'factoryStuff':
+   281→      docs = dates.size > 0
+   282→        ? await FactoryStuff.find({ date: { $in: Array.from(dates) } }).lean() as any
+   283→        : []
+   284→      break
+   285→    case 'orders':
+   286→      docs = customerIds.size > 0
+   287→        ? await Order.find({ customerId: { $in: Array.from(customerIds) } }).lean() as any
+   288→        : []
+   289→      break
+   290→    case 'dispatch':
+   291→      docs = customerIds.size > 0
+   292→        ? await Dispatch.find({ customerId: { $in: Array.from(customerIds) } }).lean() as any
+   293→        : []
+   294→      break
+   295→    case 'payments':
+   296→      docs = customerIds.size > 0
+   297→        ? await Payment.find({ customerId: { $in: Array.from(customerIds) } }).lean() as any
+   298→        : []
+   299→      break
+   300→    case 'expenses':
+   301→      // Expenses dedupe by category+amount+date — narrow by date
+   302→      docs = dates.size > 0
+   303→        ? await Expense.find({ date: { $in: Array.from(dates) } }).lean() as any
+   304→        : []
+   305→      break
+   306→  }
+   307→
+   308→  for (const d of docs) {
+   309→    const k = dbKey(module, d as Record<string, unknown>)
+   310→    if (k) keys.add(k)
+   311→  }
+   312→  return keys
+   313→}
+   314→
+   315→export async function POST(request: Request) {
+   316→  try {
+   317→    // Admin/operator only — bulk import is a privileged write operation
+   318→    const session = await requireRole(['admin', 'operator'])
+   319→    if (session instanceof NextResponse) return session
+   320→
+   321→    await connectDB()
+   322→    const body = await request.json()
+   323→    const { module, data } = body
+   324→
+   325→    if (!module || !data || !Array.isArray(data)) {
+   326→      return NextResponse.json({ error: 'Module and data array are required' }, { status: 400 })
+   327→    }
+   328→
+   329→    // Cap import size to prevent abuse / OOM
+   330→    if (data.length > MAX_IMPORT_ROWS) {
+   331→      return NextResponse.json(
+   332→        { error: `Too many rows (${data.length}). Maximum ${MAX_IMPORT_ROWS} rows per import. Split your file and try again.` },
+   333→        { status: 413 }
+   334→      )
+   335→    }
+   336→
+   337→    // ── Pre-fetch existing keys (1 DB query for the whole batch) ──────────
+   338→    const existingKeys = await buildExistingKeys(module, data as Record<string, unknown>[])
+   339→    // Track keys we've already seen WITHIN this batch so a duplicate Excel
+   340→    // row doesn't get inserted twice in the same import run.
+   341→    const seenInBatch = new Set<string>()
+   342→
+   343→    let imported = 0
+   344→    let skipped = 0
+   345→    let duplicatesSkipped = 0
+   346→    const errors: string[] = []
+   347→    const skippedReasons: string[] = []
+   348→
+   349→    // ── Bulk insert optimization ──────────────────────────────────────────
+   350→    // Instead of calling `await Model.create(doc)` for each row (N DB round
+   351→    // trips), we collect ALL valid documents into a `toInsert` array and do a
+   352→    // single `Model.insertMany(toInsert)` call after the loop. This makes the
+   353→    // import dramatically faster — 48 rows that previously took 8-10 seconds
+   354→    // (timing out on Vercel Hobby's 10s limit) now take under 1 second.
+   355→    //
+   356→    // `rowIndexByDoc` maps each document back to its original Excel row index
+   357→    // so we can report per-row errors if insertMany throws.
+   358→    const toInsert: any[] = []
+   359→    const rowIndexByDoc: number[] = []
+   360→
+   361→    for (let i = 0; i < data.length; i++) {
+   362→      try {
+   363→        const row = data[i]
+   364→
+   365→        // Normalize date fields BEFORE duplicate check / validation / insert
+   366→        // so DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY, datetime strings, and Excel
+   367→        // serial numbers are all converted to canonical YYYY-MM-DD.
+   368→        normalizeRowDates(row as Record<string, unknown>)
+   369→
+   370→        // ── Duplicate check (against DB AND within this batch) ──────────
+   371→        // Duplicates are pushed to the `errors` array (not just skippedReasons)
+   372→        // so they appear in the RED error popup with a clear "Duplicate data
+   373→        // found" message, exactly as the user requested. The row is still
+   374→        // counted in duplicatesSkipped for the summary card.
+   375→        const key = rowKey(module, row as Record<string, unknown>)
+   376→        if (key) {
+   377→          if (existingKeys.has(key)) {
+   378→            skipped++
+   379→            duplicatesSkipped++
+   380→            const label = duplicateRowLabel(module, row as Record<string, unknown>)
+   381→            errors.push(`Row ${i + 1}: Duplicate data found — ${label} already exists in records`)
+   382→            continue
+   383→          }
+   384→          if (seenInBatch.has(key)) {
+   385→            skipped++
+   386→            duplicatesSkipped++
+   387→            const label = duplicateRowLabel(module, row as Record<string, unknown>)
+   388→            errors.push(`Row ${i + 1}: Duplicate data found — ${label} appears more than once in this Excel file`)
+   389→            continue
+   390→          }
+   391→          seenInBatch.add(key)
+   392→        }
+   393→
+   394→        switch (module) {
+   395→          // ─── Customers ──────────────────────────────────────────────
+   396→          case 'customers': {
+   397→            if (!row.name || !row.mobile) {
+   398→              errors.push(`Row ${i + 1}: Name and mobile are required`)
+   399→              skipped++
+   400→              continue
+   401→            }
+   402→            toInsert.push({
+   403→              name: String(row.name).trim(),
+   404→              mobile: String(row.mobile).trim(),
+   405→              gstNumber: row.gstNumber || '',
+   406→              address: row.address || '',
+   407→              creditLimit: Number(row.creditLimit) || 0,
+   408→            })
+   409→            rowIndexByDoc.push(i)
+   410→            break
+   411→          }
+   412→
+   413→          // ─── Production ─────────────────────────────────────────────
+   414→          case 'production': {
+   415→            if (!row.date) {
+   416→              errors.push(`Row ${i + 1}: Date is required`)
+   417→              skipped++
+   418→              continue
+   419→            }
+   420→            toInsert.push({
+   421→              date: String(row.date),
+   422→              customerId: row.customerId || null,
+   423→              cement: Number(row.cement) || 0,
+   424→              zigZagGrey80: Number(row.zigZagGrey80) || 0,
+   425→              zigZagRed80: Number(row.zigZagRed80) || 0,
+   426→              zigZagYellow80: Number(row.zigZagYellow80) || 0,
+   427→              zigZagGrey60: Number(row.zigZagGrey60) || 0,
+   428→              zigZagRed60: Number(row.zigZagRed60) || 0,
+   429→              zigZagYellow60: Number(row.zigZagYellow60) || 0,
+   430→              curveStone: Number(row.curveStone) || 0,
+   431→              chequreTile: Number(row.chequreTile) || 0,
+   432→              dumbleGrey80: Number(row.dumbleGrey80) || 0,
+   433→              dumbleRed80: Number(row.dumbleRed80) || 0,
+   434→              dumbleYellow80: Number(row.dumbleYellow80) || 0,
+   435→              transportationCharge: Number(row.transportationCharge) || 0,
+   436→              remarks: String(row.remarks || ''),
+   437→            })
+   438→            rowIndexByDoc.push(i)
+   439→            break
+   440→          }
+   441→
+   442→          // ─── Stock ─────────────────────────────────────────────────
+   443→          case 'stock': {
+   444→            if (!row.date) {
+   445→              errors.push(`Row ${i + 1}: Date is required`)
+   446→              skipped++
+   447→              continue
+   448→            }
+   449→            toInsert.push({
+   450→              date: String(row.date),
+   451→              cement: Number(row.cement) || 0,
+   452→              zigZagGrey80: Number(row.zigZagGrey80) || 0,
+   453→              zigZagRed80: Number(row.zigZagRed80) || 0,
+   454→              zigZagYellow80: Number(row.zigZagYellow80) || 0,
+   455→              zigZagGrey60: Number(row.zigZagGrey60) || 0,
+   456→              zigZagRed60: Number(row.zigZagRed60) || 0,
+   457→              zigZagYellow60: Number(row.zigZagYellow60) || 0,
+   458→              chequreTile: Number(row.chequreTile) || 0,
+   459→              curveStone: Number(row.curveStone) || 0,
+   460→              dumbleGrey80: Number(row.dumbleGrey80) || 0,
+   461→              dumbleRed80: Number(row.dumbleRed80) || 0,
+   462→              dumbleYellow80: Number(row.dumbleYellow80) || 0,
+   463→            })
+   464→            rowIndexByDoc.push(i)
+   465→            break
+   466→          }
+   467→
+   468→          // ─── Daily Sell ────────────────────────────────────────────
+   469→          case 'dailySell': {
+   470→            if (!row.date || !row.customerName || !row.amount) {
+   471→              errors.push(`Row ${i + 1}: Date, customer name, and amount are required`)
+   472→              skipped++
+   473→              continue
+   474→            }
+   475→            toInsert.push({
+   476→              date: String(row.date),
+   477→              customerName: String(row.customerName),
+   478→              address: String(row.address || ''),
+   479→              contactNumber: String(row.contactNumber || row.mobile || ''),
+   480→              product: String(row.product || ''),
+   481→              amount: Number(row.amount),
+   482→              remarks: String(row.remarks || ''),
+   483→            })
+   484→            rowIndexByDoc.push(i)
+   485→            break
+   486→          }
+   487→
+   488→          // ─── Customer Payment ──────────────────────────────────────
+   489→          case 'customerPayment': {
+   490→            if (!row.date || !row.name || !row.amount) {
+   491→              errors.push(`Row ${i + 1}: Date, name, and amount are required`)
+   492→              skipped++
+   493→              continue
+   494→            }
+   495→            toInsert.push({
+   496→              date: String(row.date),
+   497→              name: String(row.name),
+   498→              address: String(row.address || ''),
+   499→              amount: Number(row.amount),
+   500→              remarks: String(row.remarks || ''),
+   501→            })
+   502→            rowIndexByDoc.push(i)
+   503→            break
+   504→          }
+   505→
+   506→          // ─── Labour Payment ────────────────────────────────────────
+   507→          case 'labourPayment': {
+   508→            if (!row.date || !row.name || !row.amount) {
+   509→              errors.push(`Row ${i + 1}: Date, name, and amount are required`)
+   510→              skipped++
+   511→              continue
+   512→            }
+   513→            toInsert.push({
+   514→              date: String(row.date),
+   515→              name: String(row.name),
+   516→              address: String(row.address || ''),
+   517→              amount: Number(row.amount),
+   518→              remarks: String(row.remarks || ''),
+   519→            })
+   520→            rowIndexByDoc.push(i)
+   521→            break
+   522→          }
+   523→
+   524→          // ─── Tractor Payment ───────────────────────────────────────
+   525→          case 'tractorPayment': {
+   526→            if (!row.date || !row.vendorName || !row.quantityTon || !row.rate) {
+   527→              errors.push(`Row ${i + 1}: Date, vendor, quantity, and rate are required`)
+   528→              skipped++
+   529→              continue
+   530→            }
+   531→            const qty = Number(row.quantityTon)
+   532→            const rate = Number(row.rate)
+   533→            const totalAmount = Number(row.totalAmount) || qty * rate
+   534→            const paidAmount = Number(row.paidAmount) || 0
+   535→            toInsert.push({
+   536→              date: String(row.date),
+   537→              vendorName: String(row.vendorName),
+   538→              quantityTon: qty,
+   539→              rate,
+   540→              totalAmount,
+   541→              paidAmount,
+   542→              remainingAmount: Number(row.remainingAmount) || (totalAmount - paidAmount),
+   543→              remarks: String(row.remarks || ''),
+   544→            })
+   545→            rowIndexByDoc.push(i)
+   546→            break
+   547→          }
+   548→
+   549→          // ─── Dust Purchase ─────────────────────────────────────────
+   550→          case 'dustPurchase': {
+   551→            if (!row.date || !row.vendorName || !row.quantity || !row.rate) {
+   552→              errors.push(`Row ${i + 1}: Date, vendor, quantity, and rate are required`)
+   553→              skipped++
+   554→              continue
+   555→            }
+   556→            const qty = Number(row.quantity)
+   557→            const rate = Number(row.rate)
+   558→            const totalAmount = Number(row.totalAmount) || qty * rate
+   559→            const paidAmount = Number(row.paidAmount) || 0
+   560→            toInsert.push({
+   561→              date: String(row.date),
+   562→              vendorName: String(row.vendorName),
+   563→              cementName: String(row.cementName || ''),
+   564→              quantity: qty,
+   565→              rate,
+   566→              totalAmount,
+   567→              paidAmount,
+   568→              transportationCharge: Number(row.transportationCharge) || 0,
+   569→              gst: Number(row.gst) || 0,
+   570→              remarks: String(row.remarks || ''),
+   571→            })
+   572→            rowIndexByDoc.push(i)
+   573→            break
+   574→          }
+   575→
+   576→          // ─── Cement Purchase ───────────────────────────────────────
+   577→          case 'cementPurchase': {
+   578→            if (!row.date || !row.vendorName || !row.quantity || !row.rate) {
+   579→              errors.push(`Row ${i + 1}: Date, vendor, quantity, and rate are required`)
+   580→              skipped++
+   581→              continue
+   582→            }
+   583→            const qty = Number(row.quantity)
+   584→            const rate = Number(row.rate)
+   585→            const totalAmount = Number(row.totalAmount) || qty * rate
+   586→            const paidAmount = Number(row.paidAmount) || 0
+   587→            toInsert.push({
+   588→              date: String(row.date),
+   589→              vendorName: String(row.vendorName),
+   590→              itemName: String(row.itemName || ''),
+   591→              quantity: qty,
+   592→              rate,
+   593→              totalAmount,
+   594→              paidAmount,
+   595→              transportationCharge: Number(row.transportationCharge) || 0,
+   596→              gst: Number(row.gst) || 0,
+   597→              remarks: String(row.remarks || ''),
+   598→            })
+   599→            rowIndexByDoc.push(i)
+   600→            break
+   601→          }
+   602→
+   603→          // ─── Hardner ───────────────────────────────────────────────
+   604→          case 'hardner': {
+   605→            if (!row.date || !row.amount) {
+   606→              errors.push(`Row ${i + 1}: Date and amount are required`)
+   607→              skipped++
+   608→              continue
+   609→            }
+   610→            toInsert.push({
+   611→              date: String(row.date),
+   612→              amount: Number(row.amount),
+   613→            })
+   614→            rowIndexByDoc.push(i)
+   615→            break
+   616→          }
+   617→
+   618→          // ─── Electricity ───────────────────────────────────────────
+   619→          case 'electricity': {
+   620→            if (!row.date || !row.amount) {
+   621→              errors.push(`Row ${i + 1}: Date and amount are required`)
+   622→              skipped++
+   623→              continue
+   624→            }
+   625→            toInsert.push({
+   626→              date: String(row.date),
+   627→              name: String(row.name || ''),
+   628→              work: String(row.work || ''),
+   629→              amount: Number(row.amount),
+   630→              remarks: String(row.remarks || ''),
+   631→            })
+   632→            rowIndexByDoc.push(i)
+   633→            break
+   634→          }
+   635→
+   636→          // ─── Factory Stuff ─────────────────────────────────────────
+   637→          case 'factoryStuff': {
+   638→            if (!row.date || !row.itemName || !row.amount) {
+   639→              errors.push(`Row ${i + 1}: Date, item name, and amount are required`)
+   640→              skipped++
+   641→              continue
+   642→            }
+   643→            toInsert.push({
+   644→              date: String(row.date),
+   645→              itemName: String(row.itemName),
+   646→              quantity: Number(row.quantity) || 0,
+   647→              amount: Number(row.amount),
+   648→              remarks: String(row.remarks || ''),
+   649→            })
+   650→            rowIndexByDoc.push(i)
+   651→            break
+   652→          }
+   653→
+   654→          // ─── Legacy modules (Orders/Dispatch/Payments/Expenses) ────
+   655→          case 'orders': {
+   656→            if (!row.customerId || !row.brickType || !row.quantity || !row.rate) {
+   657→              errors.push(`Row ${i + 1}: Customer, brick type, quantity, and rate are required`)
+   658→              skipped++
+   659→              continue
+   660→            }
+   661→            // Defer orderNumber generation to the bulk phase below — we just
+   662→            // collect the row here. The bulk phase runs ONE countDocuments
+   663→            // and ONE Company.findOne for the whole batch, then issues a
+   664→            // single insertMany with sequential orderNumbers computed in
+   665→            // memory. This eliminates the previous N × 3 query pattern.
+   666→            toInsert.push({
+   667→              customerId: row.customerId,
+   668→              brickType: row.brickType,
+   669→              quantity: Number(row.quantity),
+   670→              rate: Number(row.rate),
+   671→              amount: Number(row.amount) || Number(row.quantity) * Number(row.rate),
+   672→              deliveryDate: row.deliveryDate || row.date || new Date().toISOString().split('T')[0],
+   673→              status: row.status || 'Pending',
+   674→            })
+   675→            rowIndexByDoc.push(i)
+   676→            break
+   677→          }
+   678→
+   679→          case 'dispatch': {
+   680→            if (!row.customerId || !row.truckNumber || !row.quantity || !row.brickType || !row.date) {
+   681→              errors.push(`Row ${i + 1}: Customer, truck, quantity, brick type, and date are required`)
+   682→              skipped++
+   683→              continue
+   684→            }
+   685→            // Same deferral as orders — orderNumber generation happens in
+   686→            // the bulk phase below.
+   687→            toInsert.push({
+   688→              customerId: row.customerId,
+   689→              orderId: row.orderId || null,
+   690→              truckNumber: row.truckNumber,
+   691→              driverName: row.driverName || '',
+   692→              quantity: Number(row.quantity),
+   693→              brickType: row.brickType,
+   694→              date: row.date,
+   695→            })
+   696→            rowIndexByDoc.push(i)
+   697→            break
+   698→          }
+   699→
+   700→          case 'payments': {
+   701→            if (!row.customerId || !row.paymentType || !row.amount || !row.date) {
+   702→              errors.push(`Row ${i + 1}: Customer, payment type, amount, and date are required`)
+   703→              skipped++
+   704→              continue
+   705→            }
+   706→            toInsert.push({
+   707→              customerId: row.customerId,
+   708→              paymentType: row.paymentType,
+   709→              amount: Number(row.amount),
+   710→              date: row.date,
+   711→              remarks: row.remarks || '',
+   712→            })
+   713→            rowIndexByDoc.push(i)
+   714→            break
+   715→          }
+   716→
+   717→          case 'expenses': {
+   718→            if (!row.category || !row.amount || !row.date) {
+   719→              errors.push(`Row ${i + 1}: Category, amount, and date are required`)
+   720→              skipped++
+   721→              continue
+   722→            }
+   723→            toInsert.push({
+   724→              category: row.category,
+   725→              amount: Number(row.amount),
+   726→              date: row.date,
+   727→              description: row.description || '',
+   728→            })
+   729→            rowIndexByDoc.push(i)
+   730→            break
+   731→          }
+   732→
+   733→          default:
+   734→            errors.push(`Unknown module: ${module}`)
+   735→        }
+   736→      } catch (err) {
+   737→        errors.push(`Row ${i + 1}: ${err instanceof Error ? err.message : 'Import failed'}`)
+   738→        skipped++
+   739→      }
+   740→    }
+   741→
+   742→    // ── Bulk insert all valid documents in ONE DB call ───────────────────
+   743→    // This is the key optimization: instead of N separate `Model.create()`
+   744→    // calls (each a DB round trip), we do a single `Model.insertMany()`.
+   745→    //
+   746→    // For `orders` and `dispatch`, we need sequential orderNumber/dispatchNumber
+   747→    // values. We do that efficiently here: ONE countDocuments + ONE
+   748→    // Company.findOne for the whole batch, then compute sequential numbers
+   749→    // in memory and insertMany in one call. Previously this was done
+   750→    // per-row inside the loop (N × 3 queries).
+   751→    if (toInsert.length > 0) {
+   752→      try {
+   753→        const Model = getModelForModule(module)
+   754→
+   755→        // ── Sequential numbering for orders & dispatch ──────────────────
+   756→        // Pre-compute orderNumber/dispatchNumber for each doc in memory
+   757→        // using a single count + single Company lookup.
+   758→        if (module === 'orders' || module === 'dispatch') {
+   759→          const { Company } = await import('@/lib/models')
+   760→          const [existingCount, company] = await Promise.all([
+   761→            module === 'orders' ? Order.countDocuments({}) : Dispatch.countDocuments({}),
+   762→            Company.findOne({}),
+   763→          ])
+   764→          const prefix =
+   765→            module === 'orders'
+   766→              ? (company?.orderPrefix || 'ORD')
+   767→              : (company?.dispatchPrefix || 'DSP')
+   768→          const numField = module === 'orders' ? 'orderNumber' : 'dispatchNumber'
+   769→          toInsert.forEach((doc, idx) => {
+   770→            doc[numField] = `${prefix}-${String(existingCount + idx + 1).padStart(4, '0')}`
+   771→          })
+   772→        }
+   773→
+   774→        if (Model) {
+   775→          // `ordered: false` lets MongoDB insert all valid docs even if some
+   776→          // fail validation — we collect per-doc errors from the result.
+   777→          const result = await Model.insertMany(toInsert, { ordered: false, rawResult: false })
+   778→          imported += Array.isArray(result) ? result.length : 0
+   779→        }
+   780→      } catch (err: any) {
+   781→        // insertMany with `ordered: false` throws a BulkWriteError containing
+   782→        // `insertErrors` and `result` with details about which docs failed.
+   783→        if (err?.name === 'BulkWriteError' || err?.code === 11000) {
+   784→          // Some docs may have been inserted before the error — count them.
+   785→          const insertedCount = err?.insertedDocs?.length ?? err?.result?.nInserted ?? 0
+   786→          imported += insertedCount
+   787→          // Walk the writeErrors to map each failure back to its row index.
+   788→          const writeErrors = err?.result?.writeErrors || err?.writeErrors || []
+   789→          for (const we of writeErrors) {
+   790→            const docIdx = we.index
+   791→            const rowIdx = rowIndexByDoc[docIdx]
+   792→            if (rowIdx !== undefined) {
+   793→              const isDup = we.code === 11000
+   794→              const label = duplicateRowLabel(module, data[rowIdx] as Record<string, unknown>)
+   795→              if (isDup) {
+   796→                errors.push(`Row ${rowIdx + 1}: Duplicate data found — ${label}`)
+   797→                duplicatesSkipped++
+   798→                skipped++
+   799→              } else {
+   800→                errors.push(`Row ${rowIdx + 1}: ${we.errmsg || we.message || 'Insert failed'}`)
+   801→                skipped++
+   802→              }
+   803→            }
+   804→          }
+   805→        } else {
+   806→          // Generic error — record it once with the count.
+   807→          errors.push(`Bulk insert failed: ${err instanceof Error ? err.message : 'Unknown error'}. ${toInsert.length} row(s) were not imported.`)
+   808→          skipped += toInsert.length
+   809→        }
+   810→      }
+   811→    }
+   812→
+   813→    // Merge errors and skippedReasons so the UI can show every reason a row
+   814→    // was not imported (validation error OR duplicate OR anything else).
+   815→    const allReasons = [...errors, ...skippedReasons]
+   816→
+   817→    // Auto-sync Stock Overview from Production — when production rows are
+   818→    // imported, the Stock module must reflect the latest daily totals
+   819→    // automatically. We collect every date touched by THIS import and
+   820→    // re-aggregate the matching Stock snapshot for each.
+   821→    if (module === 'production' && imported > 0) {
+   822→      const touchedDates = data
+   823→        .map((row) => String(row.date || '').split('T')[0])
+   824→        .filter(Boolean)
+   825→      if (touchedDates.length > 0) {
+   826→        try {
+   827→          await syncStockForDates(touchedDates)
+   828→        } catch (err) {
+   829→          console.error('[import] Stock sync failed:', err)
+   830→          // Don't fail the import — production rows were already saved.
+   831→          // Just append a soft warning to the error list.
+   832→          allReasons.push('Warning: production rows imported, but Stock Overview auto-sync failed. Check server logs.')
+   833→        }
+   834→      }
+   835→    }
+   836→
+   837→    return NextResponse.json({
+   838→      success: true,
+   839→      imported,
+   840→      skipped,
+   841→      duplicatesSkipped,
+   842→      total: data.length,
+   843→      errors: allReasons.length > 0 ? allReasons.slice(0, 50) : undefined,
+   844→    })
+   845→  } catch (error) {
+   846→    console.error('Error importing data:', error)
+   847→    return NextResponse.json({ error: 'Failed to import data' }, { status: 500 })
+   848→  }
+   849→}
+   850→
+   851→// Map module name to its Mongoose model. Used by the bulk-insert path so we
+   852→// can do a single `Model.insertMany(toInsert)` call instead of N creates.
+   853→function getModelForModule(module: string) {
+   854→  switch (module) {
+   855→    case 'customers': return Customer
+   856→    case 'production': return Production
+   857→    case 'stock': return Stock
+   858→    case 'dailySell': return DailySell
+   859→    case 'customerPayment': return CustomerPayment
+   860→    case 'labourPayment': return LabourPayment
+   861→    case 'tractorPayment': return TractorPayment
+   862→    case 'dustPurchase': return DustPurchase
+   863→    case 'cementPurchase': return CementPurchase
+   864→    case 'hardner': return Hardner
+   865→    case 'electricity': return Electricity
+   866→    case 'factoryStuff': return FactoryStuff
+   867→    case 'payments': return Payment
+   868→    case 'expenses': return Expense
+   869→    // Orders and dispatch now use the bulk-insert path too — their
+   870→    // sequential orderNumber/dispatchNumber is pre-computed in memory
+   871→    // before insertMany is called. See the bulk phase in POST handler.
+   872→    case 'orders': return Order
+   873→    case 'dispatch': return Dispatch
+   874→    default: return null
+   875→  }
+   876→}
+   877→
+   878→// Human-readable label for a duplicate row, used in the skip reason.
+   879→function duplicateRowLabel(module: string, row: Record<string, unknown>): string {
+   880→  switch (module) {
+   881→    case 'customers':
+   882→      return `customer "${row.name}" (mobile ${row.mobile})`
+   883→    case 'production':
+   884→      return `production entry on ${row.date}`
+   885→    case 'stock':
+   886→      return `stock entry for ${row.date}`
+   887→    case 'dailySell':
+   888→      return `daily sell for "${row.customerName}" on ${row.date} (₹${row.amount})`
+   889→    case 'customerPayment':
+   890→      return `payment by "${row.name}" on ${row.date} (₹${row.amount})`
+   891→    case 'labourPayment':
+   892→      return `payment to "${row.name}" on ${row.date} (₹${row.amount})`
+   893→    case 'tractorPayment':
+   894→      return `tractor payment to "${row.vendorName}" on ${row.date}`
+   895→    case 'dustPurchase':
+   896→      return `dust purchase from "${row.vendorName}" on ${row.date}`
+   897→    case 'cementPurchase':
+   898→      return `cement purchase from "${row.vendorName}" on ${row.date}`
+   899→    case 'hardner':
+   900→      return `hardner entry on ${row.date} (₹${row.amount})`
+   901→    case 'electricity':
+   902→      return `electricity entry on ${row.date} (₹${row.amount})`
+   903→    case 'factoryStuff':
+   904→      return `factory stuff "${row.itemName}" on ${row.date} (₹${row.amount})`
+   905→    case 'orders':
+   906→      return `order for customer ${row.customerId} on ${row.deliveryDate || row.date}`
+   907→    case 'dispatch':
+   908→      return `dispatch to customer ${row.customerId} on ${row.date}`
+   909→    case 'payments':
+   910→      return `payment for customer ${row.customerId} on ${row.date}`
+   911→    case 'expenses':
+   912→      return `expense "${row.category}" on ${row.date} (₹${row.amount})`
+   913→    default:
+   914→      return 'record'
+   915→  }
+   916→}
+   917→
+   918→// GET endpoint — return all available modules + their required fields for import template
+   919→export async function GET() {
+   920→  const modules = [
+   921→    { id: 'customers', label: 'Customers', fields: ['name', 'mobile', 'address', 'gstNumber', 'creditLimit'] },
+   922→    { id: 'production', label: 'Production', fields: ['date', 'cement', 'zigZagGrey80', 'zigZagRed80', 'zigZagYellow80', 'zigZagGrey60', 'zigZagRed60', 'zigZagYellow60', 'curveStone', 'chequreTile', 'dumbleGrey80', 'dumbleRed80', 'dumbleYellow80', 'transportationCharge', 'remarks'] },
+   923→    { id: 'stock', label: 'Stock', fields: ['date', 'cement', 'zigZagGrey80', 'zigZagRed80', 'zigZagYellow80', 'zigZagGrey60', 'zigZagRed60', 'zigZagYellow60', 'chequreTile', 'curveStone', 'dumbleGrey80', 'dumbleRed80', 'dumbleYellow80'] },
+   924→    { id: 'dailySell', label: 'Daily Sell', fields: ['date', 'customerName', 'address', 'contactNumber', 'product', 'amount', 'remarks'] },
+   925→    { id: 'customerPayment', label: 'Customer Payment', fields: ['date', 'name', 'address', 'amount', 'remarks'] },
+   926→    { id: 'labourPayment', label: 'Labour Payment', fields: ['date', 'name', 'address', 'amount', 'remarks'] },
+   927→    { id: 'tractorPayment', label: 'Tractor Payment', fields: ['date', 'vendorName', 'quantityTon', 'rate', 'totalAmount', 'paidAmount', 'remainingAmount', 'remarks'] },
+   928→    { id: 'dustPurchase', label: 'Dust Purchase', fields: ['date', 'vendorName', 'cementName', 'quantity', 'rate', 'totalAmount', 'paidAmount', 'transportationCharge', 'gst', 'remarks'] },
+   929→    { id: 'cementPurchase', label: 'Cement Purchase', fields: ['date', 'vendorName', 'itemName', 'quantity', 'rate', 'totalAmount', 'paidAmount', 'transportationCharge', 'gst', 'remarks'] },
+   930→    { id: 'hardner', label: 'Hardner', fields: ['date', 'amount'] },
+   931→    { id: 'electricity', label: 'Electricity', fields: ['date', 'name', 'work', 'amount', 'remarks'] },
+   932→    { id: 'factoryStuff', label: 'Factory Stuff', fields: ['date', 'itemName', 'quantity', 'amount', 'remarks'] },
+   933→  ]
+   934→  return NextResponse.json({ modules })
+   935→}
+   936→
