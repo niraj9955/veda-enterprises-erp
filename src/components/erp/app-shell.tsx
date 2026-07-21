@@ -43,6 +43,7 @@ import {
 } from 'lucide-react'
 import { AiChatWidget } from '@/components/ui/ai-chat-widget'
 import { SectionBackButton } from '@/components/erp/section-back-button'
+import { InstallAppButton } from '@/components/pwa/install-app-button'
 
 // Navigation structure with collapsible sections
 interface NavItem {
@@ -476,6 +477,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </Sheet>
           <h1 className="font-bold text-white flex-1 truncate text-base drop-shadow-sm">{company?.name || 'Veda Enterprises'}</h1>
           <div className="flex items-center gap-1.5">
+            {/* PWA install — always visible (Android + iOS). Hidden if already installed. */}
+            <InstallAppButton className="text-white hover:bg-white/15 hover:text-white" />
             <ThemeToggle className="text-white hover:bg-white/15 hover:text-white" />
             <div className="hidden md:flex items-center gap-2 ml-1">
               <div className="w-8 h-8 bg-gradient-to-br from-[#02714F] to-[#025C42] rounded-full flex items-center justify-center text-white font-semibold text-xs shadow-md ring-1 ring-white/30">
