@@ -8,7 +8,7 @@
     <color name="colorSplashBg">#10B981</color>
     <color name="colorWhite">#FFFFFF</color>
     <string name="appName">Veda ERP</string>
-    <string name="defaultUrl">http://21.0.2.217:81/</string>
+    <string name="defaultUrl">https://veda-enterprises-erp.vercel.app/</string>
     <style name="Theme.VedaERP" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
