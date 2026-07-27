@@ -55,3 +55,6 @@ server.log
 node_modules.bak/
 tool-results/
 node_modules.bak/
+android-apk/.gradle/
+android-apk/app/build/
+/tmp/

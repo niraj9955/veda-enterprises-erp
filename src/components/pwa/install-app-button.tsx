@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Download, Share, PlusSquare, Smartphone, X } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { Download, Share, PlusSquare, Smartphone, X, Clock, Chrome, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -20,9 +20,11 @@ import {
  *
  * Behavior:
  *  - Android (Chrome/Edge/Samsung): button calls deferredPrompt.prompt()
- *    if available. If beforeinstallprompt hasn't fired yet (user just
- *    landed), shows a tooltip telling them to interact more or use the
- *    browser menu's "Install app" option.
+ *    if available. If beforeinstallprompt hasn't fired yet, shows a
+ *    helpful sheet with:
+ *      • A retry/wait option (SW may still be registering)
+ *      • A direct APK download link as fallback (instant install)
+ *      • Manual Chrome menu instructions
  *  - iOS (Safari): button opens the instructions sheet explaining how
  *    to use Share → Add to Home Screen. iOS does NOT support
  *    programmatic install, so this is the only path.
@@ -58,7 +60,6 @@ function isIOS() {
 
 function isInstallableBrowser() {
   if (typeof window === "undefined") return false;
-  // Chrome, Edge, Samsung Browser, Brave, Opera — all support beforeinstallprompt
   const ua = window.navigator.userAgent;
   return (
     /Android/i.test(ua) ||
@@ -80,6 +81,8 @@ export function InstallAppButton({
   const [showIosSheet, setShowIosSheet] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [swReady, setSwReady] = useState(false);
+  const waitedRef = useRef(false);
 
   useEffect(() => {
     setMounted(true);
@@ -89,6 +92,8 @@ export function InstallAppButton({
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
+      // SW is now ready since beforeinstallprompt fired
+      setSwReady(true);
     };
     const installedHandler = () => {
       setDeferredPrompt(null);
@@ -96,6 +101,22 @@ export function InstallAppButton({
 
     window.addEventListener("beforeinstallprompt", handler);
     window.addEventListener("appinstalled", installedHandler);
+
+    // Check if SW is already registered
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistration("/").then((reg) => {
+        if (reg) {
+          setSwReady(true);
+          // If SW is registered but beforeinstallprompt hasn't fired in 5s,
+          // it likely won't fire (user needs 30s engagement or already dismissed)
+          setTimeout(() => {
+            if (!waitedRef.current) {
+              waitedRef.current = true;
+            }
+          }, 5000);
+        }
+      });
+    }
 
     return () => {
       window.removeEventListener("beforeinstallprompt", handler);
@@ -111,15 +132,19 @@ export function InstallAppButton({
     }
     // Android / Chromium — call prompt() if we have it
     if (deferredPrompt) {
-      await deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
-      if (choice.outcome === "accepted") {
-        setDeferredPrompt(null);
+      try {
+        await deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        if (choice.outcome === "accepted") {
+          setDeferredPrompt(null);
+        }
+      } catch (err) {
+        // prompt() can throw if called twice — fall back to manual instructions
+        setShowFallback(true);
       }
       return;
     }
-    // Android but beforeinstallprompt hasn't fired yet —
-    // tell user to use the browser menu
+    // Android but beforeinstallprompt hasn't fired yet — show helpful fallback
     setShowFallback(true);
   }, [deferredPrompt]);
 
@@ -224,7 +249,7 @@ export function InstallAppButton({
         </SheetContent>
       </Sheet>
 
-      {/* Fallback sheet — Android but beforeinstallprompt hasn't fired yet */}
+      {/* Android fallback sheet — much more helpful now */}
       <Sheet open={showFallback} onOpenChange={setShowFallback}>
         <SheetContent side="bottom" className="mx-auto max-w-md rounded-t-2xl">
           <SheetHeader>
@@ -235,54 +260,94 @@ export function InstallAppButton({
               Install Veda ERP
             </SheetTitle>
             <SheetDescription className="text-center text-sm">
-              The browser hasn&apos;t enabled the quick-install yet. You can
-              still install it from the browser menu:
+              Two easy ways to install on your phone:
             </SheetDescription>
           </SheetHeader>
 
-          <ol className="mt-6 space-y-4">
-            <li className="flex gap-3">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-sm font-semibold text-white">
-                1
+          {/* Option 1: Direct APK download — instant install */}
+          <div className="mt-5 rounded-xl border-2 border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-900/20">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">
+                A
               </span>
-              <div className="flex-1 pt-0.5">
-                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                  Tap the browser menu (⋮ or ⠮)
-                </p>
-                <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
-                  Top-right corner of Chrome / Edge / Samsung Browser.
-                </p>
-              </div>
-            </li>
-            <li className="flex gap-3">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-sm font-semibold text-white">
-                2
-              </span>
-              <div className="flex-1 pt-0.5">
-                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                  Tap &ldquo;Install app&rdquo; or &ldquo;Add to Home
-                  screen&rdquo;
-                </p>
-                <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
-                  The option appears after the page has fully loaded.
-                </p>
-              </div>
-            </li>
-          </ol>
-
-          <div className="mt-6 rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20">
-            <p className="text-xs text-amber-800 dark:text-amber-200">
-              <strong>Note:</strong> If the option doesn&apos;t appear, try
-              visiting the site again after a few seconds — the service worker
-              needs to register first.
+              <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+                Direct APK Install (Recommended)
+              </p>
+            </div>
+            <p className="mb-3 text-xs text-emerald-800 dark:text-emerald-200">
+              Download the standalone Android app — installs immediately, no
+              browser needed.
             </p>
+            <a
+              href="/Veda-ERP.apk"
+              download
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+            >
+              <Download className="h-4 w-4" />
+              Download APK
+            </a>
           </div>
+
+          {/* Option 2: Chrome menu install */}
+          <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-600 text-xs font-bold text-white">
+                B
+              </span>
+              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                Install via Chrome Menu
+              </p>
+            </div>
+            <ol className="space-y-3">
+              <li className="flex gap-2">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-300 text-xs font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-100">
+                  1
+                </span>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    Tap the{" "}
+                    <Menu className="inline h-4 w-4 align-text-bottom text-zinc-600" />{" "}
+                    menu (⋮)
+                  </p>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                    Top-right corner of Chrome.
+                  </p>
+                </div>
+              </li>
+              <li className="flex gap-2">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-300 text-xs font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-100">
+                  2
+                </span>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    Tap &ldquo;Install app&rdquo; or &ldquo;Add to Home
+                    screen&rdquo;
+                  </p>
+                </div>
+              </li>
+            </ol>
+          </div>
+
+          {/* Status note */}
+          {!swReady && (
+            <div className="mt-4 flex items-start gap-2 rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20">
+              <Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <p className="text-xs text-amber-800 dark:text-amber-200">
+                <strong>Just a moment:</strong> The service worker is still
+                registering. If the Chrome menu doesn&apos;t show
+                &ldquo;Install app&rdquo; yet, wait 30 seconds, refresh the
+                page, then try again — or use the APK download above for
+                instant install.
+              </p>
+            </div>
+          )}
 
           <Button
             onClick={() => setShowFallback(false)}
-            className="mt-4 w-full bg-emerald-600 hover:bg-emerald-700"
+            variant="outline"
+            className="mt-4 w-full"
           >
-            Got it
+            Close
           </Button>
         </SheetContent>
       </Sheet>

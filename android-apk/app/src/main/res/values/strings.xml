@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="appName">Veda ERP</string>
-    <string name="defaultUrl">http://21.0.2.217:81/</string>
+    <string name="defaultUrl">https://veda-enterprises-erp.vercel.app/</string>
 </resources>
