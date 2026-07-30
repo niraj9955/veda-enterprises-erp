@@ -1,0 +1,21 @@
+# Android Studio / Gradle
+.gradle/
+build/
+/local.properties
+/.idea/
+.DS_Store
+/captures/
+.externalNativeBuild/
+.cxx/
+
+# APK / AAB
+*.apk
+*.aab
+*.ap_
+
+# Keystore (uncomment if you want to keep it out of git)
+#*.keystore
+#*.jks
+
+# Logs
+*.log
