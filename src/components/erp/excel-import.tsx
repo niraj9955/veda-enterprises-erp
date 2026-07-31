@@ -105,14 +105,23 @@ const moduleTemplates: Record<string, {
   },
   dailySell: {
     label: 'Daily Sell',
+    // All 13 columns shown in the Daily Sell list view are available for
+    // import. Mandatory fields: Date, Customer Name, Address, Contact.
+    // Everything else (Product, Qty, Rate, Amount, Transporter, T. Fair,
+    // Received, Pending, Remarks) is optional.
     fields: [
       { key: 'date', label: 'Date', required: true, aliases: ['date', 'sell date', 'दिनांक'] },
       { key: 'customerName', label: 'Customer Name', required: true, aliases: ['customer name', 'customer_name', 'customer', 'party', 'name'] },
-      { key: 'address', label: 'Address', required: false, aliases: ['address', 'addr', 'location'] },
-      { key: 'contactNumber', label: 'Contact Number', required: false, aliases: ['contact', 'mobile', 'phone', 'contact number', 'contact_no'] },
+      { key: 'address', label: 'Address', required: true, aliases: ['address', 'addr', 'location'] },
+      { key: 'contactNumber', label: 'Contact', required: true, aliases: ['contact', 'mobile', 'phone', 'contact number', 'contact_no', 'contact no'] },
       { key: 'product', label: 'Product', required: false, aliases: ['product', 'item', 'material', 'goods'] },
-      { key: 'quantity', label: 'Quantity', required: false, aliases: ['quantity', 'qty', 'quantity sold', 'units', 'count'] },
-      { key: 'amount', label: 'Amount', required: true, aliases: ['amount', 'total', 'sell amount', 'राशि'] },
+      { key: 'quantity', label: 'Qty', required: false, aliases: ['quantity', 'qty', 'quantity sold', 'units', 'count'] },
+      { key: 'rate', label: 'Rate', required: false, aliases: ['rate', 'price', 'per unit', 'per piece'] },
+      { key: 'amount', label: 'Amount', required: false, aliases: ['amount', 'total', 'sell amount', 'राशि'] },
+      { key: 'transporterName', label: 'Transporter', required: false, aliases: ['transporter', 'transporter name', 'transporter_name', 'transport', 'carrier'] },
+      { key: 'transporterFair', label: 'T. Fair', required: false, aliases: ['t fair', 'transport fair', 'transporter fair', 'freight', 'transportation', 'transport charge', 'transportation charge'] },
+      { key: 'receivedAmount', label: 'Received', required: false, aliases: ['received', 'received amount', 'received_amount', 'paid', 'paid amount'] },
+      { key: 'pendingAmount', label: 'Pending', required: false, aliases: ['pending', 'pending amount', 'pending_amount', 'balance', 'due'] },
       { key: 'remarks', label: 'Remarks', required: false, aliases: ['remarks', 'remark', 'note'] },
     ],
   },
@@ -359,6 +368,8 @@ function transformRow(
       'cement', 'dumbleGrey80', 'dumbleRed80', 'dumbleYellow80',
       'quantityTon', 'totalAmount', 'paidAmount', 'remainingAmount',
       'gst',
+      // Daily Sell freight/payment tracking fields
+      'transporterFair', 'receivedAmount', 'pendingAmount',
     ].includes(fieldKey)) {
       const numVal = Number(String(value || '').replace(/[^0-9.-]/g, '') || 0)
       result[fieldKey] = isNaN(numVal) ? 0 : numVal

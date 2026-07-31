@@ -419,18 +419,32 @@ export async function POST(request: Request) {
 
           // ─── Daily Sell ────────────────────────────────────────────
           case 'dailySell': {
-            if (!row.date || !row.customerName || !row.amount) {
-              errors.push(`Row ${i + 1}: Date, customer name, and amount are required`)
+            // Mandatory: Date, Customer Name, Address, Contact.
+            // Everything else (Product, Qty, Rate, Amount, Transporter,
+            // T. Fair, Received, Pending, Remarks) is optional.
+            if (!row.date || !row.customerName || !row.address || !row.contactNumber) {
+              errors.push(`Row ${i + 1}: Date, customer name, address, and contact are required`)
               skipped++
               continue
             }
+            const dsAmount = Number(row.amount) || 0
+            const dsReceived = Number(row.receivedAmount) || 0
+            const dsPending = row.pendingAmount != null && row.pendingAmount !== ''
+              ? Number(row.pendingAmount)
+              : Math.max(0, dsAmount - dsReceived)
             toInsert.push({
               date: String(row.date),
               customerName: String(row.customerName),
-              address: String(row.address || ''),
-              contactNumber: String(row.contactNumber || row.mobile || ''),
+              address: String(row.address),
+              contactNumber: String(row.contactNumber),
               product: String(row.product || ''),
-              amount: Number(row.amount),
+              quantity: Number(row.quantity) || 0,
+              rate: Number(row.rate) || 0,
+              amount: dsAmount,
+              transporterName: String(row.transporterName || ''),
+              transporterFair: Number(row.transporterFair) || 0,
+              receivedAmount: dsReceived,
+              pendingAmount: dsPending,
               remarks: String(row.remarks || ''),
             })
             rowIndexByDoc.push(i)
@@ -873,7 +887,7 @@ export async function GET() {
     { id: 'customers', label: 'Customers', fields: ['name', 'mobile', 'address', 'gstNumber', 'creditLimit'] },
     { id: 'production', label: 'Production', fields: ['date', 'cement', 'zigZagGrey80', 'zigZagRed80', 'zigZagYellow80', 'zigZagGrey60', 'zigZagRed60', 'zigZagYellow60', 'curveStone', 'chequreTile', 'dumbleGrey80', 'dumbleRed80', 'dumbleYellow80', 'transportationCharge', 'remarks'] },
     { id: 'stock', label: 'Stock', fields: ['date', 'cement', 'zigZagGrey80', 'zigZagRed80', 'zigZagYellow80', 'zigZagGrey60', 'zigZagRed60', 'zigZagYellow60', 'chequreTile', 'curveStone', 'dumbleGrey80', 'dumbleRed80', 'dumbleYellow80'] },
-    { id: 'dailySell', label: 'Daily Sell', fields: ['date', 'customerName', 'address', 'contactNumber', 'product', 'amount', 'remarks'] },
+    { id: 'dailySell', label: 'Daily Sell', fields: ['date', 'customerName', 'address', 'contactNumber', 'product', 'quantity', 'rate', 'amount', 'transporterName', 'transporterFair', 'receivedAmount', 'pendingAmount', 'remarks'] },
     { id: 'customerPayment', label: 'Customer Payment', fields: ['date', 'name', 'address', 'amount', 'remarks'] },
     { id: 'labourPayment', label: 'Labour Payment', fields: ['date', 'name', 'address', 'amount', 'remarks'] },
     { id: 'tractorPayment', label: 'Tractor Payment', fields: ['date', 'vendorName', 'quantityTon', 'rate', 'totalAmount', 'paidAmount', 'remainingAmount', 'remarks'] },
