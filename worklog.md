@@ -1970,3 +1970,95 @@ Stage Summary:
 - User can change server URL from in-app Settings (no rebuild needed)
 - Default URL: http://21.0.2.217:81/ (network IP - works on same WiFi as server)
 - Keystore: /home/z/my-project/android-apk/veda-release.keystore (valid until 2053)
+
+---
+Task ID: date-fix-v2-centralized
+Agent: Main Agent
+Task: User reported "avi v date glt le rha" (still reading wrong dates) after the previous Excel-import-only fix. Both dd/mm/yyyy and dd-mm-yyyy formats must be accepted everywhere.
+
+Work Log:
+- Inspected the user's actual Production.xlsx file with openpyxl — discovered the file contains dates in THREE different representations:
+  • String format 'dd-mm-yyyy' (e.g. '21-06-2026')
+  • Excel datetime objects with number_format='dd/mm/yyyy' (e.g. datetime(2026,6,5))
+  • Excel serial numbers (e.g. 46178) returned by SheetJS with cellDates:false
+- Ran end-to-end test with SheetJS to confirm what the library actually returns:
+  • String cells → returned as-is (e.g. '21-06-2026')
+  • Datetime cells → returned as Excel serial numbers (e.g. 46178)
+- Audited the codebase and found the date parsing logic was DUPLICATED in THREE places:
+  1. excel-import.tsx → had CORRECT logic (Indian default, no new Date(string) fallback)
+  2. /api/import/route.ts → had CORRECT logic (mirrored excel-import.tsx)
+  3. ai-schemas.ts coerceFieldValue 'date' branch → had BUGGY logic:
+     - DD-MM-YYYY regex assumed first number is always the day (no >12 heuristic)
+     - Fallback used `new Date(string)` which interprets '05-06-2026' as MM-DD-YYYY (May 6)
+     - Fallback used `parsed.toISOString().slice(0,10)` which returns UTC date (off-by-one in IST)
+- Found additional gap: all 16 module API routes (production, stock, orders, dispatch, payments,
+  expenses, daily-sell, customer-payment, labour-payment, tractor-payment, dust-purchase,
+  cement-purchase, hardner, electricity, factory-stuff, bills) accepted body.date / body.deliveryDate
+  and stored it RAW — no normalization. If a user (or AI Fill) sent '21-06-2026' to POST /api/production,
+  it got stored as the string '21-06-2026' instead of '2026-06-21', breaking sorts and filters.
+
+FIX IMPLEMENTED:
+- Created src/lib/date-utils.ts — single source of truth for normalizeDate() and todayLocal().
+  Handles ALL these formats:
+  • dd-mm-yyyy, dd/mm/yyyy, dd.mm.yyyy, dd mm yyyy (Indian default — day first)
+  • yyyy-mm-dd, yyyy/mm/dd, yyyy.mm.dd
+  • dd-mm-yy (short year → 20XX)
+  • MM-DD-YYYY (US — only when first number >12 forces day-first interpretation to fail)
+  • Datetime strings (time portion stripped)
+  • Excel serial numbers (e.g. 46178 → 2026-06-05) using UTC getters
+  • Date objects using LOCAL getters (avoids IST off-by-one)
+  • Numeric strings like "46178"
+  • NEVER uses new Date(string) as fallback — returns today's date instead
+  Heuristic for ambiguous dates (both day and month ≤ 12): defaults to DD-MM (Indian).
+- excel-import.tsx: removed local parseDate + todayLocal functions, replaced with imports from
+  @/lib/date-utils. Simplified the date handling block in transformRow() to a single
+  normalizeDate(value) call.
+- /api/import/route.ts: removed local normalizeDate function (~85 lines), replaced with
+  import from @/lib/date-utils. The normalizeRowDates() helper still calls normalizeDate()
+  for defense-in-depth.
+- ai-schemas.ts: added `import { normalizeDate } from '@/lib/date-utils'`. Replaced the
+  buggy 'date' case in coerceFieldValue with a single `normalizeDate(raw)` call. This
+  fixes AI Fill dates that previously could be silently swapped (day/month).
+- Patched all 32 API route files (16 modules × 2 files each: route.ts + [id]/route.ts)
+  using a Python script (scripts/patch_date_normalize.py) + cleanup script
+  (scripts/clean_date_patch.py). Each POST/PUT handler now runs:
+    `if (body.date) body.date = normalizeDate(body.date)`
+  BEFORE the existing validation/save logic.
+- Created scripts/migrate-dates.ts — one-time MongoDB migration script that scans every
+  collection with a date field, finds docs whose date is NOT in canonical YYYY-MM-DD
+  format, and updates them in place. Supports DRY_RUN mode for safe preview.
+  Usage: `MONGODB_URI="..." bun run scripts/migrate-dates.ts`
+         `MONGODB_URI="..." DRY_RUN=1 bun run scripts/migrate-dates.ts` (preview only)
+
+VERIFICATION:
+- npx tsc --noEmit: zero errors
+- npx next build: ✓ Compiled successfully in 14.6s, all 75+ routes generated
+- Created scripts/test_normalize_date.cjs with 41 test cases — ALL PASS:
+  • dd-mm-yyyy, dd/mm/yyyy, dd.mm.yyyy, dd mm yyyy all → correct YYYY-MM-DD
+  • 13-07-2026 → 2026-07-13 (first >12 forces day-first)
+  • 05-06-2026 → 2026-06-05 (ambiguous → Indian default)
+  • 07-13-2026 → 2026-07-13 (US format — second >12 forces MM-DD)
+  • Excel serial 46178 → 2026-06-05 (UTC getters, no IST shift)
+  • Date object → uses LOCAL getters, no off-by-one
+  • User's actual Excel dates (16-07, 14-07, 13-07, 05-07) all parse to correct July dates
+- Created scripts/test_excel_e2e.cjs — runs SheetJS on the actual Production.xlsx file
+  and traces every row through normalizeDate(). All 48 rows parse correctly.
+
+Stage Summary:
+- Date parsing is now CENTRALIZED in src/lib/date-utils.ts — one function, one behavior,
+  used everywhere (Excel import, /api/import, /api/<module> POST/PUT, AI Fill).
+- Both dd-mm-yyyy AND dd/mm/yyyy are accepted everywhere (plus dd.mm.yyyy, dd mm yyyy).
+- Old wrong-format dates already in MongoDB can be cleaned up by running
+  scripts/migrate-dates.ts (with DRY_RUN=1 first to preview changes).
+- Files added:
+  • src/lib/date-utils.ts (centralized normalizeDate + todayLocal)
+  • scripts/migrate-dates.ts (one-time MongoDB date migration)
+  • scripts/patch_date_normalize.py (idempotent route patcher)
+  • scripts/clean_date_patch.py (indentation cleanup helper)
+  • scripts/test_normalize_date.cjs (41 unit tests)
+  • scripts/test_excel_e2e.cjs (end-to-end Excel test)
+- Files modified:
+  • src/components/erp/excel-import.tsx (uses centralized normalizer)
+  • src/app/api/import/route.ts (uses centralized normalizer)
+  • src/lib/ai-schemas.ts (fixed buggy new Date(string) fallback)
+  • 32 files in src/app/api/<module>/route.ts + [id]/route.ts (normalize before save)
