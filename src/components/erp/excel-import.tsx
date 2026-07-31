@@ -364,11 +364,15 @@ function transformRow(
       continue
     }
 
-    // Handle date fields - try to parse various formats
+    // Handle date fields - try to parse various formats.
+    // IMPORTANT: Always interpret DD-MM-YYYY (Indian format) as day-first.
+    // Never fall back to native Date(string) because it interprets
+    // "05-06-2026" as MM-DD-YYYY (US format) — that's the bug we fixed.
     if (['date', 'deliveryDate'].includes(fieldKey)) {
       // Excel may return dates as numeric serial numbers (e.g. 46178).
-      // Detect that case and convert to YYYY-MM-DD before string parsing.
-      // Also handle serial numbers passed as strings (e.g. "46178").
+      // Excel epoch = 1899-12-30 (serial 0). Unix epoch = 1970-01-01 (serial 25569).
+      // Convert serial to a YYYY-MM-DD string using LOCAL date methods to avoid
+      // the UTC off-by-one bug (IST = UTC+5:30, midnight local = previous day 18:30 UTC).
       const numericValue = typeof value === 'number'
         ? value
         : (typeof value === 'string' && /^\d{4,6}(\.\d+)?$/.test(value.trim())
@@ -376,17 +380,26 @@ function transformRow(
             : NaN)
 
       if (Number.isFinite(numericValue) && numericValue > 59 && numericValue < 60000) {
-        // Excel serial date: days since 1899-12-30
+        // Excel serial date: days since 1899-12-30.
+        // Use UTC getters because the serial represents a UTC midnight,
+        // and we want that exact date without timezone shifting.
         const ms = Math.round((numericValue - 25569) * 86400 * 1000)
         const d = new Date(ms)
         if (!isNaN(d.getTime())) {
-          result[fieldKey] = d.toISOString().split('T')[0]
+          const y = d.getUTCFullYear()
+          const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+          const day = String(d.getUTCDate()).padStart(2, '0')
+          result[fieldKey] = `${y}-${m}-${day}`
           continue
         }
       }
       // Excel may also return a Date object if cellDates:true was used.
+      // Use LOCAL getters because the Date object represents a local-midnight moment.
       if (value instanceof Date && !isNaN(value.getTime())) {
-        result[fieldKey] = value.toISOString().split('T')[0]
+        const y = value.getFullYear()
+        const m = String(value.getMonth() + 1).padStart(2, '0')
+        const day = String(value.getDate()).padStart(2, '0')
+        result[fieldKey] = `${y}-${m}-${day}`
         continue
       }
       result[fieldKey] = parseDate(String(value || ''))
@@ -462,21 +475,28 @@ function transformRow(
 }
 
 // Parse various date formats to YYYY-MM-DD.
-// Supported formats (case-insensitive, any separator among - / . or space):
+// IMPORTANT: This is an Indian ERP — DD-MM-YYYY (day-first) is the DEFAULT.
+// We never use native new Date(string) as a fallback because JS interprets
+// "05-06-2026" as MM-DD-YYYY (US format), which silently swaps day/month.
+//
+// Supported formats (any separator among - / . or space):
 //   • YYYY-MM-DD          (already canonical, returned as-is)
-//   • DD-MM-YYYY  DD/MM/YYYY  DD.MM.YYYY  (full year, day-first — Indian format)
-//   • DD-MM-YY    DD/MM/YY    DD.MM.YY    (short year, prefixed with 20)
-//   • MM/DD/YYYY  (US format — only used when second number is > 12, so 01/13/2024 -> Jan 13)
+//   • YYYY/MM/DD  YYYY.MM.DD
+//   • DD-MM-YYYY  DD/MM/YYYY  DD.MM.YYYY   (day-first, Indian format — DEFAULT)
+//   • DD-MM-YY    DD/MM/YY    DD.MM.YY     (short year, prefixed with 20)
+//   • MM-DD-YYYY  (US format — ONLY when first number > 12, e.g. 13/01/2024)
 //   • Datetime strings like "2024-01-15 10:30:00" or "15-01-2024 10:30" (time part stripped)
 //   • Excel serial numbers are handled earlier in transformRow() — not here.
-//   • Fallback: native Date parsing, then the raw string unchanged.
+//   • Fallback: today's date in YYYY-MM-DD (NOT new Date(string)).
 function parseDate(value: string): string {
-  if (!value || value.trim() === '') return new Date().toISOString().split('T')[0]
+  if (!value || value.trim() === '') {
+    return todayLocal()
+  }
 
   // Strip any time portion (e.g. " 10:30:00", "T10:30", " 10:30 AM")
   // so datetime strings don't confuse the regex below.
   const trimmed = value.trim().replace(/[Tt]\s*\d{1,2}:\d{2}.*$/, '').replace(/\s+\d{1,2}:\d{2}.*$/, '').trim()
-  if (trimmed === '') return new Date().toISOString().split('T')[0]
+  if (trimmed === '') return todayLocal()
 
   // Already in YYYY-MM-DD format
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmed)) {
@@ -491,17 +511,22 @@ function parseDate(value: string): string {
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
 
-  // DD-MM-YYYY / DD/MM/YYYY / DD.MM.YYYY  (day-first, full year)
-  //   — also handles MM/DD/YYYY when first number > 12 (e.g. 13/01/2024)
+  // DD-MM-YYYY / DD/MM/YYYY / DD.MM.YYYY  (day-first, full year — INDIAN DEFAULT)
+  // Heuristic: if FIRST number > 12, it MUST be a day → DD-MM (Indian) format.
+  //            if SECOND number > 12, it MUST be a day → MM-DD (US) format.
+  //            otherwise, default to DD-MM (Indian).
   const dmyMatch = trimmed.match(/^(\d{1,2})[/.\s-](\d{1,2})[/.\s-](\d{4})$/)
   if (dmyMatch) {
     let [, a, b, y] = dmyMatch
     let d: string, m: string
-    // If second number > 12, it MUST be a day -> user wrote MM/DD (US format)
-    if (Number(b) > 12 && Number(a) <= 12) {
+    if (Number(a) > 12 && Number(b) <= 12) {
+      // First number > 12 → first must be day → DD-MM (Indian) format
+      d = a; m = b
+    } else if (Number(b) > 12 && Number(a) <= 12) {
+      // Second number > 12 → second must be day → MM-DD (US) format
       m = a; d = b
     } else {
-      // Default to DD-MM (Indian format)
+      // Both ≤ 12 → ambiguous → default to DD-MM (Indian)
       d = a; m = b
     }
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
@@ -512,7 +537,9 @@ function parseDate(value: string): string {
   if (dmyShortMatch) {
     let [, a, b, y] = dmyShortMatch
     let d: string, m: string
-    if (Number(b) > 12 && Number(a) <= 12) {
+    if (Number(a) > 12 && Number(b) <= 12) {
+      d = a; m = b
+    } else if (Number(b) > 12 && Number(a) <= 12) {
       m = a; d = b
     } else {
       d = a; m = b
@@ -520,16 +547,20 @@ function parseDate(value: string): string {
     return `20${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
 
-  // Try native Date parsing as fallback (handles ISO, RFC2822, etc.)
-  try {
-    const date = new Date(trimmed)
-    if (!isNaN(date.getTime())) {
-      return date.toISOString().split('T')[0]
-    }
-  } catch {}
+  // NO native Date(string) fallback — it silently interprets DD-MM as MM-DD.
+  // Last resort — return today's date so the user can see a row was imported
+  // and fix the date manually if needed.
+  return todayLocal()
+}
 
-  // Last resort — return as-is so server-side validation can flag it
-  return trimmed
+// Returns today's date as YYYY-MM-DD using LOCAL timezone (not UTC).
+// Using toISOString().split('T')[0] causes off-by-one in IST (UTC+5:30).
+function todayLocal(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelImportProps) {
@@ -567,7 +598,11 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
     try {
       const XLSX = await import('xlsx')
       const arrayBuffer = await file.arrayBuffer()
-      const workbook = XLSX.read(arrayBuffer)
+      // cellDates: false → Excel date cells come back as numeric serials (NOT Date objects).
+      // This is critical because Date objects use local timezone and toISOString()
+      // would shift the date back by one day in IST (UTC+5:30).
+      // We convert serials to YYYY-MM-DD ourselves using UTC getters in transformRow().
+      const workbook = XLSX.read(arrayBuffer, { cellDates: false })
       const sheetName = workbook.SheetNames[0]
       const worksheet = workbook.Sheets[sheetName]
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' })

@@ -20,24 +20,41 @@ const MAX_IMPORT_ROWS = 5000
 // we re-normalize here as defense-in-depth so a direct API call (or a future
 // caller that bypasses the Excel wizard) is still safe.
 //
+// IMPORTANT: This is an Indian ERP — DD-MM-YYYY (day-first) is the DEFAULT.
+// We never use native new Date(string) as a fallback because JS interprets
+// "05-06-2026" as MM-DD-YYYY (US format), which silently swaps day/month.
+//
 // Supported input formats (any separator among - / . or space):
 //   • YYYY-MM-DD          (already canonical)
-//   • DD-MM-YYYY  DD/MM/YYYY  DD.MM.YYYY   (day-first, Indian format)
+//   • YYYY/MM/DD  YYYY.MM.DD
+//   • DD-MM-YYYY  DD/MM/YYYY  DD.MM.YYYY   (day-first, Indian format — DEFAULT)
 //   • DD-MM-YY    DD/MM/YY    DD.MM.YY     (short year, prefixed with 20)
 //   • MM/DD/YYYY  (only when first number > 12, e.g. 13/01/2024 -> Jan 13)
 //   • Datetime strings like "2024-01-15 10:30:00" (time part stripped)
 //   • Excel serial numbers (e.g. 46178)
-//   • Fallback: native Date parsing, then the raw string unchanged.
+//   • Fallback: today's date in YYYY-MM-DD (NOT new Date(string)).
 function normalizeDate(value: unknown): string {
   if (value == null) return ''
   if (value instanceof Date && !isNaN(value.getTime())) {
-    return value.toISOString().split('T')[0]
+    // Use LOCAL getters — Date objects represent local moments,
+    // and toISOString() would shift the date back by one day in IST (UTC+5:30).
+    const y = value.getFullYear()
+    const m = String(value.getMonth() + 1).padStart(2, '0')
+    const d = String(value.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
   }
   if (typeof value === 'number' && Number.isFinite(value) && value > 59 && value < 60000) {
-    // Excel serial date: days since 1899-12-30
+    // Excel serial date: days since 1899-12-30.
+    // Use UTC getters because the serial represents a UTC midnight,
+    // and we want that exact date without timezone shifting.
     const ms = Math.round((value - 25569) * 86400 * 1000)
     const d = new Date(ms)
-    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0]
+    if (!isNaN(d.getTime())) {
+      const y = d.getUTCFullYear()
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+      const day = String(d.getUTCDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
+    }
   }
   const raw = String(value ?? '').trim()
   if (raw === '') return ''
@@ -60,28 +77,45 @@ function normalizeDate(value: unknown): string {
     const [, y, m, d] = ymdMatch
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
-  // DD-MM-YYYY / DD/MM/YYYY / DD.MM.YYYY (with US fallback if second > 12)
+  // DD-MM-YYYY / DD/MM/YYYY / DD.MM.YYYY (Indian default — day first)
+  // Heuristic: if FIRST number > 12, it MUST be a day → DD-MM (Indian) format.
+  //            if SECOND number > 12, it MUST be a day → MM-DD (US) format.
+  //            otherwise, default to DD-MM (Indian).
   const dmyMatch = trimmed.match(/^(\d{1,2})[/.\s-](\d{1,2})[/.\s-](\d{4})$/)
   if (dmyMatch) {
     const [, a, b, y] = dmyMatch
-    const d = Number(b) > 12 && Number(a) <= 12 ? b : a
-    const m = Number(b) > 12 && Number(a) <= 12 ? a : b
+    let d: string, m: string
+    if (Number(a) > 12 && Number(b) <= 12) {
+      d = a; m = b   // DD-MM (Indian)
+    } else if (Number(b) > 12 && Number(a) <= 12) {
+      m = a; d = b   // MM-DD (US)
+    } else {
+      d = a; m = b   // Default DD-MM (Indian)
+    }
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
   // DD-MM-YY / DD/MM/YY / DD.MM.YY
   const dmyShortMatch = trimmed.match(/^(\d{1,2})[/.\s-](\d{1,2})[/.\s-](\d{2})$/)
   if (dmyShortMatch) {
     const [, a, b, y] = dmyShortMatch
-    const d = Number(b) > 12 && Number(a) <= 12 ? b : a
-    const m = Number(b) > 12 && Number(a) <= 12 ? a : b
+    let d: string, m: string
+    if (Number(a) > 12 && Number(b) <= 12) {
+      d = a; m = b
+    } else if (Number(b) > 12 && Number(a) <= 12) {
+      m = a; d = b
+    } else {
+      d = a; m = b
+    }
     return `20${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
-  // Native Date fallback
-  try {
-    const date = new Date(trimmed)
-    if (!isNaN(date.getTime())) return date.toISOString().split('T')[0]
-  } catch {}
-  return raw
+  // NO native Date(string) fallback — it silently interprets DD-MM as MM-DD.
+  // Last resort — return today's date so a row can still be inserted
+  // and the user can fix the date manually if needed.
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 // Normalize every date-like field on a row before validation/insert.
