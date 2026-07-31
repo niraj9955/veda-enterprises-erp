@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { connectDB, toObject, extractCustomer } from '@/lib/db'
 import { Order } from '@/lib/models'
 import { requireSession, requireRole } from '@/lib/auth'
+import { normalizeDate } from '@/lib/date-utils'
 
 // Force dynamic — never cache list responses
 export const dynamic = 'force-dynamic'
@@ -37,6 +38,9 @@ export async function POST(request: Request) {
 
     await connectDB()
     const body = await request.json()
+    // Normalize date to canonical YYYY-MM-DD
+    // (handles dd-mm-yyyy, dd/mm/yyyy, Excel serials, Date objects, etc.)
+    if (body.deliveryDate) body.deliveryDate = normalizeDate(body.deliveryDate)
 
     if (!body.customerId || !body.deliveryDate) {
       return NextResponse.json({ error: 'Customer and delivery date are required' }, { status: 400 })

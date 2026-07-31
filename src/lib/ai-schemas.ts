@@ -17,6 +17,8 @@
 // IMPORTANT: keep this list in sync with the Mongoose schemas in
 // src/lib/models.ts and the form state shapes in each *-module.tsx file.
 
+import { normalizeDate } from '@/lib/date-utils'
+
 export type AiFieldType = 'string' | 'number' | 'date' | 'phone'
 
 export interface AiField {
@@ -251,24 +253,27 @@ export function coerceFieldValue(field: AiField, raw: unknown): unknown {
       return isNaN(n) ? undefined : n
     }
     case 'date': {
-      const s = String(raw).trim()
-      if (!s) return undefined
-      // AI returns ISO date (YYYY-MM-DD). Accept that directly.
-      // Also handle DD-MM-YYYY / DD/MM/YYYY.
-      const isoMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
-      if (isoMatch) return s
-      const dmyMatch = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/)
-      if (dmyMatch) {
-        const [, dd, mm, yy] = dmyMatch
-        const year = yy.length === 2 ? `20${yy}` : yy
-        return `${year}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`
-      }
-      // Try Date.parse as last resort
-      const parsed = new Date(s)
-      if (!isNaN(parsed.getTime())) {
-        return parsed.toISOString().slice(0, 10)
-      }
-      return undefined
+      // Defer to the centralized normalizer so AI-extracted dates use the
+      // SAME parsing logic as Excel import and the /api/<module> routes.
+      //
+      // BUG FIXED: the previous implementation had two issues:
+      //   1. The DD-MM-YYYY regex assumed first number is always the day,
+      //      without applying the >12 heuristic — so "05-06-2026" was
+      //      treated as 5 June (correct by luck) but "13-06-2026" was
+      //      rejected and fell through to new Date(string) which interprets
+      //      DD-MM as MM-DD (US format), silently swapping day/month.
+      //   2. The fallback used parsed.toISOString().slice(0, 10) which
+      //      returns UTC date — off-by-one in IST (UTC+5:30).
+      //
+      // The centralized normalizeDate() handles all of these correctly:
+      //   • DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY (Indian default — day first)
+      //   • YYYY-MM-DD, YYYY/MM/DD
+      //   • Short years (DD-MM-YY → 20XX)
+      //   • Datetime strings (time portion stripped)
+      //   • Excel serials + Date objects
+      //   • NEVER uses new Date(string) as fallback
+      const normalized = normalizeDate(raw)
+      return normalized || undefined
     }
     case 'phone': {
       const digits = String(raw).replace(/[^\d+]/g, '')

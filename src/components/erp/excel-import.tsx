@@ -21,6 +21,7 @@ import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download, Loader2, 
 import { api } from '@/lib/api'
 import { toast } from '@/hooks/use-toast'
 import { ScrollableTable } from '@/components/ui/scrollable-table'
+import { normalizeDate, todayLocal } from '@/lib/date-utils'
 
 interface ExcelImportProps {
   module:
@@ -364,45 +365,17 @@ function transformRow(
       continue
     }
 
-    // Handle date fields - try to parse various formats.
-    // IMPORTANT: Always interpret DD-MM-YYYY (Indian format) as day-first.
-    // Never fall back to native Date(string) because it interprets
-    // "05-06-2026" as MM-DD-YYYY (US format) — that's the bug we fixed.
+    // Handle date fields — defer to the centralized normalizer in
+    // src/lib/date-utils.ts. It accepts:
+    //   • Excel serials (46178 → 2026-06-05) using UTC getters
+    //   • Date objects using LOCAL getters (avoids IST off-by-one)
+    //   • Strings in DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY, YYYY-MM-DD, etc.
+    //   • Both 2-digit and 4-digit years
+    //   • Datetime strings (time portion stripped)
+    // NEVER uses new Date(string) — it interprets DD-MM as MM-DD (US format).
     if (['date', 'deliveryDate'].includes(fieldKey)) {
-      // Excel may return dates as numeric serial numbers (e.g. 46178).
-      // Excel epoch = 1899-12-30 (serial 0). Unix epoch = 1970-01-01 (serial 25569).
-      // Convert serial to a YYYY-MM-DD string using LOCAL date methods to avoid
-      // the UTC off-by-one bug (IST = UTC+5:30, midnight local = previous day 18:30 UTC).
-      const numericValue = typeof value === 'number'
-        ? value
-        : (typeof value === 'string' && /^\d{4,6}(\.\d+)?$/.test(value.trim())
-            ? Number(value)
-            : NaN)
-
-      if (Number.isFinite(numericValue) && numericValue > 59 && numericValue < 60000) {
-        // Excel serial date: days since 1899-12-30.
-        // Use UTC getters because the serial represents a UTC midnight,
-        // and we want that exact date without timezone shifting.
-        const ms = Math.round((numericValue - 25569) * 86400 * 1000)
-        const d = new Date(ms)
-        if (!isNaN(d.getTime())) {
-          const y = d.getUTCFullYear()
-          const m = String(d.getUTCMonth() + 1).padStart(2, '0')
-          const day = String(d.getUTCDate()).padStart(2, '0')
-          result[fieldKey] = `${y}-${m}-${day}`
-          continue
-        }
-      }
-      // Excel may also return a Date object if cellDates:true was used.
-      // Use LOCAL getters because the Date object represents a local-midnight moment.
-      if (value instanceof Date && !isNaN(value.getTime())) {
-        const y = value.getFullYear()
-        const m = String(value.getMonth() + 1).padStart(2, '0')
-        const day = String(value.getDate()).padStart(2, '0')
-        result[fieldKey] = `${y}-${m}-${day}`
-        continue
-      }
-      result[fieldKey] = parseDate(String(value || ''))
+      const normalized = normalizeDate(value)
+      result[fieldKey] = normalized || todayLocal()
       continue
     }
 
@@ -474,94 +447,10 @@ function transformRow(
   return result
 }
 
-// Parse various date formats to YYYY-MM-DD.
-// IMPORTANT: This is an Indian ERP — DD-MM-YYYY (day-first) is the DEFAULT.
-// We never use native new Date(string) as a fallback because JS interprets
-// "05-06-2026" as MM-DD-YYYY (US format), which silently swaps day/month.
-//
-// Supported formats (any separator among - / . or space):
-//   • YYYY-MM-DD          (already canonical, returned as-is)
-//   • YYYY/MM/DD  YYYY.MM.DD
-//   • DD-MM-YYYY  DD/MM/YYYY  DD.MM.YYYY   (day-first, Indian format — DEFAULT)
-//   • DD-MM-YY    DD/MM/YY    DD.MM.YY     (short year, prefixed with 20)
-//   • MM-DD-YYYY  (US format — ONLY when first number > 12, e.g. 13/01/2024)
-//   • Datetime strings like "2024-01-15 10:30:00" or "15-01-2024 10:30" (time part stripped)
-//   • Excel serial numbers are handled earlier in transformRow() — not here.
-//   • Fallback: today's date in YYYY-MM-DD (NOT new Date(string)).
-function parseDate(value: string): string {
-  if (!value || value.trim() === '') {
-    return todayLocal()
-  }
-
-  // Strip any time portion (e.g. " 10:30:00", "T10:30", " 10:30 AM")
-  // so datetime strings don't confuse the regex below.
-  const trimmed = value.trim().replace(/[Tt]\s*\d{1,2}:\d{2}.*$/, '').replace(/\s+\d{1,2}:\d{2}.*$/, '').trim()
-  if (trimmed === '') return todayLocal()
-
-  // Already in YYYY-MM-DD format
-  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmed)) {
-    const [y, m, d] = trimmed.split('-')
-    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
-  }
-
-  // YYYY/MM/DD or YYYY.MM.DD
-  const ymdMatch = trimmed.match(/^(\d{4})[/.\s](\d{1,2})[/.\s](\d{1,2})$/)
-  if (ymdMatch) {
-    const [, y, m, d] = ymdMatch
-    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
-  }
-
-  // DD-MM-YYYY / DD/MM/YYYY / DD.MM.YYYY  (day-first, full year — INDIAN DEFAULT)
-  // Heuristic: if FIRST number > 12, it MUST be a day → DD-MM (Indian) format.
-  //            if SECOND number > 12, it MUST be a day → MM-DD (US) format.
-  //            otherwise, default to DD-MM (Indian).
-  const dmyMatch = trimmed.match(/^(\d{1,2})[/.\s-](\d{1,2})[/.\s-](\d{4})$/)
-  if (dmyMatch) {
-    let [, a, b, y] = dmyMatch
-    let d: string, m: string
-    if (Number(a) > 12 && Number(b) <= 12) {
-      // First number > 12 → first must be day → DD-MM (Indian) format
-      d = a; m = b
-    } else if (Number(b) > 12 && Number(a) <= 12) {
-      // Second number > 12 → second must be day → MM-DD (US) format
-      m = a; d = b
-    } else {
-      // Both ≤ 12 → ambiguous → default to DD-MM (Indian)
-      d = a; m = b
-    }
-    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
-  }
-
-  // DD-MM-YY / DD/MM/YY / DD.MM.YY (short year)
-  const dmyShortMatch = trimmed.match(/^(\d{1,2})[/.\s-](\d{1,2})[/.\s-](\d{2})$/)
-  if (dmyShortMatch) {
-    let [, a, b, y] = dmyShortMatch
-    let d: string, m: string
-    if (Number(a) > 12 && Number(b) <= 12) {
-      d = a; m = b
-    } else if (Number(b) > 12 && Number(a) <= 12) {
-      m = a; d = b
-    } else {
-      d = a; m = b
-    }
-    return `20${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
-  }
-
-  // NO native Date(string) fallback — it silently interprets DD-MM as MM-DD.
-  // Last resort — return today's date so the user can see a row was imported
-  // and fix the date manually if needed.
-  return todayLocal()
-}
-
-// Returns today's date as YYYY-MM-DD using LOCAL timezone (not UTC).
-// Using toISOString().split('T')[0] causes off-by-one in IST (UTC+5:30).
-function todayLocal(): string {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
+// NOTE: date parsing logic (parseDate + todayLocal) was moved to
+// src/lib/date-utils.ts so it can be shared with the /api/import route
+// and the /api/<module> routes for consistent date handling across the
+// entire codebase. See normalizeDate() and todayLocal() there.
 
 export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelImportProps) {
   const [rawData, setRawData] = useState<Record<string, unknown>[]>([])

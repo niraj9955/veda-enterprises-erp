@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { connectDB, toObject, extractCustomer } from '@/lib/db'
 import { Order, Bill, Payment } from '@/lib/models'
 import { requireSession, requireRole } from '@/lib/auth'
+import { normalizeDate } from '@/lib/date-utils'
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -33,6 +34,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     await connectDB()
     const { id } = await params
     const body = await request.json()
+    // Normalize date to canonical YYYY-MM-DD
+    // (handles dd-mm-yyyy, dd/mm/yyyy, Excel serials, Date objects, etc.)
+    if (body.deliveryDate) body.deliveryDate = normalizeDate(body.deliveryDate)
 
     const updateData: Record<string, unknown> = {}
     const fields = ['customerId', 'brickType', 'quantity', 'rate', 'amount', 'deliveryDate', 'status']

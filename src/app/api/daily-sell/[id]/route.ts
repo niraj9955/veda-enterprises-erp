@@ -3,6 +3,7 @@ import { connectDB, toObject } from '@/lib/db'
 import { DailySell } from '@/lib/models'
 import { syncAllFromDailySell, cleanupDailySellLinks } from '@/lib/daily-sell-sync'
 import { requireSession, requireRole } from '@/lib/auth'
+import { normalizeDate } from '@/lib/date-utils'
 
 // Force dynamic — never cache individual daily-sell responses
 export const dynamic = 'force-dynamic'
@@ -68,6 +69,9 @@ export async function PUT(
     await connectDB()
     const { id } = await params
     const body = await request.json()
+    // Normalize date to canonical YYYY-MM-DD
+    // (handles dd-mm-yyyy, dd/mm/yyyy, Excel serials, Date objects, etc.)
+    if (body.date) body.date = normalizeDate(body.date)
 
     const updateData: Record<string, unknown> = {}
     for (const field of DAILY_SELL_FIELDS) {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { connectDB, toObject } from '@/lib/db'
 import { Bill, Payment } from '@/lib/models'
 import { requireSession, requireAdmin } from '@/lib/auth'
+import { normalizeDate } from '@/lib/date-utils'
 
 // GET single bill
 export async function GET(
@@ -38,6 +39,10 @@ export async function PUT(
 
     const { id } = await params
     const body = await request.json()
+    // Normalize date to canonical YYYY-MM-DD
+    // (handles dd-mm-yyyy, dd/mm/yyyy, Excel serials, Date objects, etc.)
+    if (body.date) body.date = normalizeDate(body.date)
+    if (body.dueDate) body.dueDate = normalizeDate(body.dueDate)
 
     const existing = await Bill.findById(id)
     if (!existing) {

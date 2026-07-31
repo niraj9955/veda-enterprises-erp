@@ -7,6 +7,7 @@ import {
   syncDeleteCustomerPayment,
 } from '@/lib/payment-customer-sync'
 import { requireSession, requireRole } from '@/lib/auth'
+import { normalizeDate } from '@/lib/date-utils'
 
 // Force dynamic — never cache list responses
 export const dynamic = 'force-dynamic'
@@ -61,6 +62,9 @@ export async function POST(request: Request) {
 
     await connectDB()
     const body = await request.json()
+    // Normalize date to canonical YYYY-MM-DD
+    // (handles dd-mm-yyyy, dd/mm/yyyy, Excel serials, Date objects, etc.)
+    if (body.date) body.date = normalizeDate(body.date)
 
     if (!body.customerId || !body.paymentType || !body.amount || !body.date) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
