@@ -487,14 +487,33 @@ export default function ExcelImport({ module, open, onClose, onSuccess }: ExcelI
     try {
       const XLSX = await import('xlsx')
       const arrayBuffer = await file.arrayBuffer()
-      // cellDates: false → Excel date cells come back as numeric serials (NOT Date objects).
-      // This is critical because Date objects use local timezone and toISOString()
-      // would shift the date back by one day in IST (UTC+5:30).
-      // We convert serials to YYYY-MM-DD ourselves using UTC getters in transformRow().
+      // ⚠️ CRITICAL — Read options for correct Indian date parsing ⚠️
+      //
+      // PROBLEM: When a user types "12-07-2026" in an Excel cell (meaning
+      // July 12 in Indian DD-MM-YYYY format), Excel itself may auto-detect
+      // it as a date and store the WRONG serial number internally — Excel
+      // uses US MM-DD-YYYY interpretation for ambiguous dates (where both
+      // day and month ≤ 12), so it stores serial for December 7, 2026
+      // instead of July 12, 2026. The cell's DISPLAY format still shows
+      // "12-07-2026" (because the cell is formatted DD-MM-YYYY), so the
+      // user sees the correct date but the underlying value is corrupted.
+      //
+      // FIX: Use `raw: false` so sheet_to_json returns the FORMATTED
+      // DISPLAY STRING (cell.w) instead of the raw serial (cell.v).
+      // The display string matches what the user sees in Excel, and our
+      // normalizeDate() function then correctly parses it as DD-MM-YYYY
+      // (Indian day-first format) → July 12, 2026.
+      //
+      // `cellDates: false` ensures we never get Date objects (which would
+      // trigger IST off-by-one when serialized via toISOString).
+      //
+      // Numeric cells also come back as strings with `raw: false`, but our
+      // numeric field handler strips non-numeric chars via regex, so
+      // "13" / "13.00" / "₹13.50" all parse correctly to numbers.
       const workbook = XLSX.read(arrayBuffer, { cellDates: false })
       const sheetName = workbook.SheetNames[0]
       const worksheet = workbook.Sheets[sheetName]
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false })
 
       // Empty sheet — keep file name so the Import button stays enabled,
       // but clear all parsed state. The user will see a "No data found"
