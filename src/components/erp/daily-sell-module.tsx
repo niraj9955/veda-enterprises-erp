@@ -239,13 +239,12 @@ export function DailySellModule() {
   const [savingNew, setSavingNew] = React.useState(false)
   const [formOpen, setFormOpen] = React.useState(false)
 
-  // ── Multi-product mode ─────────────────────────────────────────────
-  // When true, the Add Sale dialog shows a line-items table where the user
-  // can add multiple products (e.g. a customer buying 3 types of bricks).
-  // On Save, we loop through line items and create one DailySell record
-  // per line — sharing the same date/customer/contact/transporter/received.
-  // When false, the dialog behaves as before (single product in fields).
-  const [multiProductMode, setMultiProductMode] = React.useState(false)
+  // ── Multi-product line items ──────────────────────────────────────
+  // The Add Sale dialog ALWAYS shows a line-items table — starts with one
+  // row. The user can click "Add More Product" to add more rows for
+  // customers buying multiple brick types in one sale. Each row becomes a
+  // separate DailySell record on Save (sharing date/customer/contact/
+  // transporter/received across all rows).
   const [lineItems, setLineItems] = React.useState<ProductLineItem[]>([
     { id: `li-${Date.now()}`, product: '', quantity: '', rate: '' },
   ])
@@ -269,7 +268,6 @@ export function DailySellModule() {
 
   const openAddDialog = () => {
     setNewRow(emptyForm)
-    setMultiProductMode(false)
     setLineItems([{ id: `li-${Date.now()}`, product: '', quantity: '', rate: '' }])
     setFormOpen(true)
   }
@@ -440,18 +438,14 @@ export function DailySellModule() {
 
   // ── Auto-calc for new row ────────────────────────────────────────────
   const newComputedAmount = React.useMemo(() => {
-    // Multi-product mode: sum of (qty × rate) for every non-empty line item
-    if (multiProductMode) {
-      return lineItems.reduce((sum, li) => {
-        const qty = Number(li.quantity) || 0
-        const rate = Number(li.rate) || 0
-        return sum + qty * rate
-      }, 0)
-    }
-    const qty = Number(newRow.quantity) || 0
-    const rate = Number(newRow.rate) || 0
-    return qty * rate
-  }, [multiProductMode, lineItems, newRow.quantity, newRow.rate])
+    // Sum of (qty × rate) for every non-empty line item.
+    // The dialog always shows the line-items table now (no toggle).
+    return lineItems.reduce((sum, li) => {
+      const qty = Number(li.quantity) || 0
+      const rate = Number(li.rate) || 0
+      return sum + qty * rate
+    }, 0)
+  }, [lineItems])
 
   const newComputedPending = React.useMemo(() => {
     return Math.max(0, newComputedAmount - (Number(newRow.receivedAmount) || 0))
@@ -513,11 +507,9 @@ export function DailySellModule() {
       return
     }
 
-    // ── Multi-product mode ─────────────────────────────────────────────
-    // Build a list of {product, quantity, rate, amount} entries to save.
-    // In single-product mode this is exactly one entry (from newRow fields).
-    // In multi-product mode this is one entry per non-empty line item.
-    // Each entry becomes a separate DailySell record on the server.
+    // ── Build entries from line items ─────────────────────────────────
+    // Each line item becomes a separate DailySell record on the server.
+    // All entries share date/customer/address/contact/transporter/received.
     type EntryToSave = {
       product: string
       quantity: number
@@ -526,51 +518,42 @@ export function DailySellModule() {
     }
     const entries: EntryToSave[] = []
 
-    if (multiProductMode) {
-      // Filter out completely empty lines (no product, no qty, no rate)
-      const filled = lineItems.filter(
-        (li) => li.product || li.quantity || li.rate
-      )
-      if (filled.length === 0) {
+    // Filter out completely empty lines (no product, no qty, no rate)
+    const filled = lineItems.filter(
+      (li) => li.product || li.quantity || li.rate
+    )
+    if (filled.length === 0) {
+      toast({
+        title: 'Validation Error',
+        description: 'Add at least one product with quantity and rate.',
+        variant: 'destructive',
+      })
+      return
+    }
+    for (const li of filled) {
+      if (!li.product) {
         toast({
           title: 'Validation Error',
-          description: 'Add at least one product with quantity and rate.',
+          description: 'Every line item must have a product selected.',
           variant: 'destructive',
         })
         return
       }
-      for (const li of filled) {
-        if (!li.product) {
-          toast({
-            title: 'Validation Error',
-            description: 'Every line item must have a product selected.',
-            variant: 'destructive',
-          })
-          return
-        }
-        const qty = Number(li.quantity) || 0
-        const rate = Number(li.rate) || 0
-        if (qty <= 0) {
-          toast({
-            title: 'Validation Error',
-            description: `Quantity for "${li.product}" must be greater than 0.`,
-            variant: 'destructive',
-          })
-          return
-        }
-        entries.push({
-          product: li.product,
-          quantity: qty,
-          rate,
-          amount: qty * rate,
+      const qty = Number(li.quantity) || 0
+      const rate = Number(li.rate) || 0
+      if (qty <= 0) {
+        toast({
+          title: 'Validation Error',
+          description: `Quantity for "${li.product}" must be greater than 0.`,
+          variant: 'destructive',
         })
+        return
       }
-    } else {
       entries.push({
-        product: newRow.product.trim(),
-        quantity: Number(newRow.quantity) || 0,
-        rate: Number(newRow.rate) || 0,
-        amount: newComputedAmount,
+        product: li.product,
+        quantity: qty,
+        rate,
+        amount: qty * rate,
       })
     }
 
@@ -666,7 +649,6 @@ export function DailySellModule() {
                 : 'Daily sell entry created successfully',
         })
         setNewRow(emptyForm)
-        setMultiProductMode(false)
         setLineItems([{ id: `li-${Date.now()}`, product: '', quantity: '', rate: '' }])
         setFormOpen(false)
         fetchData()
@@ -1714,234 +1696,120 @@ export function DailySellModule() {
               </div>
             </div>
 
-            {/* ── Multi-product toggle ─────────────────────────────────── */}
-            {/* When ON: show line-items table (one row per product) so user
-                can record a customer buying multiple brick types in a single
-                dialog. When OFF: traditional single Product + Qty + Rate. */}
-            <div className="flex items-center justify-between rounded-lg border bg-slate-50 dark:bg-slate-900/40 px-3 py-2">
-              <div className="flex items-center gap-2">
-                <ShoppingCart className="size-4 text-emerald-600 dark:text-emerald-400" />
-                <div className="text-xs">
-                  <div className="font-semibold">Multiple Products</div>
-                  <div className="text-muted-foreground">
-                    Customer buying more than one item? Add multiple line items.
-                  </div>
-                </div>
+            {/* ── Products line-items table ─────────────────────────────── */}
+            {/* Always shown. Starts with one row. User clicks "Add More
+                Product" below to add another row for multi-product sales.
+                Each row becomes a separate DailySell record on Save. */}
+            <div className="grid gap-2">
+              <div className="flex items-center justify-between">
+                <Label>Products <span className="text-destructive">*</span></Label>
+                <span className="text-xs text-muted-foreground">
+                  Total: <span className="font-semibold text-emerald-700 dark:text-emerald-300">{formatCurrency(newComputedAmount)}</span>
+                </span>
               </div>
-              <Button
-                type="button"
-                variant={multiProductMode ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setMultiProductMode((v) => !v)}
-                className={multiProductMode ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}
-              >
-                {multiProductMode ? 'ON' : 'OFF'}
-              </Button>
-            </div>
-
-            {multiProductMode ? (
-              /* ── Multi-product line items table ──────────────────────────
-                 Each row = one product entry. On Save, each becomes a
-                 separate DailySell record (shared date/customer/contact). */
-              <div className="grid gap-2">
-                <div className="flex items-center justify-between">
-                  <Label>Products <span className="text-destructive">*</span></Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addLineItem}
-                    className="h-7 text-xs"
-                  >
-                    <Plus className="size-3 mr-1" />
-                    Add Product
-                  </Button>
-                </div>
-                <div className="rounded-md border divide-y">
-                  {lineItems.map((li, idx) => {
-                    const qty = Number(li.quantity) || 0
-                    const rate = Number(li.rate) || 0
-                    const lineAmount = qty * rate
-                    const avail = li.product ? getProductAvail(li.product) : null
-                    const lowStock = avail != null && qty > avail
-                    return (
-                      <div key={li.id} className="grid grid-cols-12 gap-2 items-end p-2">
-                        <div className="col-span-5 grid gap-1">
-                          <span className="text-[10px] font-medium text-muted-foreground">
-                            Product #{idx + 1}
-                          </span>
-                          <Select
-                            value={li.product}
-                            onValueChange={(v) => updateLineItem(li.id, 'product', v)}
-                          >
-                            <SelectTrigger className="h-9 w-full">
-                              <SelectValue placeholder="Select product" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectGroup>
-                                <SelectLabel>Product Items {stockLoading ? '(loading…)' : ''}</SelectLabel>
-                                {productsWithAvail.map((p) => (
-                                  <SelectItem key={p.key} value={p.key}>
-                                    <span className="flex items-center gap-2">
-                                      <span>{p.label}</span>
-                                      {p.avail != null && (
-                                        <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${p.avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
-                                          Avail: {p.avail.toLocaleString('en-IN')}
-                                        </span>
-                                      )}
-                                    </span>
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="col-span-2 grid gap-1">
-                          <span className="text-[10px] font-medium text-muted-foreground">Qty</span>
-                          <Input
-                            type="number"
-                            min="0"
-                            placeholder="0"
-                            value={li.quantity}
-                            onChange={(e) => updateLineItem(li.id, 'quantity', e.target.value)}
-                            className={`h-9 ${lowStock ? 'border-rose-500 ring-1 ring-rose-400 bg-rose-50 dark:bg-rose-950/30' : ''}`}
-                          />
-                        </div>
-                        <div className="col-span-2 grid gap-1">
-                          <span className="text-[10px] font-medium text-muted-foreground">Rate</span>
-                          <Input
-                            type="number"
-                            min="0"
-                            placeholder="0"
-                            value={li.rate}
-                            onChange={(e) => updateLineItem(li.id, 'rate', e.target.value)}
-                            className="h-9"
-                          />
-                        </div>
-                        <div className="col-span-2 grid gap-1">
-                          <span className="text-[10px] font-medium text-muted-foreground">Amount</span>
-                          <div className="h-9 flex items-center justify-end rounded-md border bg-emerald-50 dark:bg-emerald-900/20 px-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                            {formatCurrency(lineAmount)}
-                          </div>
-                        </div>
-                        <div className="col-span-1 flex justify-end">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-9 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
-                            disabled={lineItems.length === 1}
-                            onClick={() => removeLineItem(li.id)}
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
-                        </div>
-                        {lowStock && (
-                          <div className="col-span-12 -mt-1">
-                            <p className="text-xs text-rose-600 flex items-center gap-1">
-                              <AlertTriangle className="size-3" />
-                              Only {avail!.toLocaleString('en-IN')} units of &quot;{li.product}&quot; available in stock
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-                <div className="flex justify-end pt-1">
-                  <div className="text-xs text-muted-foreground">
-                    Total across {lineItems.filter((l) => l.product).length} product(s):&nbsp;
-                    <span className="font-semibold text-emerald-700 dark:text-emerald-300">
-                      {formatCurrency(newComputedAmount)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* Contact + Product (2 col) */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="ds-product">Product</Label>
-                    <Select value={newRow.product} onValueChange={(v) => handleNewRowChange('product', v)}>
-                      <SelectTrigger id="ds-product" className="w-full">
-                        <SelectValue placeholder="Select product item" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectLabel>Product Items {stockLoading ? '(loading stock…)' : ''}</SelectLabel>
-                          {productsWithAvail.map((p) => (
-                            <SelectItem key={p.key} value={p.key}>
-                              <span className="flex items-center gap-2">
-                                <span>{p.label}</span>
-                                {p.avail != null && (
-                                  <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${p.avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
-                                    Avail: {p.avail.toLocaleString('en-IN')}
+              <div className="rounded-md border divide-y">
+                {lineItems.map((li, idx) => {
+                  const qty = Number(li.quantity) || 0
+                  const rate = Number(li.rate) || 0
+                  const lineAmount = qty * rate
+                  const avail = li.product ? getProductAvail(li.product) : null
+                  const lowStock = avail != null && qty > avail
+                  return (
+                    <div key={li.id} className="grid grid-cols-12 gap-2 items-end p-2">
+                      <div className="col-span-5 grid gap-1">
+                        <span className="text-[10px] font-medium text-muted-foreground">
+                          Product #{idx + 1}
+                        </span>
+                        <Select
+                          value={li.product}
+                          onValueChange={(v) => updateLineItem(li.id, 'product', v)}
+                        >
+                          <SelectTrigger className="h-9 w-full">
+                            <SelectValue placeholder="Select product" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              <SelectLabel>Product Items {stockLoading ? '(loading…)' : ''}</SelectLabel>
+                              {productsWithAvail.map((p) => (
+                                <SelectItem key={p.key} value={p.key}>
+                                  <span className="flex items-center gap-2">
+                                    <span>{p.label}</span>
+                                    {p.avail != null && (
+                                      <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${p.avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
+                                        Avail: {p.avail.toLocaleString('en-IN')}
+                                      </span>
+                                    )}
                                   </span>
-                                )}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="ds-quantity">Quantity</Label>
-                    <div className="relative">
-                      <Input
-                        id="ds-quantity"
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={newRow.quantity}
-                        onChange={(e) => handleNewRowChange('quantity', e.target.value)}
-                        className={`pr-9 ${(() => {
-                          const enteredQty = Number(newRow.quantity) || 0
-                          const avail = newRow.product ? getProductAvail(newRow.product) : null
-                          return avail != null && enteredQty > avail ? 'border-rose-500 ring-1 ring-rose-400 bg-rose-50 dark:bg-rose-950/30' : ''
-                        })()}`}
-                      />
-                      <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
-                        <FieldVoiceInput fieldLabel="quantity" onChange={(text) => handleNewRowChange('quantity', text.replace(/[^0-9.]/g, ''))} />
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
                       </div>
-                    </div>
-                    {(() => {
-                      const enteredQty = Number(newRow.quantity) || 0
-                      const avail = newRow.product ? getProductAvail(newRow.product) : null
-                      if (avail != null && enteredQty > avail) {
-                        return (
+                      <div className="col-span-2 grid gap-1">
+                        <span className="text-[10px] font-medium text-muted-foreground">Qty</span>
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={li.quantity}
+                          onChange={(e) => updateLineItem(li.id, 'quantity', e.target.value)}
+                          className={`h-9 ${lowStock ? 'border-rose-500 ring-1 ring-rose-400 bg-rose-50 dark:bg-rose-950/30' : ''}`}
+                        />
+                      </div>
+                      <div className="col-span-2 grid gap-1">
+                        <span className="text-[10px] font-medium text-muted-foreground">Rate</span>
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={li.rate}
+                          onChange={(e) => updateLineItem(li.id, 'rate', e.target.value)}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="col-span-2 grid gap-1">
+                        <span className="text-[10px] font-medium text-muted-foreground">Amount</span>
+                        <div className="h-9 flex items-center justify-end rounded-md border bg-emerald-50 dark:bg-emerald-900/20 px-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                          {formatCurrency(lineAmount)}
+                        </div>
+                      </div>
+                      <div className="col-span-1 flex justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-9 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                          disabled={lineItems.length === 1}
+                          onClick={() => removeLineItem(li.id)}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                      {lowStock && (
+                        <div className="col-span-12 -mt-1">
                           <p className="text-xs text-rose-600 flex items-center gap-1">
                             <AlertTriangle className="size-3" />
-                            Only {avail.toLocaleString('en-IN')} available in stock
+                            Only {avail!.toLocaleString('en-IN')} units of &quot;{li.product}&quot; available in stock
                           </p>
-                        )
-                      }
-                      return null
-                    })()}
-                  </div>
-                </div>
-
-                {/* Rate (full width in single mode) */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="ds-rate">Rate (₹)</Label>
-                    <div className="relative">
-                      <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                      <Input
-                        id="ds-rate"
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        className="pl-9 pr-9"
-                    value={newRow.rate}
-                    onChange={(e) => handleNewRowChange('rate', e.target.value)}
-                  />
-                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
-                    <FieldVoiceInput fieldLabel="rate" onChange={(text) => handleNewRowChange('rate', text.replace(/[^0-9.]/g, ''))} />
-                  </div>
-                </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
+
+              {/* Add More Product button — below the table, full visibility */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addLineItem}
+                className="h-8 text-xs w-full border-dashed"
+              >
+                <Plus className="size-3.5 mr-1" />
+                Add More Product
+              </Button>
             </div>
 
             {/* Amount + Pending (auto-calc display, 2 col) */}
@@ -1959,8 +1827,6 @@ export function DailySellModule() {
                 </div>
               </div>
             </div>
-              </>
-            )}
 
             {/* Transporter Name + T Fair (2 col) */}
             <div className="grid grid-cols-2 gap-3">
