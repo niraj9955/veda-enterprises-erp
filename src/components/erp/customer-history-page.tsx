@@ -349,8 +349,15 @@ function OrdersView({ orders }: { orders: Record<string, unknown>[] }) {
             const rowSpan = isMulti ? items.length : 1
             return items.map((line, idx) => {
               const isFirst = idx === 0
+              // Alternating tinted backgrounds for multi-item sub-rows.
+              const rowBg = isMulti
+                ? idx % 2 === 0
+                  ? 'bg-blue-50/60 dark:bg-blue-900/20'
+                  : 'bg-sky-50/40 dark:bg-sky-900/10'
+                : ''
+              const rowBorder = isMulti && idx > 0 ? 'border-t border-blue-200/70 dark:border-blue-800/40' : ''
               return (
-                <TableRow key={`${String(o._id || o.id)}-line-${idx}`}>
+                <TableRow key={`${String(o._id || o.id)}-line-${idx}`} className={`${rowBg} ${rowBorder}`.trim()}>
                   {isFirst && (
                     <>
                       <TableCell className="font-mono text-xs align-top" rowSpan={rowSpan}>

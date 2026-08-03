@@ -932,17 +932,21 @@ export function OrderModule() {
                     const rowSpan = isMulti ? items.length : 1
                     return items.map((line, lineIdx) => {
                       const isFirstLine = lineIdx === 0
+                      // Alternating tinted backgrounds for multi-item sub-rows
+                      // so each product line is visually distinct (Excel-like).
+                      const rowBg = selectedIds.has(order.id)
+                        ? 'bg-emerald-50/60 dark:bg-emerald-900/15'
+                        : isMulti
+                        ? lineIdx % 2 === 0
+                          ? 'bg-blue-50/60 dark:bg-blue-900/20'
+                          : 'bg-sky-50/40 dark:bg-sky-900/10'
+                        : ''
+                      const rowBorder = isMulti && lineIdx > 0 ? 'border-t border-blue-200/70 dark:border-blue-800/40' : ''
                       return (
                         <TableRow
                           key={`${order.id}-line-${lineIdx}`}
                           data-state={selectedIds.has(order.id) ? 'selected' : undefined}
-                          className={
-                            selectedIds.has(order.id)
-                              ? 'bg-emerald-50/60 dark:bg-emerald-900/15'
-                              : isMulti && lineIdx > 0
-                              ? 'border-t border-zinc-100 dark:border-zinc-800'
-                              : ''
-                          }
+                          className={`${rowBg} ${rowBorder}`.trim()}
                         >
                           {isFirstLine && (
                             <TableCell className="w-10 align-top" rowSpan={rowSpan}>
