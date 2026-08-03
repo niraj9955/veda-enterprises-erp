@@ -1831,23 +1831,25 @@ export function DailySellModule() {
                   const lowStock = avail != null && qty > avail
                   return (
                     <div key={li.id} className="p-2.5 grid gap-2">
-                      {/* Row 1: product label + delete button on same line */}
+                      {/* Row 1: product label + avail badge (own line, wraps cleanly) + delete button */}
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-medium text-muted-foreground">
-                          Product #{idx + 1}
+                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                          <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">
+                            Product #{idx + 1}
+                          </span>
                           {avail != null && (
                             <span
-                              className={`ml-2 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}
+                              className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap ${avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}
                             >
                               Avail: {avail.toLocaleString('en-IN')}
                             </span>
                           )}
-                        </span>
+                        </div>
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="size-7 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                          className="size-7 shrink-0 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                           disabled={lineItems.length === 1}
                           onClick={() => removeLineItem(li.id)}
                           title="Remove this product"

@@ -91,9 +91,8 @@ export async function PUT(
     // (so editing only the customer/date/transporter/received fields on a
     // multi-product record doesn't wipe out the line items).
     type ProductEntry = { product: string; quantity: number; rate: number; amount: number }
-    let products: ProductEntry[] | null = null
     if (Array.isArray(body.products)) {
-      products = body.products
+      const products: ProductEntry[] = body.products
         .filter((p: any) => p && typeof p === 'object')
         .map((p: any) => ({
           product: String(p.product || '').trim(),

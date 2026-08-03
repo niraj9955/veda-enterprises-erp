@@ -916,18 +916,32 @@ export function OrderModule() {
                       </TableCell>
                       <TableCell>{order.customer?.name || '—'}</TableCell>
                       <TableCell className="hidden sm:table-cell">
-                        <Badge variant="outline">{order.brickType}</Badge>
-                        {order.items && order.items.length > 0 && (
-                          <Badge variant="secondary" className="ml-1 text-[10px]">
-                            {order.items.length} item{order.items.length > 1 ? 's' : ''}
-                          </Badge>
+                        {order.items && order.items.length > 1 ? (
+                          <div className="flex flex-col gap-0.5 py-0.5">
+                            {order.items.map((it, i) => (
+                              <span key={i} className="text-xs whitespace-nowrap">
+                                <span className="font-medium">{it.description || '—'}</span>
+                                <span className="text-muted-foreground"> × {Number(it.quantity || 0)}</span>
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <Badge variant="outline">{order.brickType || order.items?.[0]?.description || '—'}</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {new Intl.NumberFormat('en-IN').format(order.quantity)}
+                        {order.items && order.items.length > 1 ? (
+                          <span className="text-xs text-muted-foreground italic">sum: {new Intl.NumberFormat('en-IN').format(order.quantity)}</span>
+                        ) : (
+                          new Intl.NumberFormat('en-IN').format(order.quantity)
+                        )}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell text-right whitespace-nowrap">
-                        {formatCurrency(order.rate)}
+                        {order.items && order.items.length > 1 ? (
+                          <span className="text-xs text-muted-foreground italic">varies</span>
+                        ) : (
+                          formatCurrency(order.rate)
+                        )}
                       </TableCell>
                       <TableCell className="text-right font-medium whitespace-nowrap">
                         {formatCurrency(order.amount)}

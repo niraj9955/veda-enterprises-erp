@@ -360,7 +360,7 @@ function OrdersView({ orders }: { orders: Record<string, unknown>[] }) {
         <TableRow>
           <TableHead>Order #</TableHead>
           <TableHead>Date</TableHead>
-          <TableHead>Brick Type</TableHead>
+          <TableHead>Products</TableHead>
           <TableHead className="text-right">Qty</TableHead>
           <TableHead className="text-right">Rate</TableHead>
           <TableHead className="text-right">Amount</TableHead>
@@ -368,19 +368,50 @@ function OrdersView({ orders }: { orders: Record<string, unknown>[] }) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {orders.map((o) => (
-          <TableRow key={String(o._id || o.id)}>
-            <TableCell className="font-mono text-xs">{String(o.orderNumber || '—')}</TableCell>
-            <TableCell className="whitespace-nowrap">{formatDate(String(o.deliveryDate || ''))}</TableCell>
-            <TableCell>{String(o.brickType || '—')}</TableCell>
-            <TableCell className="text-right">{Number(o.quantity || 0)}</TableCell>
-            <TableCell className="text-right">{formatCurrency(Number(o.rate || 0))}</TableCell>
-            <TableCell className="text-right font-medium">{formatCurrency(Number(o.amount || 0))}</TableCell>
-            <TableCell>
-              <Badge variant="outline" className="text-xs">{String(o.status || 'Pending')}</Badge>
-            </TableCell>
-          </TableRow>
-        ))}
+        {orders.map((o) => {
+          // Multi-item orders store line items in `items[]`. Single-item
+          // (legacy) orders only have the top-level `brickType` field.
+          const items = Array.isArray(o.items) ? (o.items as Array<{ description: string; quantity: number; rate: number; amount: number }>) : []
+          const hasMulti = items.length > 1
+          return (
+            <TableRow key={String(o._id || o.id)}>
+              <TableCell className="font-mono text-xs">{String(o.orderNumber || '—')}</TableCell>
+              <TableCell className="whitespace-nowrap">{formatDate(String(o.deliveryDate || ''))}</TableCell>
+              <TableCell>
+                {hasMulti ? (
+                  <div className="flex flex-col gap-0.5">
+                    {items.map((it, i) => (
+                      <span key={i} className="text-xs">
+                        <span className="font-medium">{it.description || '—'}</span>
+                        <span className="text-muted-foreground"> × {Number(it.quantity || 0)}</span>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-xs">{String(o.brickType || items[0]?.description || '—')}</span>
+                )}
+              </TableCell>
+              <TableCell className="text-right">
+                {hasMulti ? (
+                  <span className="text-xs text-muted-foreground italic">sum: {Number(o.quantity || 0)}</span>
+                ) : (
+                  Number(o.quantity || 0)
+                )}
+              </TableCell>
+              <TableCell className="text-right">
+                {hasMulti ? (
+                  <span className="text-xs text-muted-foreground italic">varies</span>
+                ) : (
+                  formatCurrency(Number(o.rate || 0))
+                )}
+              </TableCell>
+              <TableCell className="text-right font-medium">{formatCurrency(Number(o.amount || 0))}</TableCell>
+              <TableCell>
+                <Badge variant="outline" className="text-xs">{String(o.status || 'Pending')}</Badge>
+              </TableCell>
+            </TableRow>
+          )
+        })}
       </TableBody>
     </Table>
   )
@@ -472,6 +503,7 @@ function DailySellsView({ dailySells }: { dailySells: Record<string, unknown>[] 
       <TableHeader>
         <TableRow>
           <TableHead>Date</TableHead>
+          <TableHead>Products</TableHead>
           <TableHead>Address</TableHead>
           <TableHead>Contact</TableHead>
           <TableHead className="text-right">Amount</TableHead>
@@ -479,15 +511,35 @@ function DailySellsView({ dailySells }: { dailySells: Record<string, unknown>[] 
         </TableRow>
       </TableHeader>
       <TableBody>
-        {dailySells.map((d) => (
-          <TableRow key={String(d._id || d.id)}>
-            <TableCell className="whitespace-nowrap">{formatDate(String(d.date || ''))}</TableCell>
-            <TableCell className="text-muted-foreground">{String(d.address || '—')}</TableCell>
-            <TableCell>{String(d.contactNumber || '—')}</TableCell>
-            <TableCell className="text-right font-medium">{formatCurrency(Number(d.amount || 0))}</TableCell>
-            <TableCell className="text-muted-foreground">{String(d.remarks || '—')}</TableCell>
-          </TableRow>
-        ))}
+        {dailySells.map((d) => {
+          // Multi-product records store line items in `products[]`. Single-
+          // product (legacy) records only have the top-level `product` field.
+          const prods = Array.isArray(d.products) ? (d.products as Array<{ product: string; quantity: number; rate: number; amount: number }>) : []
+          const hasMulti = prods.length > 0
+          return (
+            <TableRow key={String(d._id || d.id)}>
+              <TableCell className="whitespace-nowrap">{formatDate(String(d.date || ''))}</TableCell>
+              <TableCell>
+                {hasMulti ? (
+                  <div className="flex flex-col gap-0.5">
+                    {prods.map((p, i) => (
+                      <span key={i} className="text-xs">
+                        <span className="font-medium">{p.product || '—'}</span>
+                        <span className="text-muted-foreground"> × {Number(p.quantity || 0)} @ {formatCurrency(Number(p.rate || 0))}</span>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-xs">{String(d.product || '—')}</span>
+                )}
+              </TableCell>
+              <TableCell className="text-muted-foreground">{String(d.address || '—')}</TableCell>
+              <TableCell>{String(d.contactNumber || '—')}</TableCell>
+              <TableCell className="text-right font-medium">{formatCurrency(Number(d.amount || 0))}</TableCell>
+              <TableCell className="text-muted-foreground">{String(d.remarks || '—')}</TableCell>
+            </TableRow>
+          )
+        })}
       </TableBody>
     </Table>
   )
