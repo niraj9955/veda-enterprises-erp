@@ -128,12 +128,29 @@ export async function GET() {
     }
 
     // ── SINGLE PASS over DailySell (sell quantity by product name) ─────
+    // Multi-product records store line items in `products[]`; legacy single-
+    // product records only have `product` + `quantity`. We iterate over
+    // `products[]` when present so EVERY sold item is counted toward the
+    // correct product's stock — otherwise multi-product sales would only
+    // reduce the first product's available quantity.
     const sellByProductName = new Map<string, number>()
+    const addSell = (rawName: string, qty: number) => {
+      const name = rawName.toLowerCase().trim()
+      if (!name) return
+      sellByProductName.set(name, (sellByProductName.get(name) || 0) + qty)
+    }
     for (const d of dailySells) {
-      const productName = String((d as Record<string, unknown>).product || '').toLowerCase().trim()
-      if (!productName) continue
-      const qty = Number((d as Record<string, unknown>).quantity) || 0
-      sellByProductName.set(productName, (sellByProductName.get(productName) || 0) + qty)
+      const prods = Array.isArray((d as any).products) ? (d as any).products : []
+      if (prods.length > 0) {
+        for (const p of prods) {
+          addSell(String((p as any).product || ''), Number((p as any).quantity) || 0)
+        }
+      } else {
+        addSell(
+          String((d as Record<string, unknown>).product || ''),
+          Number((d as Record<string, unknown>).quantity) || 0,
+        )
+      }
     }
 
     // ── Assemble per-field summary rows ────────────────────────────────

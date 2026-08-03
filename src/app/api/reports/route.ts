@@ -51,21 +51,51 @@ export async function GET(request: Request) {
       // ─────────────────────────────────────────────────────────────────────
       case 'sales': {
         const dailySells = await DailySell.find({}).sort({ date: -1 }).lean()
-        const rows = dailySells
-          .filter((d: any) => dateMatches(String(d.date || '')))
-          .map((d: any) => ({
-            id: String(d._id),
+        // ── Expand multi-product records ────────────────────────────────
+        // A DailySell entry can hold multiple line items in `products[]`.
+        // For the sales report, we expand each multi-product record into
+        // one row PER product so the user sees every product the customer
+        // ordered (instead of the legacy "first product, +N more" string
+        // stored on `d.product`). Single-product records (legacy or
+        // products.length === 1) yield exactly one row, identical to before.
+        const rows: any[] = []
+        for (const d of dailySells) {
+          if (!dateMatches(String(d.date || ''))) continue
+          const base = {
             date: String(d.date || ''),
             customerId: d.customerId ? String(d.customerId) : '',
             customer: d.customerName
               ? { id: d.customerId ? String(d.customerId) : '', name: String(d.customerName) }
               : null,
-            brickType: String(d.product || ''),
-            quantity: Number(d.quantity) || 0,
-            rate: Number(d.rate) || 0,
-            totalAmount: Number(d.amount) || 0,
             orderId: d.orderId ? String(d.orderId) : null,
-          }))
+          }
+          const prods = Array.isArray((d as any).products) ? (d as any).products : []
+          if (prods.length > 0) {
+            prods.forEach((p: any, idx: number) => {
+              const qty = Number(p.quantity) || 0
+              const rate = Number(p.rate) || 0
+              const amt = Number(p.amount) || qty * rate
+              rows.push({
+                id: `${d._id}-${idx}`,
+                ...base,
+                brickType: String(p.product || ''),
+                quantity: qty,
+                rate,
+                totalAmount: amt,
+              })
+            })
+          } else {
+            // Legacy single-product record (no products[] field).
+            rows.push({
+              id: String(d._id),
+              ...base,
+              brickType: String((d as any).product || ''),
+              quantity: Number((d as any).quantity) || 0,
+              rate: Number((d as any).rate) || 0,
+              totalAmount: Number((d as any).amount) || 0,
+            })
+          }
+        }
         const totalSales = rows.reduce((sum, r) => sum + r.totalAmount, 0)
         return NextResponse.json({ data: rows, totalSales })
       }
@@ -134,13 +164,27 @@ export async function GET(request: Request) {
           }
         }
 
-        // Sold by product name (DailySell.product = human-readable name)
+        // Sold by product name. Multi-product records store line items in
+        // `products[]`; legacy single-product records only have `product`.
+        // We iterate over `products[]` when present so EVERY sold item is
+        // counted toward the correct product's stock — otherwise multi-
+        // product sales would only reduce the first product's stock.
         const soldByField: Record<string, number> = {}
         for (const d of dailySells) {
-          const prod = String((d as any).product || '').trim()
-          if (!prod) continue
-          const qty = Number((d as any).quantity) || 0
-          soldByField[prod] = (soldByField[prod] || 0) + qty
+          const prods = Array.isArray((d as any).products) ? (d as any).products : []
+          if (prods.length > 0) {
+            for (const p of prods) {
+              const prodName = String((p as any).product || '').trim()
+              if (!prodName) continue
+              const qty = Number((p as any).quantity) || 0
+              soldByField[prodName] = (soldByField[prodName] || 0) + qty
+            }
+          } else {
+            const prod = String((d as any).product || '').trim()
+            if (!prod) continue
+            const qty = Number((d as any).quantity) || 0
+            soldByField[prod] = (soldByField[prod] || 0) + qty
+          }
         }
 
         const rows = PRODUCT_FIELDS.map((f, i) => {
