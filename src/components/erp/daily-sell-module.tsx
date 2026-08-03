@@ -1304,139 +1304,190 @@ export function DailySellModule() {
                 )}
 
                 {/* Existing rows — read mode OR edit mode */}
-                {!loading && filteredDailySells.map((item) => {
+                {!loading && filteredDailySells.flatMap((item) => {
                   const isEditing = editingId === item.id
-                  return (
-                    <TableRow
-                      key={item.id}
-                      data-state={selectedIds.has(item.id) ? 'selected' : undefined}
-                      className={
-                        selectedIds.has(item.id)
-                          ? 'bg-emerald-50/60 dark:bg-emerald-900/15'
-                          : isEditing
-                          ? 'bg-blue-50/60 dark:bg-blue-900/15'
-                          : ''
-                      }
-                    >
-                      <TableCell className="w-10 sticky left-0 bg-background z-10">
-                        <Checkbox
-                          checked={selectedIds.has(item.id)}
-                          onCheckedChange={() => toggleSelect(item.id)}
-                          aria-label={`Select row for ${item.customerName}`}
-                          disabled={isEditing}
+                  // ── Multi-product expansion (Excel-style) ──────────────────────
+                  // When a DailySell record has 2+ products in `products[]`,
+                  // we expand it into N table rows — one per product — so each
+                  // product gets its own Product/Qty/Rate/Amount cell with the
+                  // real values (not "varies" / "sum: N"). The Date, Customer,
+                  // Address, Contact, Transporter, T.Fair, Received, Pending,
+                  // Remarks, Synced, and Actions cells use `rowSpan={N}` on the
+                  // FIRST sub-row so they visually span across all sub-rows
+                  // (exactly like merged cells in the user's Excel template).
+                  //
+                  // Single-product records (or legacy records without products[])
+                  // render as before — exactly one table row.
+                  //
+                  // When the record is being EDITED inline, we collapse back to
+                  // a single row (the edit form only edits customer/date/
+                  // transporter/received fields — multi-product line items are
+                  // preserved server-side and not editable inline).
+                  const prods = Array.isArray(item.products) ? item.products : []
+                  const lines = isEditing
+                    ? [{
+                        // For edit mode we only need a placeholder product
+                        // cell — the actual product/qty/rate cells render as
+                        // the existing edit-mode UI (read-only badge for
+                        // multi-product, or editable inputs for single).
+                        product: '',
+                        quantity: 0,
+                        rate: 0,
+                        amount: 0,
+                      }]
+                    : prods.length > 0
+                    ? prods.map((p: any) => ({
+                        product: String(p.product || ''),
+                        quantity: Number(p.quantity) || 0,
+                        rate: Number(p.rate) || 0,
+                        amount: Number(p.amount) || (Number(p.quantity) || 0) * (Number(p.rate) || 0),
+                      }))
+                    : [{
+                        product: String(item.product || ''),
+                        quantity: Number(item.quantity) || 0,
+                        rate: Number(item.rate ?? 0) || 0,
+                        amount: Number(item.amount) || 0,
+                      }]
+                  const isMulti = lines.length > 1
+                  const rowSpan = isMulti ? lines.length : 1
+
+                  // Build the sub-rows. The FIRST sub-row contains all the
+                  // customer/date/transporter/etc cells with rowSpan. The
+                  // remaining sub-rows contain ONLY the product-line cells
+                  // (Product, Qty, Rate, Amount).
+                  return lines.map((line, lineIdx) => {
+                    const isFirstLine = lineIdx === 0
+                    return (
+                      <TableRow
+                        key={`${item.id}-line-${lineIdx}`}
+                        data-state={selectedIds.has(item.id) ? 'selected' : undefined}
+                        className={
+                          selectedIds.has(item.id)
+                            ? 'bg-emerald-50/60 dark:bg-emerald-900/15'
+                            : isEditing
+                            ? 'bg-blue-50/60 dark:bg-blue-900/15'
+                            : isMulti && lineIdx > 0
+                            ? 'border-t border-zinc-100 dark:border-zinc-800'
+                            : ''
+                        }
+                      >
+                  {/* ── Checkbox cell — only on first sub-row, spans all sub-rows */}
+                  {isFirstLine && (
+                    <TableCell className="w-10 sticky left-0 bg-background z-10 align-top" rowSpan={rowSpan}>
+                      <Checkbox
+                        checked={selectedIds.has(item.id)}
+                        onCheckedChange={() => toggleSelect(item.id)}
+                        aria-label={`Select row for ${item.customerName}`}
+                        disabled={isEditing}
+                      />
+                    </TableCell>
+                  )}
+
+                  {isEditing && isFirstLine ? (
+                    // ── Edit mode (single row, all cells become inputs) ──
+                    <>
+                      <TableCell className="sticky left-10 bg-background z-10 min-w-[130px]">
+                        <Input
+                          type="date"
+                          value={editRow.date}
+                          onChange={(e) => handleEditRowChange('date', e.target.value)}
+                          className="h-8 text-xs px-2"
                         />
                       </TableCell>
-
-                      {isEditing ? (
-                        // ── Edit mode — all cells become inputs ──
-                        <>
-                          <TableCell className="sticky left-10 bg-background z-10 min-w-[130px]">
-                            <Input
-                              type="date"
-                              value={editRow.date}
-                              onChange={(e) => handleEditRowChange('date', e.target.value)}
-                              className="h-8 text-xs px-2"
-                            />
-                          </TableCell>
-                          <TableCell className="min-w-[140px]">
-                            <CellInput value={editRow.customerName} onChange={(v) => handleEditRowChange('customerName', v)} placeholder="Customer" />
-                          </TableCell>
-                          <TableCell className="min-w-[140px]">
-                            <CellInput value={editRow.address} onChange={(v) => handleEditRowChange('address', v)} placeholder="Address" />
-                          </TableCell>
-                          <TableCell className="min-w-[120px]">
-                            <CellInput value={editRow.contactNumber} onChange={(v) => handleEditRowChange('contactNumber', v)} placeholder="Contact" />
-                          </TableCell>
-                          <TableCell className="min-w-[180px]">
-                            {(() => {
-                              // For multi-product records, show a read-only
-                              // "Multiple products" badge instead of the single
-                              // product select — the line items are preserved
-                              // on save and cannot be edited inline.
-                              const orig = dailySells.find((s) => s.id === editingId)
-                              const origProds = Array.isArray(orig?.products) ? orig!.products : []
-                              if (origProds.length > 1) {
-                                return (
-                                  <div className="flex flex-col gap-0.5 text-xs">
-                                    <span className="font-medium text-blue-700 dark:text-blue-300">
-                                      {origProds.length} products
-                                    </span>
-                                    <span className="text-[10px] text-muted-foreground" title={origProds.map((p: any) => p.product).filter(Boolean).join(' · ')}>
-                                      {origProds.map((p: any) => p.product).filter(Boolean).join(' · ').slice(0, 40)}
-                                      {origProds.map((p: any) => p.product).filter(Boolean).join(' · ').length > 40 ? '…' : ''}
-                                    </span>
-                                  </div>
-                                )
-                              }
-                              return (
-                                <Select value={editRow.product} onValueChange={(v) => handleEditRowChange('product', v)}>
-                                  <SelectTrigger className="h-8 text-xs px-2">
-                                    <SelectValue placeholder="Product" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectGroup>
-                                      <SelectLabel>Product Items {stockLoading ? '(loading stock…)' : ''}</SelectLabel>
-                                      {productsWithAvail.map((p) => (
-                                        <SelectItem key={p.key} value={p.key} textValue={p.label}>
-                                          <span className="flex items-center gap-2">
-                                            <span>{p.label}</span>
-                                            {p.avail != null && (
-                                              <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${p.avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
-                                                Avail: {p.avail.toLocaleString('en-IN')}
-                                              </span>
-                                            )}
+                      <TableCell className="min-w-[140px]">
+                        <CellInput value={editRow.customerName} onChange={(v) => handleEditRowChange('customerName', v)} placeholder="Customer" />
+                      </TableCell>
+                      <TableCell className="min-w-[140px]">
+                        <CellInput value={editRow.address} onChange={(v) => handleEditRowChange('address', v)} placeholder="Address" />
+                      </TableCell>
+                      <TableCell className="min-w-[120px]">
+                        <CellInput value={editRow.contactNumber} onChange={(v) => handleEditRowChange('contactNumber', v)} placeholder="Contact" />
+                      </TableCell>
+                      <TableCell className="min-w-[180px]">
+                        {(() => {
+                          // For multi-product records, show a read-only
+                          // "Multiple products" badge instead of the single
+                          // product select — the line items are preserved
+                          // on save and cannot be edited inline.
+                          const orig = dailySells.find((s) => s.id === editingId)
+                          const origProds = Array.isArray(orig?.products) ? orig!.products : []
+                          if (origProds.length > 1) {
+                            return (
+                              <div className="flex flex-col gap-0.5 text-xs">
+                                <span className="font-medium text-blue-700 dark:text-blue-300">
+                                  {origProds.length} products
+                                </span>
+                                <span className="text-[10px] text-muted-foreground" title={origProds.map((p: any) => p.product).filter(Boolean).join(' · ')}>
+                                  {origProds.map((p: any) => p.product).filter(Boolean).join(' · ').slice(0, 40)}
+                                  {origProds.map((p: any) => p.product).filter(Boolean).join(' · ').length > 40 ? '…' : ''}
+                                </span>
+                              </div>
+                            )
+                          }
+                          return (
+                            <Select value={editRow.product} onValueChange={(v) => handleEditRowChange('product', v)}>
+                              <SelectTrigger className="h-8 text-xs px-2">
+                                <SelectValue placeholder="Product" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectGroup>
+                                  <SelectLabel>Product Items {stockLoading ? '(loading stock…)' : ''}</SelectLabel>
+                                  {productsWithAvail.map((p) => (
+                                    <SelectItem key={p.key} value={p.key} textValue={p.label}>
+                                      <span className="flex items-center gap-2">
+                                        <span>{p.label}</span>
+                                        {p.avail != null && (
+                                          <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${p.avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
+                                            Avail: {p.avail.toLocaleString('en-IN')}
                                           </span>
-                                        </SelectItem>
-                                      ))}
-                                    </SelectGroup>
-                                  </SelectContent>
-                                </Select>
-                              )
-                            })()}
-                          </TableCell>
-                          <TableCell className="min-w-[80px]">
-                            {(() => {
-                              // For multi-product records, show total qty
-                              // (read-only). For single-product, show the
-                              // editable input with stock-check badge.
-                              const orig = dailySells.find((s) => s.id === editingId)
-                              const origProds = Array.isArray(orig?.products) ? orig!.products : []
-                              if (origProds.length > 1) {
-                                const total = origProds.reduce((s: number, p: any) => s + (Number(p.quantity) || 0), 0)
-                                return (
-                                  <span className="text-xs font-medium tabular-nums">
-                                    {total.toLocaleString('en-IN')}
-                                  </span>
-                                )
-                              }
-                              const enteredQty = Number(editRow.quantity) || 0
-                              const avail = editRow.product ? getProductAvail(editRow.product) : null
-                              // For edit mode we add back the original qty of this row (if same product)
-                              // because that qty is currently "out of stock" but will be returned on save.
-                              const originalQty =
-                                orig && orig.product === editRow.product
-                                  ? Number(orig.quantity) || 0
-                                  : 0
-                              const effectiveAvail = (avail ?? 0) + originalQty
-                              const isOver = avail != null && enteredQty > effectiveAvail
-                              return (
-                                <div className="relative">
-                                  <CellInput
-                                    type="number"
-                                    min="0"
-                                    value={editRow.quantity}
-                                    onChange={(v) => handleEditRowChange('quantity', v)}
-                                    placeholder="0"
-                                    className={isOver ? 'border-rose-500 ring-1 ring-rose-400 bg-rose-50 dark:bg-rose-950/30' : ''}
-                                  />
-                                  {isOver && (
-                                    <span
-                                      className="absolute -top-1.5 -right-1.5 flex items-center justify-center size-4 rounded-full bg-rose-500 text-white shadow"
-                                      title={`Available: ${effectiveAvail.toLocaleString('en-IN')} (incl. ${originalQty.toLocaleString('en-IN')} from this entry), you entered: ${enteredQty.toLocaleString('en-IN')}`}
-                                    >
-                                      <AlertTriangle className="size-2.5" />
-                                    </span>
-                                  )}
+                                        )}
+                                      </span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectGroup>
+                              </SelectContent>
+                            </Select>
+                          )
+                        })()}
+                      </TableCell>
+                      <TableCell className="min-w-[80px]">
+                        {(() => {
+                          const orig = dailySells.find((s) => s.id === editingId)
+                          const origProds = Array.isArray(orig?.products) ? orig!.products : []
+                          if (origProds.length > 1) {
+                            const total = origProds.reduce((s: number, p: any) => s + (Number(p.quantity) || 0), 0)
+                            return (
+                              <span className="text-xs font-medium tabular-nums">
+                                {total.toLocaleString('en-IN')}
+                              </span>
+                            )
+                          }
+                          const enteredQty = Number(editRow.quantity) || 0
+                          const avail = editRow.product ? getProductAvail(editRow.product) : null
+                          const originalQty =
+                            orig && orig.product === editRow.product
+                              ? Number(orig.quantity) || 0
+                              : 0
+                          const effectiveAvail = (avail ?? 0) + originalQty
+                          const isOver = avail != null && enteredQty > effectiveAvail
+                          return (
+                            <div className="relative">
+                              <CellInput
+                                type="number"
+                                min="0"
+                                value={editRow.quantity}
+                                onChange={(v) => handleEditRowChange('quantity', v)}
+                                placeholder="0"
+                                className={isOver ? 'border-rose-500 ring-1 ring-rose-400 bg-rose-50 dark:bg-rose-950/30' : ''}
+                              />
+                              {isOver && (
+                                <span
+                                  className="absolute -top-1.5 -right-1.5 flex items-center justify-center size-4 rounded-full bg-rose-500 text-white shadow"
+                                  title={`Available: ${effectiveAvail.toLocaleString('en-IN')} (incl. ${originalQty.toLocaleString('en-IN')} from this entry), you entered: ${enteredQty.toLocaleString('en-IN')}`}
+                                >
+                                  <AlertTriangle className="size-2.5" />
+                                </span>
+                              )}
                                 </div>
                               )
                             })()}
@@ -1522,132 +1573,125 @@ export function DailySellModule() {
                           </TableCell>
                         </>
                       ) : (
-                        // ── Read mode — display values + Edit/Delete buttons ──
+                        // ── Read mode ──────────────────────────────────────────
+                        // Multi-product records: the FIRST sub-row carries the
+                        // "shared" cells (Date, Customer, Address, Contact,
+                        // Transporter, T.Fair, Received, Pending, Remarks,
+                        // Synced, Actions) with rowSpan so they visually merge
+                        // across all N product sub-rows. EVERY sub-row (incl.
+                        // the first) carries the per-product cells:
+                        // Product, Qty, Rate, Amount — each with its own real
+                        // value (no "varies" / "sum: N").
                         <>
-                          <TableCell className="font-medium whitespace-nowrap sticky left-10 bg-background z-10">
-                            {formatDate(item.date)}
-                          </TableCell>
-                          <TableCell className="font-medium whitespace-nowrap">{item.customerName}</TableCell>
-                          <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.address || '—'}</TableCell>
-                          <TableCell className="whitespace-nowrap">{item.contactNumber || '—'}</TableCell>
-                          <TableCell className="max-w-[240px]">
-                            {(() => {
-                              // ── Multi-product display ─────────────────────────
-                              // If `products[]` exists with 2+ items, show all
-                              // product names joined with " · " and a small "N
-                              // items" badge so the user can tell at a glance
-                              // that this row contains multiple products. If
-                              // only one product (or legacy single-product
-                              // record), fall back to the simple `item.product`
-                              // text.
-                              const prods = Array.isArray(item.products) ? item.products : []
-                              if (prods.length > 1) {
-                                const names = prods
-                                  .map((p) => p.product)
-                                  .filter(Boolean)
-                                  .join(' · ')
-                                return (
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="truncate text-xs font-medium" title={names}>
-                                      {names}
-                                    </span>
+                          {isFirstLine && (
+                            <>
+                              <TableCell
+                                className="font-medium whitespace-nowrap sticky left-10 bg-background z-10 align-top"
+                                rowSpan={rowSpan}
+                              >
+                                <div className="flex flex-col gap-0.5">
+                                  <span>{formatDate(item.date)}</span>
+                                  {isMulti && (
                                     <span className="inline-flex w-fit items-center rounded bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300">
-                                      {prods.length} items
+                                      {lines.length} items
                                     </span>
-                                  </div>
-                                )
-                              }
-                              if (prods.length === 1 && prods[0].product) {
-                                return <span className="truncate">{prods[0].product}</span>
-                              }
-                              if (item.product) {
-                                return <span className="truncate">{item.product}</span>
-                              }
-                              return <span className="text-muted-foreground">—</span>
-                            })()}
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="font-medium whitespace-nowrap align-top" rowSpan={rowSpan}>
+                                {item.customerName}
+                              </TableCell>
+                              <TableCell className="max-w-[150px] truncate text-muted-foreground align-top" rowSpan={rowSpan}>
+                                {item.address || '—'}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap align-top" rowSpan={rowSpan}>
+                                {item.contactNumber || '—'}
+                              </TableCell>
+                            </>
+                          )}
+                          {/* ── Per-line cells (rendered on EVERY sub-row) ── */}
+                          <TableCell className="whitespace-nowrap align-top">
+                            <Badge variant="outline" className="border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-400">
+                              {line.product || '—'}
+                            </Badge>
                           </TableCell>
-                          <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">
-                            {(() => {
-                              // For multi-product records, show total qty with
-                              // " (N)" suffix so the user knows it's a sum. For
-                              // single-product, show the qty as before.
-                              const prods = Array.isArray(item.products) ? item.products : []
-                              if (prods.length > 1) {
-                                const total = prods.reduce((s, p) => s + (Number(p.quantity) || 0), 0)
-                                return `${total.toLocaleString('en-IN')} (${prods.length})`
-                              }
-                              return item.quantity != null ? item.quantity.toLocaleString('en-IN') : '—'
-                            })()}
+                          <TableCell className="text-right font-medium whitespace-nowrap tabular-nums align-top">
+                            {line.quantity.toLocaleString('en-IN')}
                           </TableCell>
-                          <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">
-                            {(() => {
-                              // For multi-product records, rate varies per
-                              // item — show "varies" instead of a misleading
-                              // single value. For single-product, show the rate.
-                              const prods = Array.isArray(item.products) ? item.products : []
-                              if (prods.length > 1) {
-                                return <span className="text-muted-foreground text-xs italic">varies</span>
-                              }
-                              return item.rate != null ? formatCurrency(item.rate) : '—'
-                            })()}
+                          <TableCell className="text-right font-medium whitespace-nowrap tabular-nums align-top">
+                            {formatCurrency(line.rate)}
                           </TableCell>
-                          <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">{formatCurrency(item.amount)}</TableCell>
-                          <TableCell className="max-w-[150px] truncate">{item.transporterName || '—'}</TableCell>
-                          <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">
-                            {item.transporterFair != null ? formatCurrency(item.transporterFair) : '—'}
+                          <TableCell className="text-right font-medium whitespace-nowrap tabular-nums align-top">
+                            {formatCurrency(line.amount)}
                           </TableCell>
-                          <TableCell className="text-right font-medium whitespace-nowrap tabular-nums text-blue-700 dark:text-blue-300">
-                            {item.receivedAmount != null ? formatCurrency(item.receivedAmount) : '—'}
-                          </TableCell>
-                          <TableCell className={`text-right font-medium whitespace-nowrap tabular-nums ${(item.pendingAmount ?? 0) > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}`}>
-                            {item.pendingAmount != null ? formatCurrency(item.pendingAmount) : '—'}
-                          </TableCell>
-                          <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.remarks || '—'}</TableCell>
-                          <TableCell className="text-center">
-                            {item.orderId || item.customerPaymentId || item.customerId ? (
-                              <span
-                                className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300"
-                                title={item.syncNotes || 'Auto-synced'}
+                          {isFirstLine && (
+                            <>
+                              <TableCell className="max-w-[150px] truncate align-top" rowSpan={rowSpan}>
+                                {item.transporterName || '—'}
+                              </TableCell>
+                              <TableCell className="text-right font-medium whitespace-nowrap tabular-nums align-top" rowSpan={rowSpan}>
+                                {item.transporterFair != null ? formatCurrency(item.transporterFair) : '—'}
+                              </TableCell>
+                              <TableCell className="text-right font-medium whitespace-nowrap tabular-nums align-top text-blue-700 dark:text-blue-300" rowSpan={rowSpan}>
+                                {item.receivedAmount != null ? formatCurrency(item.receivedAmount) : '—'}
+                              </TableCell>
+                              <TableCell
+                                className={`text-right font-medium whitespace-nowrap tabular-nums align-top ${(item.pendingAmount ?? 0) > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}`}
+                                rowSpan={rowSpan}
                               >
-                                <CheckCircle2 className="size-3" />
-                                Synced
-                              </span>
-                            ) : (
-                              <span
-                                className="inline-flex items-center rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-xs text-muted-foreground"
-                                title="Created before auto-sync was enabled"
-                              >
-                                —
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleStartEdit(item)}
-                                title="Edit"
-                                disabled={!!editingId}
-                              >
-                                <Pencil className="size-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setDeleteTarget(item)}
-                                title="Delete"
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                disabled={!!editingId}
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
+                                {item.pendingAmount != null ? formatCurrency(item.pendingAmount) : '—'}
+                              </TableCell>
+                              <TableCell className="max-w-[150px] truncate text-muted-foreground align-top" rowSpan={rowSpan}>
+                                {item.remarks || '—'}
+                              </TableCell>
+                              <TableCell className="text-center align-top" rowSpan={rowSpan}>
+                                {item.orderId || item.customerPaymentId || item.customerId ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300"
+                                    title={item.syncNotes || 'Auto-synced'}
+                                  >
+                                    <CheckCircle2 className="size-3" />
+                                    Synced
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="inline-flex items-center rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-xs text-muted-foreground"
+                                    title="Created before auto-sync was enabled"
+                                  >
+                                    —
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right align-top" rowSpan={rowSpan}>
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleStartEdit(item)}
+                                    title="Edit"
+                                    disabled={!!editingId}
+                                  >
+                                    <Pencil className="size-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setDeleteTarget(item)}
+                                    title="Delete"
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    disabled={!!editingId}
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </>
+                          )}
                         </>
                       )}
                     </TableRow>
                   )
+                  })
                 })}
               </TableBody>
             </Table>

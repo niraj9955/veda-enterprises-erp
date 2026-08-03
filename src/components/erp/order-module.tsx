@@ -908,72 +908,113 @@ export function OrderModule() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredOrders.map((order) => (
-                    <TableRow key={order.id} data-state={selectedIds.has(order.id) ? 'selected' : undefined} className={selectedIds.has(order.id) ? 'bg-emerald-50/60 dark:bg-emerald-900/15' : ''}>
-                      <TableCell className="w-10"><Checkbox checked={selectedIds.has(order.id)} onCheckedChange={() => toggleSelect(order.id)} aria-label={`Select row for ${order.orderNumber}`} /></TableCell>
-                      <TableCell className="font-medium whitespace-nowrap">
-                        {order.orderNumber}
-                      </TableCell>
-                      <TableCell>{order.customer?.name || '—'}</TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        {order.items && order.items.length > 1 ? (
-                          <div className="flex flex-col gap-0.5 py-0.5">
-                            {order.items.map((it, i) => (
-                              <span key={i} className="text-xs whitespace-nowrap">
-                                <span className="font-medium">{it.description || '—'}</span>
-                                <span className="text-muted-foreground"> × {Number(it.quantity || 0)}</span>
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <Badge variant="outline">{order.brickType || order.items?.[0]?.description || '—'}</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {order.items && order.items.length > 1 ? (
-                          <span className="text-xs text-muted-foreground italic">sum: {new Intl.NumberFormat('en-IN').format(order.quantity)}</span>
-                        ) : (
-                          new Intl.NumberFormat('en-IN').format(order.quantity)
-                        )}
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell text-right whitespace-nowrap">
-                        {order.items && order.items.length > 1 ? (
-                          <span className="text-xs text-muted-foreground italic">varies</span>
-                        ) : (
-                          formatCurrency(order.rate)
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right font-medium whitespace-nowrap">
-                        {formatCurrency(order.amount)}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell whitespace-nowrap">
-                        {formatDate(order.deliveryDate)}
-                      </TableCell>
-                      <TableCell>{renderStatusBadge(order.status)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEditStatusDialog(order)}
-                            title="Edit Status"
-                            className="text-sky-600 hover:text-sky-700 hover:bg-sky-50"
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteTarget(order)}
-                            title="Delete Order"
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  // ── Multi-product expansion (Excel-style) ──────────────────
+                  // Orders with 2+ items in `items[]` expand into N table rows
+                  // — one per item — so each gets its own Brick Type / Qty /
+                  // Rate / Amount cell with real values (no "varies" / "sum: N").
+                  // Order No, Customer, Delivery Date, Status, Actions, and the
+                  // Checkbox use `rowSpan={N}` on the first sub-row.
+                  filteredOrders.flatMap((order) => {
+                    const items = order.items && order.items.length > 0
+                      ? order.items.map((it) => ({
+                          description: String(it.description || ''),
+                          quantity: Number(it.quantity) || 0,
+                          rate: Number(it.rate) || 0,
+                          amount: Number(it.amount) || 0,
+                        }))
+                      : [{
+                          description: String(order.brickType || ''),
+                          quantity: Number(order.quantity) || 0,
+                          rate: Number(order.rate) || 0,
+                          amount: Number(order.amount) || 0,
+                        }]
+                    const isMulti = items.length > 1
+                    const rowSpan = isMulti ? items.length : 1
+                    return items.map((line, lineIdx) => {
+                      const isFirstLine = lineIdx === 0
+                      return (
+                        <TableRow
+                          key={`${order.id}-line-${lineIdx}`}
+                          data-state={selectedIds.has(order.id) ? 'selected' : undefined}
+                          className={
+                            selectedIds.has(order.id)
+                              ? 'bg-emerald-50/60 dark:bg-emerald-900/15'
+                              : isMulti && lineIdx > 0
+                              ? 'border-t border-zinc-100 dark:border-zinc-800'
+                              : ''
+                          }
+                        >
+                          {isFirstLine && (
+                            <TableCell className="w-10 align-top" rowSpan={rowSpan}>
+                              <Checkbox
+                                checked={selectedIds.has(order.id)}
+                                onCheckedChange={() => toggleSelect(order.id)}
+                                aria-label={`Select row for ${order.orderNumber}`}
+                              />
+                            </TableCell>
+                          )}
+                          {isFirstLine && (
+                            <TableCell className="font-medium whitespace-nowrap align-top" rowSpan={rowSpan}>
+                              <div className="flex flex-col gap-0.5">
+                                <span>{order.orderNumber}</span>
+                                {isMulti && (
+                                  <span className="inline-flex w-fit items-center rounded bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300">
+                                    {items.length} items
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                          )}
+                          {isFirstLine && (
+                            <TableCell className="align-top" rowSpan={rowSpan}>{order.customer?.name || '—'}</TableCell>
+                          )}
+                          {/* Per-line cells — rendered on EVERY sub-row */}
+                          <TableCell className="hidden sm:table-cell align-top">
+                            <Badge variant="outline">{line.description || '—'}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right align-top">
+                            {new Intl.NumberFormat('en-IN').format(line.quantity)}
+                          </TableCell>
+                          <TableCell className="hidden sm:table-cell text-right whitespace-nowrap align-top">
+                            {formatCurrency(line.rate)}
+                          </TableCell>
+                          <TableCell className="text-right font-medium whitespace-nowrap align-top">
+                            {formatCurrency(line.amount)}
+                          </TableCell>
+                          {isFirstLine && (
+                            <>
+                              <TableCell className="hidden md:table-cell whitespace-nowrap align-top" rowSpan={rowSpan}>
+                                {formatDate(order.deliveryDate)}
+                              </TableCell>
+                              <TableCell className="align-top" rowSpan={rowSpan}>{renderStatusBadge(order.status)}</TableCell>
+                              <TableCell className="text-right align-top" rowSpan={rowSpan}>
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => openEditStatusDialog(order)}
+                                    title="Edit Status"
+                                    className="text-sky-600 hover:text-sky-700 hover:bg-sky-50"
+                                  >
+                                    <Pencil className="size-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setDeleteTarget(order)}
+                                    title="Delete Order"
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </>
+                          )}
+                        </TableRow>
+                      )
+                    })
+                  })
                 )}
               </TableBody>
             </Table>

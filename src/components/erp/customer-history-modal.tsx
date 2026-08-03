@@ -368,49 +368,57 @@ function OrdersView({ orders }: { orders: Record<string, unknown>[] }) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {orders.map((o) => {
+        {orders.flatMap((o) => {
           // Multi-item orders store line items in `items[]`. Single-item
-          // (legacy) orders only have the top-level `brickType` field.
-          const items = Array.isArray(o.items) ? (o.items as Array<{ description: string; quantity: number; rate: number; amount: number }>) : []
-          const hasMulti = items.length > 1
-          return (
-            <TableRow key={String(o._id || o.id)}>
-              <TableCell className="font-mono text-xs">{String(o.orderNumber || '—')}</TableCell>
-              <TableCell className="whitespace-nowrap">{formatDate(String(o.deliveryDate || ''))}</TableCell>
-              <TableCell>
-                {hasMulti ? (
-                  <div className="flex flex-col gap-0.5">
-                    {items.map((it, i) => (
-                      <span key={i} className="text-xs">
-                        <span className="font-medium">{it.description || '—'}</span>
-                        <span className="text-muted-foreground"> × {Number(it.quantity || 0)}</span>
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-xs">{String(o.brickType || items[0]?.description || '—')}</span>
+          // (legacy) orders only have the top-level `brickType` field. We
+          // expand each multi-item order into N sub-rows so every product
+          // gets its own Product / Qty / Rate / Amount cell — same Excel-
+          // style layout the user requested for the main Order module.
+          const items = Array.isArray(o.items) && o.items.length > 0
+            ? (o.items as Array<{ description: string; quantity: number; rate: number; amount: number }>)
+            : [{
+                description: String(o.brickType || ''),
+                quantity: Number(o.quantity || 0),
+                rate: Number(o.rate || 0),
+                amount: Number(o.amount || 0),
+              }]
+          const isMulti = items.length > 1
+          const rowSpan = isMulti ? items.length : 1
+          return items.map((line, idx) => {
+            const isFirst = idx === 0
+            return (
+              <TableRow key={`${String(o._id || o.id)}-line-${idx}`}>
+                {isFirst && (
+                  <>
+                    <TableCell className="font-mono text-xs align-top" rowSpan={rowSpan}>
+                      <div className="flex flex-col gap-0.5">
+                        <span>{String(o.orderNumber || '—')}</span>
+                        {isMulti && (
+                          <span className="inline-flex w-fit items-center rounded bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300">
+                            {items.length} items
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap align-top" rowSpan={rowSpan}>
+                      {formatDate(String(o.deliveryDate || ''))}
+                    </TableCell>
+                  </>
                 )}
-              </TableCell>
-              <TableCell className="text-right">
-                {hasMulti ? (
-                  <span className="text-xs text-muted-foreground italic">sum: {Number(o.quantity || 0)}</span>
-                ) : (
-                  Number(o.quantity || 0)
+                <TableCell className="align-top">
+                  <span className="text-xs font-medium">{line.description || '—'}</span>
+                </TableCell>
+                <TableCell className="text-right align-top">{Number(line.quantity || 0)}</TableCell>
+                <TableCell className="text-right align-top">{formatCurrency(Number(line.rate || 0))}</TableCell>
+                <TableCell className="text-right font-medium align-top">{formatCurrency(Number(line.amount || 0))}</TableCell>
+                {isFirst && (
+                  <TableCell className="align-top" rowSpan={rowSpan}>
+                    <Badge variant="outline" className="text-xs">{String(o.status || 'Pending')}</Badge>
+                  </TableCell>
                 )}
-              </TableCell>
-              <TableCell className="text-right">
-                {hasMulti ? (
-                  <span className="text-xs text-muted-foreground italic">varies</span>
-                ) : (
-                  formatCurrency(Number(o.rate || 0))
-                )}
-              </TableCell>
-              <TableCell className="text-right font-medium">{formatCurrency(Number(o.amount || 0))}</TableCell>
-              <TableCell>
-                <Badge variant="outline" className="text-xs">{String(o.status || 'Pending')}</Badge>
-              </TableCell>
-            </TableRow>
-          )
+              </TableRow>
+            )
+          })
         })}
       </TableBody>
     </Table>
@@ -503,42 +511,63 @@ function DailySellsView({ dailySells }: { dailySells: Record<string, unknown>[] 
       <TableHeader>
         <TableRow>
           <TableHead>Date</TableHead>
-          <TableHead>Products</TableHead>
+          <TableHead>Product</TableHead>
+          <TableHead className="text-right">Qty</TableHead>
+          <TableHead className="text-right">Rate</TableHead>
+          <TableHead className="text-right">Amount</TableHead>
           <TableHead>Address</TableHead>
           <TableHead>Contact</TableHead>
-          <TableHead className="text-right">Amount</TableHead>
           <TableHead>Remarks</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {dailySells.map((d) => {
+        {dailySells.flatMap((d) => {
           // Multi-product records store line items in `products[]`. Single-
           // product (legacy) records only have the top-level `product` field.
-          const prods = Array.isArray(d.products) ? (d.products as Array<{ product: string; quantity: number; rate: number; amount: number }>) : []
-          const hasMulti = prods.length > 0
-          return (
-            <TableRow key={String(d._id || d.id)}>
-              <TableCell className="whitespace-nowrap">{formatDate(String(d.date || ''))}</TableCell>
-              <TableCell>
-                {hasMulti ? (
-                  <div className="flex flex-col gap-0.5">
-                    {prods.map((p, i) => (
-                      <span key={i} className="text-xs">
-                        <span className="font-medium">{p.product || '—'}</span>
-                        <span className="text-muted-foreground"> × {Number(p.quantity || 0)} @ {formatCurrency(Number(p.rate || 0))}</span>
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-xs">{String(d.product || '—')}</span>
+          // Expand each multi-product record into N sub-rows so every product
+          // gets its own Product / Qty / Rate / Amount cell (Excel-style).
+          const prods = Array.isArray(d.products) && d.products.length > 0
+            ? (d.products as Array<{ product: string; quantity: number; rate: number; amount: number }>)
+            : [{
+                product: String(d.product || ''),
+                quantity: Number(d.quantity || 0),
+                rate: Number(d.rate || 0),
+                amount: Number(d.amount || 0),
+              }]
+          const isMulti = prods.length > 1
+          const rowSpan = isMulti ? prods.length : 1
+          return prods.map((line, idx) => {
+            const isFirst = idx === 0
+            return (
+              <TableRow key={`${String(d._id || d.id)}-line-${idx}`}>
+                {isFirst && (
+                  <TableCell className="whitespace-nowrap align-top" rowSpan={rowSpan}>
+                    <div className="flex flex-col gap-0.5">
+                      <span>{formatDate(String(d.date || ''))}</span>
+                      {isMulti && (
+                        <span className="inline-flex w-fit items-center rounded bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300">
+                          {prods.length} items
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
                 )}
-              </TableCell>
-              <TableCell className="text-muted-foreground">{String(d.address || '—')}</TableCell>
-              <TableCell>{String(d.contactNumber || '—')}</TableCell>
-              <TableCell className="text-right font-medium">{formatCurrency(Number(d.amount || 0))}</TableCell>
-              <TableCell className="text-muted-foreground">{String(d.remarks || '—')}</TableCell>
-            </TableRow>
-          )
+                <TableCell className="align-top">
+                  <span className="text-xs font-medium">{line.product || '—'}</span>
+                </TableCell>
+                <TableCell className="text-right align-top">{Number(line.quantity || 0)}</TableCell>
+                <TableCell className="text-right align-top">{formatCurrency(Number(line.rate || 0))}</TableCell>
+                <TableCell className="text-right font-medium align-top">{formatCurrency(Number(line.amount || 0))}</TableCell>
+                {isFirst && (
+                  <>
+                    <TableCell className="text-muted-foreground align-top" rowSpan={rowSpan}>{String(d.address || '—')}</TableCell>
+                    <TableCell className="align-top" rowSpan={rowSpan}>{String(d.contactNumber || '—')}</TableCell>
+                    <TableCell className="text-muted-foreground align-top" rowSpan={rowSpan}>{String(d.remarks || '—')}</TableCell>
+                  </>
+                )}
+              </TableRow>
+            )
+          })
         })}
       </TableBody>
     </Table>
