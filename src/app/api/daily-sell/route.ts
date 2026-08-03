@@ -78,22 +78,69 @@ export async function POST(request: Request) {
     if (!body.date || !body.customerName || body.amount == null) {
       return NextResponse.json({ error: 'Date, customer name and amount are required' }, { status: 400 })
     }
-    const amount = Number(body.amount)
+
+    // ── Multi-product support ────────────────────────────────────────
+    // If the request includes a `products` array (>=1 item), we store it
+    // AND use it to derive the legacy single-product fields as a SUMMARY:
+    //   • product  = first product's name (with ", +N more" if multiple)
+    //   • quantity = sum of all line-item quantities
+    //   • amount   = sum of all line-item amounts
+    //   • rate     = 0 (varies per item — meaningless as a single value)
+    // If no `products` array is provided, fall back to the legacy single-
+    // product path (use body.product/quantity/rate/amount as-is).
+    type ProductEntry = { product: string; quantity: number; rate: number; amount: number }
+    let products: ProductEntry[] = []
+    if (Array.isArray(body.products) && body.products.length > 0) {
+      products = body.products
+        .filter((p: any) => p && typeof p === 'object')
+        .map((p: any) => ({
+          product: String(p.product || '').trim(),
+          quantity: Number(p.quantity) || 0,
+          rate: Number(p.rate) || 0,
+          amount: Number(p.amount) || (Number(p.quantity) || 0) * (Number(p.rate) || 0),
+        }))
+    }
+
+    const hasMulti = products.length > 0
+
+    // Derive the legacy summary fields.
+    let legacyProduct: string
+    let legacyQuantity: number
+    let legacyRate: number
+    let legacyAmount: number
+
+    if (hasMulti) {
+      legacyProduct =
+        products.length === 1
+          ? products[0].product
+          : `${products[0].product}, +${products.length - 1} more`
+      legacyQuantity = products.reduce((s, p) => s + (Number(p.quantity) || 0), 0)
+      legacyAmount = products.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+      legacyRate = 0
+    } else {
+      legacyProduct = String(body.product || '')
+      legacyQuantity = Number(body.quantity) || 0
+      legacyRate = Number(body.rate) || 0
+      legacyAmount = Number(body.amount)
+    }
+
     const received = Number(body.receivedAmount) || 0
-    const pending = Math.max(0, amount - received)
+    const pending = Math.max(0, legacyAmount - received)
+
     const record = await DailySell.create({
       date: body.date,
       customerName: body.customerName,
       address: body.address || '',
       contactNumber: body.contactNumber || '',
-      product: body.product || '',
-      quantity: Number(body.quantity) || 0,
-      rate: Number(body.rate) || 0,
-      amount,
+      product: legacyProduct,
+      quantity: legacyQuantity,
+      rate: legacyRate,
+      amount: legacyAmount,
       transporterName: body.transporterName || '',
       transporterFair: Number(body.transporterFair) || 0,
       receivedAmount: received,
       pendingAmount: pending,
+      products: hasMulti ? products : [],
       remarks: body.remarks || '',
     })
 
@@ -108,15 +155,16 @@ export async function POST(request: Request) {
         customerName: body.customerName,
         address: body.address || '',
         contactNumber: body.contactNumber || '',
-        product: body.product || '',
-        quantity: Number(body.quantity) || 0,
-        rate: Number(body.rate) || 0,
-        amount,
+        product: legacyProduct,
+        quantity: legacyQuantity,
+        rate: legacyRate,
+        amount: legacyAmount,
         transporterName: body.transporterName || '',
         transporterFair: Number(body.transporterFair) || 0,
         receivedAmount: received,
         pendingAmount: pending,
         remarks: body.remarks || '',
+        products: hasMulti ? products : undefined,
       })
       record.customerId = sync.customerId as any
       record.orderId = sync.orderId as any

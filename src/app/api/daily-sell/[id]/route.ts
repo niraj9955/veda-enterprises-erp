@@ -84,6 +84,39 @@ export async function PUT(
       }
     }
 
+    // ── Multi-product support ────────────────────────────────────────
+    // If the body includes a `products` array, store it AND recompute the
+    // legacy summary fields (product/quantity/rate/amount) from it. If the
+    // body does NOT include `products`, the existing array is preserved
+    // (so editing only the customer/date/transporter/received fields on a
+    // multi-product record doesn't wipe out the line items).
+    type ProductEntry = { product: string; quantity: number; rate: number; amount: number }
+    let products: ProductEntry[] | null = null
+    if (Array.isArray(body.products)) {
+      products = body.products
+        .filter((p: any) => p && typeof p === 'object')
+        .map((p: any) => ({
+          product: String(p.product || '').trim(),
+          quantity: Number(p.quantity) || 0,
+          rate: Number(p.rate) || 0,
+          amount: Number(p.amount) || (Number(p.quantity) || 0) * (Number(p.rate) || 0),
+        }))
+      if (products.length > 0) {
+        // Recompute summary fields from the products array.
+        updateData.products = products
+        updateData.product =
+          products.length === 1
+            ? products[0].product
+            : `${products[0].product}, +${products.length - 1} more`
+        updateData.quantity = products.reduce((s, p) => s + (Number(p.quantity) || 0), 0)
+        updateData.amount = products.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+        updateData.rate = 0
+      } else {
+        // Empty array — clear multi-product storage.
+        updateData.products = []
+      }
+    }
+
     const record = await DailySell.findByIdAndUpdate(id, updateData, { new: true })
     if (!record) {
       return NextResponse.json({ error: 'Daily sell entry not found' }, { status: 404 })
@@ -111,7 +144,17 @@ export async function PUT(
     }
 
     // Step 2: re-create the mirrors with the updated field values.
+    // If the record has a `products` array, pass it through so syncOrder
+    // creates the Order with one line item per product.
     try {
+      const recordProducts = Array.isArray((record as any).products)
+        ? (record as any).products.map((p: any) => ({
+            product: String(p.product || ''),
+            quantity: Number(p.quantity) || 0,
+            rate: Number(p.rate) || 0,
+            amount: Number(p.amount) || 0,
+          }))
+        : undefined
       const sync = await syncAllFromDailySell({
         dailySellId: String(record._id),
         date: String(record.date),
@@ -127,6 +170,7 @@ export async function PUT(
         receivedAmount: rec,
         pendingAmount: Number(record.pendingAmount) || 0,
         remarks: String(record.remarks || ''),
+        products: recordProducts && recordProducts.length > 0 ? recordProducts : undefined,
       })
       record.customerId = sync.customerId as any
       record.orderId = sync.orderId as any

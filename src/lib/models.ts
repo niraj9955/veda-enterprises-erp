@@ -116,6 +116,19 @@ const DailySellSchema = new mongoose.Schema({
   // When synced to CustomerPayment, the recorded amount = receivedAmount.
   receivedAmount: { type: Number, default: 0 },
   pendingAmount: { type: Number, default: 0 },
+  // ── Multi-product support ─────────────────────────────────────────────
+  // When a customer buys MULTIPLE brick types in one sale, ALL line items
+  // are stored here. The legacy `product/quantity/rate/amount` fields above
+  // become SUMMARY fields (first product's name; sum of quantities; total
+  // amount) for backward-compat with the list view and any code that still
+  // reads single-product fields. Empty array = single-product record (use
+  // the legacy fields instead).
+  products: [{
+    product: { type: String, default: '' },
+    quantity: { type: Number, default: 0 },
+    rate: { type: Number, default: 0 },
+    amount: { type: Number, default: 0 },
+  }],
   remarks: { type: String, default: '' },
   // ── Auto-sync linkage ──────────────────────────────────────────────────
   // Each DailySell entry mirrors itself into FOUR collections on save:

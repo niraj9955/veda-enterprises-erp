@@ -61,6 +61,18 @@ export interface DailySellInput {
   receivedAmount?: number
   pendingAmount?: number
   remarks?: string
+  // ── Multi-product line items ───────────────────────────────────────
+  // When the sale has multiple products, ALL line items live here. The
+  // Order mirror will then be created with one row per item. The legacy
+  // `product/quantity/rate/amount` fields above are still used as summary
+  // for Customer Payment / Payment / Tractor Payment sync (they only care
+  // about the total amount, not the per-product breakdown).
+  products?: Array<{
+    product: string
+    quantity: number
+    rate: number
+    amount: number
+  }>
   // Used by syncTractorPayment to set linkedDailySellId back on the
   // mirrored TractorPayment record so future PUT/DELETE on the parent
   // DailySell can find and clean it up.
@@ -158,19 +170,44 @@ export async function syncOrder(
     const prefix = company?.orderPrefix || 'ORD'
     const orderNumber = `${prefix}-${String(count + 1).padStart(4, '0')}`
 
-    const product = (input.product || '').trim() || 'Item'
-    const quantity = Number(input.quantity) || 0
-    const rate = Number(input.rate) || 0
-    const amount = Number(input.amount) || quantity * rate
+    // ── Multi-product vs single-product path ──────────────────────────
+    // When `input.products` has 2+ items, build the Order with one line
+    // item per product. The Order's top-level brickType/quantity/rate/
+    // amount become SUMMARY fields (first product's name, total qty,
+    // total amount) so existing code that reads Order.brickType still
+    // works. When `products` is missing/empty, fall back to the legacy
+    // single-product path.
+    const products = Array.isArray(input.products) ? input.products : []
+    const hasMulti = products.length > 0
 
-    const order = await Order.create({
-      orderNumber,
-      customerId,
-      brickType: product,
-      quantity,
-      rate,
-      amount,
-      items: [
+    let brickType: string
+    let quantity: number
+    let rate: number
+    let amount: number
+    let items: Array<{ description: string; hsn: string; quantity: number; unit: string; rate: number; amount: number }>
+
+    if (hasMulti) {
+      // Multi-product: build line items from the array.
+      items = products.map((p) => {
+        const desc = (p.product || '').trim() || 'Item'
+        const q = Number(p.quantity) || 0
+        const r = Number(p.rate) || 0
+        const a = Number(p.amount) || q * r
+        return { description: desc, hsn: '', quantity: q, unit: 'pcs', rate: r, amount: a }
+      })
+      brickType = items[0]?.description || 'Multiple Items'
+      quantity = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0)
+      amount = items.reduce((s, i) => s + (Number(i.amount) || 0), 0)
+      // Weighted-average rate (avoid div-by-zero when qty=0)
+      rate = quantity > 0 ? Math.round((amount / quantity) * 100) / 100 : 0
+    } else {
+      // Single-product legacy path.
+      const product = (input.product || '').trim() || 'Item'
+      quantity = Number(input.quantity) || 0
+      rate = Number(input.rate) || 0
+      amount = Number(input.amount) || quantity * rate
+      brickType = product
+      items = [
         {
           description: product,
           hsn: '',
@@ -179,7 +216,17 @@ export async function syncOrder(
           rate,
           amount,
         },
-      ],
+      ]
+    }
+
+    const order = await Order.create({
+      orderNumber,
+      customerId,
+      brickType,
+      quantity,
+      rate,
+      amount,
+      items,
       deliveryDate: input.date,
       status: 'Pending',
     })
@@ -187,7 +234,9 @@ export async function syncOrder(
     return {
       orderId: order._id.toString(),
       orderNumber,
-      note: `Order ${orderNumber} created`,
+      note: hasMulti
+        ? `Order ${orderNumber} created (${items.length} items)`
+        : `Order ${orderNumber} created`,
     }
   } catch (err) {
     console.error('[daily-sell-sync] Order sync failed:', err)

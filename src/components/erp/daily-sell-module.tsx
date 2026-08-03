@@ -106,6 +106,16 @@ interface DailySell {
   orderId?: string | null
   customerPaymentId?: string | null
   syncNotes?: string
+  // ── Multi-product line items ───────────────────────────────────────
+  // When a sale has multiple products, ALL line items live here. Empty
+  // array (or undefined) = single-product record (use legacy `product/
+  // quantity/rate/amount` fields above).
+  products?: Array<{
+    product: string
+    quantity: number
+    rate: number
+    amount: number
+  }>
   createdAt: string
   updatedAt: string
 }
@@ -507,18 +517,19 @@ export function DailySellModule() {
       return
     }
 
-    // ── Build entries from line items ─────────────────────────────────
-    // Each line item becomes a separate DailySell record on the server.
-    // All entries share date/customer/address/contact/transporter/received.
-    type EntryToSave = {
+    // ── Build products[] from line items ──────────────────────────────
+    // All line items go into ONE DailySell record (single POST). The
+    // server stores them in the `products` array and derives legacy
+    // single-product fields as a summary (first product name, total qty,
+    // total amount). Empty lines (no product/qty/rate) are skipped.
+    type ProductEntry = {
       product: string
       quantity: number
       rate: number
       amount: number
     }
-    const entries: EntryToSave[] = []
+    const entries: ProductEntry[] = []
 
-    // Filter out completely empty lines (no product, no qty, no rate)
     const filled = lineItems.filter(
       (li) => li.product || li.quantity || li.rate
     )
@@ -559,8 +570,8 @@ export function DailySellModule() {
 
     // ── Low-stock validation ──────────────────────────────────────────
     // Validate EVERY entry against available stock. If any one entry
-    // exceeds stock, abort the whole save (so we don't create half
-    // the entries and leave the user in a confusing state).
+    // exceeds stock, abort the whole save (so we don't create a record
+    // with invalid quantities).
     if (!stockLoading) {
       for (const entry of entries) {
         if (!entry.product) continue
@@ -578,88 +589,51 @@ export function DailySellModule() {
 
     setSavingNew(true)
     try {
-      // Common fields shared across every entry
-      const shared = {
+      // Total amount = sum of all line-item amounts. Received is what the
+      // customer paid total; pending is the difference.
+      const totalAmount = entries.reduce((s, e) => s + e.amount, 0)
+      const totalReceived = Number(newRow.receivedAmount) || 0
+      const totalPending = Math.max(0, totalAmount - totalReceived)
+
+      // ── ONE POST call — server stores products[] in a single record ──
+      // The legacy single-product fields are derived on the server as a
+      // summary so the list view + filters still work without changes.
+      const res = await api.createDailySell({
         date: newRow.date,
         customerName: newRow.customerName.trim(),
         address: newRow.address.trim(),
         contactNumber: newRow.contactNumber.trim(),
+        // Legacy single-product fields are derived on the server from
+        // products[] — we still pass them so single-product Excel imports
+        // (which don't have products[]) keep working via the same route.
+        product: entries[0].product,
+        quantity: entries.reduce((s, e) => s + e.quantity, 0),
+        rate: 0,
+        amount: totalAmount,
         transporterName: newRow.transporterName.trim(),
         transporterFair: Number(newRow.transporterFair) || 0,
+        receivedAmount: totalReceived,
+        pendingAmount: totalPending,
         remarks: newRow.remarks.trim(),
-      }
+        // ← THE KEY FIELD: line items are stored here on the server.
+        products: entries,
+      })
 
-      // Total received amount is split proportionally across entries by
-      // amount (so each record's receivedAmount/pendingAmount is internally
-      // consistent). If user entered 0 received, every entry gets 0.
-      const totalAmount = entries.reduce((s, e) => s + e.amount, 0)
-      const totalReceived = Number(newRow.receivedAmount) || 0
-      let remainingReceived = totalReceived
-
-      let successCount = 0
-      let firstSyncNotes = ''
-      const errors: string[] = []
-
-      for (let i = 0; i < entries.length; i++) {
-        const entry = entries[i]
-        // Allocate received: last entry gets whatever remains to avoid
-        // rounding leaving a few rupees behind.
-        const isLast = i === entries.length - 1
-        let entryReceived: number
-        if (isLast) {
-          entryReceived = Math.min(entry.amount, remainingReceived)
-        } else if (totalAmount > 0) {
-          entryReceived = Math.round((entry.amount / totalAmount) * totalReceived)
-          remainingReceived -= entryReceived
-        } else {
-          entryReceived = 0
-        }
-        const entryPending = Math.max(0, entry.amount - entryReceived)
-
-        try {
-          const res = await api.createDailySell({
-            ...shared,
-            product: entry.product,
-            quantity: entry.quantity,
-            rate: entry.rate,
-            amount: entry.amount,
-            receivedAmount: entryReceived,
-            pendingAmount: entryPending,
-          })
-          if (!firstSyncNotes) {
-            firstSyncNotes = (res as any)?.dailySell?.syncNotes || ''
-          }
-          successCount++
-        } catch (err) {
-          errors.push(
-            `${entry.product}: ${err instanceof Error ? err.message : 'failed'}`
-          )
-        }
-      }
-
-      if (successCount > 0) {
-        const totalProducts = entries.length
-        toast({
-          title: 'Success',
-          description:
-            totalProducts > 1
-              ? `${successCount} of ${totalProducts} entries created${firstSyncNotes ? ` · Auto-synced: ${firstSyncNotes}` : ''}${errors.length ? ` · ${errors.length} failed` : ''}`
-              : firstSyncNotes
-                ? `Entry created · Auto-synced: ${firstSyncNotes}`
-                : 'Daily sell entry created successfully',
-        })
-        setNewRow(emptyForm)
-        setLineItems([{ id: `li-${Date.now()}`, product: '', quantity: '', rate: '' }])
-        setFormOpen(false)
-        fetchData()
-        fetchStock()
-      } else if (errors.length > 0) {
-        toast({
-          title: 'Error',
-          description: `All entries failed: ${errors[0]}`,
-          variant: 'destructive',
-        })
-      }
+      const syncNotes = (res as any)?.dailySell?.syncNotes || ''
+      toast({
+        title: 'Success',
+        description:
+          entries.length > 1
+            ? `Sale created with ${entries.length} products${syncNotes ? ` · Auto-synced: ${syncNotes}` : ''}`
+            : syncNotes
+              ? `Entry created · Auto-synced: ${syncNotes}`
+              : 'Daily sell entry created successfully',
+      })
+      setNewRow(emptyForm)
+      setLineItems([{ id: `li-${Date.now()}`, product: '', quantity: '', rate: '' }])
+      setFormOpen(false)
+      fetchData()
+      fetchStock()
     } catch (err) {
       toast({
         title: 'Error',
@@ -706,13 +680,27 @@ export function DailySellModule() {
       return
     }
 
-    // ── Low-stock validation (edit mode) ──────────────────────────────
-    // Same logic as Quick Add — but we add back the existing row's qty
-    // because editing it means the old qty is "returned" to stock first.
-    if (editRow.product && !stockLoading) {
+    // ── Multi-product record? ──────────────────────────────────────────
+    // If the original record has a `products` array with 2+ items, the
+    // inline edit cannot meaningfully edit individual line items (the UI
+    // doesn't show them). In that case, we OMIT product/quantity/rate/
+    // amount from the PUT payload — the server preserves the existing
+    // `products` array and only updates the shared fields (date, customer,
+    // transporter, received, remarks, etc.). The amount field is sent so
+    // pendingAmount stays consistent with the new receivedAmount.
+    const originalItem = dailySells.find((s) => s.id === editingId)
+    const originalProducts = Array.isArray(originalItem?.products)
+      ? (originalItem!.products as Array<{ product: string; quantity: number; rate: number; amount: number }>)
+      : []
+    const isMulti = originalProducts.length > 1
+
+    // ── Low-stock validation (edit mode, single-product only) ─────────
+    // For multi-product records, stock validation happens at save time
+    // on the server (we can't easily validate inline since the inputs are
+    // not shown). Skip the client-side check for multi-product records.
+    if (!isMulti && editRow.product && !stockLoading) {
       const avail = getProductAvail(editRow.product)
       const newQty = Number(editRow.quantity) || 0
-      const originalItem = dailySells.find((s) => s.id === editingId)
       const originalQty =
         originalItem && originalItem.product === editRow.product
           ? Number(originalItem.quantity) || 0
@@ -730,19 +718,30 @@ export function DailySellModule() {
 
     setSavingEdit(true)
     try {
-      const payload = {
+      // For multi-product records: only send shared fields + amount (so
+      // pendingAmount stays consistent). Don't send product/quantity/rate
+      // — server keeps the existing products[] untouched.
+      // For single-product records: send everything as before.
+      const payload: Record<string, unknown> = {
         date: editRow.date,
         customerName: editRow.customerName.trim(),
         address: editRow.address.trim(),
         contactNumber: editRow.contactNumber.trim(),
-        product: editRow.product.trim(),
-        quantity: Number(editRow.quantity) || 0,
-        rate: Number(editRow.rate) || 0,
-        amount: editComputedAmount,
         transporterName: editRow.transporterName.trim(),
         transporterFair: Number(editRow.transporterFair) || 0,
         receivedAmount: Number(editRow.receivedAmount) || 0,
         remarks: editRow.remarks.trim(),
+      }
+      if (isMulti) {
+        // Amount = sum of original line-item amounts (user can't edit
+        // products inline, so the total doesn't change). Send it so the
+        // server computes the right pendingAmount = amount − received.
+        payload.amount = originalProducts.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+      } else {
+        payload.product = editRow.product.trim()
+        payload.quantity = Number(editRow.quantity) || 0
+        payload.rate = Number(editRow.rate) || 0
+        payload.amount = editComputedAmount
       }
       const res = await api.updateDailySell(editingId, payload)
       const synced = (res as any)?.dailySell?.syncNotes
@@ -1349,39 +1348,74 @@ export function DailySellModule() {
                             <CellInput value={editRow.contactNumber} onChange={(v) => handleEditRowChange('contactNumber', v)} placeholder="Contact" />
                           </TableCell>
                           <TableCell className="min-w-[180px]">
-                            <Select value={editRow.product} onValueChange={(v) => handleEditRowChange('product', v)}>
-                              <SelectTrigger className="h-8 text-xs px-2">
-                                <SelectValue placeholder="Product" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectGroup>
-                                  <SelectLabel>Product Items {stockLoading ? '(loading stock…)' : ''}</SelectLabel>
-                                  {productsWithAvail.map((p) => (
-                                    <SelectItem key={p.key} value={p.key}>
-                                      <span className="flex items-center gap-2">
-                                        <span>{p.label}</span>
-                                        {p.avail != null && (
-                                          <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${p.avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
-                                            Avail: {p.avail.toLocaleString('en-IN')}
+                            {(() => {
+                              // For multi-product records, show a read-only
+                              // "Multiple products" badge instead of the single
+                              // product select — the line items are preserved
+                              // on save and cannot be edited inline.
+                              const orig = dailySells.find((s) => s.id === editingId)
+                              const origProds = Array.isArray(orig?.products) ? orig!.products : []
+                              if (origProds.length > 1) {
+                                return (
+                                  <div className="flex flex-col gap-0.5 text-xs">
+                                    <span className="font-medium text-blue-700 dark:text-blue-300">
+                                      {origProds.length} products
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground" title={origProds.map((p: any) => p.product).filter(Boolean).join(' · ')}>
+                                      {origProds.map((p: any) => p.product).filter(Boolean).join(' · ').slice(0, 40)}
+                                      {origProds.map((p: any) => p.product).filter(Boolean).join(' · ').length > 40 ? '…' : ''}
+                                    </span>
+                                  </div>
+                                )
+                              }
+                              return (
+                                <Select value={editRow.product} onValueChange={(v) => handleEditRowChange('product', v)}>
+                                  <SelectTrigger className="h-8 text-xs px-2">
+                                    <SelectValue placeholder="Product" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectGroup>
+                                      <SelectLabel>Product Items {stockLoading ? '(loading stock…)' : ''}</SelectLabel>
+                                      {productsWithAvail.map((p) => (
+                                        <SelectItem key={p.key} value={p.key} textValue={p.label}>
+                                          <span className="flex items-center gap-2">
+                                            <span>{p.label}</span>
+                                            {p.avail != null && (
+                                              <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${p.avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
+                                                Avail: {p.avail.toLocaleString('en-IN')}
+                                              </span>
+                                            )}
                                           </span>
-                                        )}
-                                      </span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectGroup>
-                              </SelectContent>
-                            </Select>
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
+                                  </SelectContent>
+                                </Select>
+                              )
+                            })()}
                           </TableCell>
                           <TableCell className="min-w-[80px]">
                             {(() => {
+                              // For multi-product records, show total qty
+                              // (read-only). For single-product, show the
+                              // editable input with stock-check badge.
+                              const orig = dailySells.find((s) => s.id === editingId)
+                              const origProds = Array.isArray(orig?.products) ? orig!.products : []
+                              if (origProds.length > 1) {
+                                const total = origProds.reduce((s: number, p: any) => s + (Number(p.quantity) || 0), 0)
+                                return (
+                                  <span className="text-xs font-medium tabular-nums">
+                                    {total.toLocaleString('en-IN')}
+                                  </span>
+                                )
+                              }
                               const enteredQty = Number(editRow.quantity) || 0
                               const avail = editRow.product ? getProductAvail(editRow.product) : null
                               // For edit mode we add back the original qty of this row (if same product)
                               // because that qty is currently "out of stock" but will be returned on save.
-                              const originalItem = dailySells.find((s) => s.id === editingId)
                               const originalQty =
-                                originalItem && originalItem.product === editRow.product
-                                  ? Number(originalItem.quantity) || 0
+                                orig && orig.product === editRow.product
+                                  ? Number(orig.quantity) || 0
                                   : 0
                               const effectiveAvail = (avail ?? 0) + originalQty
                               const isOver = avail != null && enteredQty > effectiveAvail
@@ -1408,10 +1442,30 @@ export function DailySellModule() {
                             })()}
                           </TableCell>
                           <TableCell className="min-w-[90px]">
-                            <CellInput type="number" min="0" value={editRow.rate} onChange={(v) => handleEditRowChange('rate', v)} placeholder="0" />
+                            {(() => {
+                              // For multi-product records, rate varies — show
+                              // "varies" read-only. For single-product, editable.
+                              const orig = dailySells.find((s) => s.id === editingId)
+                              const origProds = Array.isArray(orig?.products) ? orig!.products : []
+                              if (origProds.length > 1) {
+                                return <span className="text-xs italic text-muted-foreground">varies</span>
+                              }
+                              return <CellInput type="number" min="0" value={editRow.rate} onChange={(v) => handleEditRowChange('rate', v)} placeholder="0" />
+                            })()}
                           </TableCell>
                           <TableCell className="text-right font-semibold whitespace-nowrap tabular-nums text-emerald-700 dark:text-emerald-300">
-                            {formatCurrency(editComputedAmount)}
+                            {(() => {
+                              // For multi-product records, show the original
+                              // total amount (user can't edit products inline).
+                              // For single-product, show the live-computed amount.
+                              const orig = dailySells.find((s) => s.id === editingId)
+                              const origProds = Array.isArray(orig?.products) ? orig!.products : []
+                              if (origProds.length > 1) {
+                                const total = origProds.reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0)
+                                return formatCurrency(total)
+                              }
+                              return formatCurrency(editComputedAmount)
+                            })()}
                           </TableCell>
                           <TableCell className="min-w-[130px]">
                             <CellInput value={editRow.transporterName} onChange={(v) => handleEditRowChange('transporterName', v)} placeholder="Transporter" />
@@ -1423,7 +1477,20 @@ export function DailySellModule() {
                             <CellInput type="number" min="0" value={editRow.receivedAmount} onChange={(v) => handleEditRowChange('receivedAmount', v)} placeholder="0" />
                           </TableCell>
                           <TableCell className="text-right font-semibold whitespace-nowrap tabular-nums text-amber-700 dark:text-amber-300">
-                            {formatCurrency(editComputedPending)}
+                            {(() => {
+                              // For multi-product records, base pending on the
+                              // original total amount (user can't edit products
+                              // inline, so the total stays the same). For single-
+                              // product records, use the live-computed amount.
+                              const orig = dailySells.find((s) => s.id === editingId)
+                              const origProds = Array.isArray(orig?.products) ? orig!.products : []
+                              const baseAmount =
+                                origProds.length > 1
+                                  ? origProds.reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0)
+                                  : editComputedAmount
+                              const pending = Math.max(0, baseAmount - (Number(editRow.receivedAmount) || 0))
+                              return formatCurrency(pending)
+                            })()}
                           </TableCell>
                           <TableCell className="min-w-[140px]">
                             <CellInput value={editRow.remarks} onChange={(v) => handleEditRowChange('remarks', v)} placeholder="Remarks" />
@@ -1463,18 +1530,66 @@ export function DailySellModule() {
                           <TableCell className="font-medium whitespace-nowrap">{item.customerName}</TableCell>
                           <TableCell className="max-w-[150px] truncate text-muted-foreground">{item.address || '—'}</TableCell>
                           <TableCell className="whitespace-nowrap">{item.contactNumber || '—'}</TableCell>
-                          <TableCell className="max-w-[180px] truncate">
-                            {item.product ? (
-                              <span className="truncate">{item.product}</span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
+                          <TableCell className="max-w-[240px]">
+                            {(() => {
+                              // ── Multi-product display ─────────────────────────
+                              // If `products[]` exists with 2+ items, show all
+                              // product names joined with " · " and a small "N
+                              // items" badge so the user can tell at a glance
+                              // that this row contains multiple products. If
+                              // only one product (or legacy single-product
+                              // record), fall back to the simple `item.product`
+                              // text.
+                              const prods = Array.isArray(item.products) ? item.products : []
+                              if (prods.length > 1) {
+                                const names = prods
+                                  .map((p) => p.product)
+                                  .filter(Boolean)
+                                  .join(' · ')
+                                return (
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="truncate text-xs font-medium" title={names}>
+                                      {names}
+                                    </span>
+                                    <span className="inline-flex w-fit items-center rounded bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300">
+                                      {prods.length} items
+                                    </span>
+                                  </div>
+                                )
+                              }
+                              if (prods.length === 1 && prods[0].product) {
+                                return <span className="truncate">{prods[0].product}</span>
+                              }
+                              if (item.product) {
+                                return <span className="truncate">{item.product}</span>
+                              }
+                              return <span className="text-muted-foreground">—</span>
+                            })()}
                           </TableCell>
                           <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">
-                            {item.quantity != null ? item.quantity.toLocaleString('en-IN') : '—'}
+                            {(() => {
+                              // For multi-product records, show total qty with
+                              // " (N)" suffix so the user knows it's a sum. For
+                              // single-product, show the qty as before.
+                              const prods = Array.isArray(item.products) ? item.products : []
+                              if (prods.length > 1) {
+                                const total = prods.reduce((s, p) => s + (Number(p.quantity) || 0), 0)
+                                return `${total.toLocaleString('en-IN')} (${prods.length})`
+                              }
+                              return item.quantity != null ? item.quantity.toLocaleString('en-IN') : '—'
+                            })()}
                           </TableCell>
                           <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">
-                            {item.rate != null ? formatCurrency(item.rate) : '—'}
+                            {(() => {
+                              // For multi-product records, rate varies per
+                              // item — show "varies" instead of a misleading
+                              // single value. For single-product, show the rate.
+                              const prods = Array.isArray(item.products) ? item.products : []
+                              if (prods.length > 1) {
+                                return <span className="text-muted-foreground text-xs italic">varies</span>
+                              }
+                              return item.rate != null ? formatCurrency(item.rate) : '—'
+                            })()}
                           </TableCell>
                           <TableCell className="text-right font-medium whitespace-nowrap tabular-nums">{formatCurrency(item.amount)}</TableCell>
                           <TableCell className="max-w-[150px] truncate">{item.transporterName || '—'}</TableCell>
@@ -1715,84 +1830,93 @@ export function DailySellModule() {
                   const avail = li.product ? getProductAvail(li.product) : null
                   const lowStock = avail != null && qty > avail
                   return (
-                    <div key={li.id} className="grid grid-cols-12 gap-2 items-end p-2">
-                      <div className="col-span-5 grid gap-1">
-                        <span className="text-[10px] font-medium text-muted-foreground">
+                    <div key={li.id} className="p-2.5 grid gap-2">
+                      {/* Row 1: product label + delete button on same line */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-medium text-muted-foreground">
                           Product #{idx + 1}
+                          {avail != null && (
+                            <span
+                              className={`ml-2 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}
+                            >
+                              Avail: {avail.toLocaleString('en-IN')}
+                            </span>
+                          )}
                         </span>
-                        <Select
-                          value={li.product}
-                          onValueChange={(v) => updateLineItem(li.id, 'product', v)}
-                        >
-                          <SelectTrigger className="h-9 w-full">
-                            <SelectValue placeholder="Select product" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              <SelectLabel>Product Items {stockLoading ? '(loading…)' : ''}</SelectLabel>
-                              {productsWithAvail.map((p) => (
-                                <SelectItem key={p.key} value={p.key}>
-                                  <span className="flex items-center gap-2">
-                                    <span>{p.label}</span>
-                                    {p.avail != null && (
-                                      <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${p.avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
-                                        Avail: {p.avail.toLocaleString('en-IN')}
-                                      </span>
-                                    )}
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="col-span-2 grid gap-1">
-                        <span className="text-[10px] font-medium text-muted-foreground">Qty</span>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                          value={li.quantity}
-                          onChange={(e) => updateLineItem(li.id, 'quantity', e.target.value)}
-                          className={`h-9 ${lowStock ? 'border-rose-500 ring-1 ring-rose-400 bg-rose-50 dark:bg-rose-950/30' : ''}`}
-                        />
-                      </div>
-                      <div className="col-span-2 grid gap-1">
-                        <span className="text-[10px] font-medium text-muted-foreground">Rate</span>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                          value={li.rate}
-                          onChange={(e) => updateLineItem(li.id, 'rate', e.target.value)}
-                          className="h-9"
-                        />
-                      </div>
-                      <div className="col-span-2 grid gap-1">
-                        <span className="text-[10px] font-medium text-muted-foreground">Amount</span>
-                        <div className="h-9 flex items-center justify-end rounded-md border bg-emerald-50 dark:bg-emerald-900/20 px-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                          {formatCurrency(lineAmount)}
-                        </div>
-                      </div>
-                      <div className="col-span-1 flex justify-end">
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="size-9 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                          className="size-7 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                           disabled={lineItems.length === 1}
                           onClick={() => removeLineItem(li.id)}
+                          title="Remove this product"
                         >
-                          <Trash2 className="size-4" />
+                          <Trash2 className="size-3.5" />
                         </Button>
                       </div>
-                      {lowStock && (
-                        <div className="col-span-12 -mt-1">
-                          <p className="text-xs text-rose-600 flex items-center gap-1">
-                            <AlertTriangle className="size-3" />
-                            Only {avail!.toLocaleString('en-IN')} units of &quot;{li.product}&quot; available in stock
-                          </p>
+                      {/* Row 2: product select — full width, no Avail badge inside the trigger */}
+                      <Select
+                        value={li.product}
+                        onValueChange={(v) => updateLineItem(li.id, 'product', v)}
+                      >
+                        <SelectTrigger className="h-9 w-full">
+                          <SelectValue placeholder="Select product" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectLabel>Product Items {stockLoading ? '(loading…)' : ''}</SelectLabel>
+                            {productsWithAvail.map((p) => (
+                              <SelectItem key={p.key} value={p.key} textValue={p.label}>
+                                <span className="flex items-center gap-2">
+                                  <span>{p.label}</span>
+                                  {p.avail != null && (
+                                    <span className={`text-[10px] font-medium rounded px-1.5 py-0.5 ${p.avail > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
+                                      Avail: {p.avail.toLocaleString('en-IN')}
+                                    </span>
+                                  )}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      {/* Row 3: Qty | Rate | Amount — 3-col grid, comfortable spacing */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="grid gap-1">
+                          <span className="text-[10px] font-medium text-muted-foreground">Qty</span>
+                          <Input
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            value={li.quantity}
+                            onChange={(e) => updateLineItem(li.id, 'quantity', e.target.value)}
+                            className={`h-9 ${lowStock ? 'border-rose-500 ring-1 ring-rose-400 bg-rose-50 dark:bg-rose-950/30' : ''}`}
+                          />
                         </div>
+                        <div className="grid gap-1">
+                          <span className="text-[10px] font-medium text-muted-foreground">Rate</span>
+                          <Input
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            value={li.rate}
+                            onChange={(e) => updateLineItem(li.id, 'rate', e.target.value)}
+                            className="h-9"
+                          />
+                        </div>
+                        <div className="grid gap-1">
+                          <span className="text-[10px] font-medium text-muted-foreground">Amount</span>
+                          <div className="h-9 flex items-center justify-end rounded-md border bg-emerald-50 dark:bg-emerald-900/20 px-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                            {formatCurrency(lineAmount)}
+                          </div>
+                        </div>
+                      </div>
+                      {lowStock && (
+                        <p className="text-xs text-rose-600 flex items-center gap-1">
+                          <AlertTriangle className="size-3" />
+                          Only {avail!.toLocaleString('en-IN')} units of &quot;{li.product}&quot; available in stock
+                        </p>
                       )}
                     </div>
                   )
