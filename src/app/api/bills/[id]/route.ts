@@ -106,10 +106,15 @@ export async function PUT(
     //   1. paidAmount > 0 && customerId set  → upsert Payment (create or update)
     //   2. paidAmount === 0 || customerId null → delete any existing synced Payment
     //   3. customer changed → delete old Payment, create new under new customer
+    // SKIPPED for quotations — quotations are not real invoices, so they
+    // never have a "paid amount" to mirror into the Payments module. Any
+    // stale Payment from a previously-invoiced record (e.g. billType was
+    // changed from 'sales' to 'quotation') is still cleaned up below.
+    const isQuotation = (updateData.billType || existing.billType) === 'quotation'
     try {
       const existingPayment = await Payment.findOne({ billId: existing._id })
 
-      if (customerId && paidAmount > 0) {
+      if (customerId && paidAmount > 0 && !isQuotation) {
         const paymentType = body.paymentMode || existing.paymentMode || 'Cash'
         const remarks = `Auto-synced from bill ${existing.billNumber}`
         if (existingPayment) {

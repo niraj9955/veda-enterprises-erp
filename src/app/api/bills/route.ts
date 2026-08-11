@@ -65,11 +65,15 @@ export async function POST(request: Request) {
     if (body.date) body.date = normalizeDate(body.date)
     if (body.dueDate) body.dueDate = normalizeDate(body.dueDate)
 
-    // Generate bill number: BILL-YYYYMM-0001
-    const count = await Bill.countDocuments({})
+    // Generate bill number: BILL-YYYYMM-0001 for normal bills,
+    // QUO-YYYYMM-0001 for quotations (separate prefix + counter).
+    const isQuotation = body.billType === 'quotation'
+    const prefix = isQuotation ? 'QUO' : 'BILL'
+    const countQuery = isQuotation ? { billType: 'quotation' } : {}
+    const count = await Bill.countDocuments(countQuery)
     const now = new Date()
     const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
-    const billNumber = `BILL-${yyyymm}-${String(count + 1).padStart(4, '0')}`
+    const billNumber = `${prefix}-${yyyymm}-${String(count + 1).padStart(4, '0')}`
 
     // Get company info for "from" fields (defaults)
     const company = await Company.findOne({})
@@ -136,7 +140,9 @@ export async function POST(request: Request) {
     // amount, create a corresponding Payment row so the receipt shows up in
     // the Payments module without manual entry. The Payment carries billId so
     // future updates / deletes on this Bill propagate atomically.
-    if (customerId && paidAmount > 0) {
+    // SKIPPED for quotations — quotations are not real invoices, so there's
+    // no "paid amount" to mirror into the Payments module.
+    if (customerId && paidAmount > 0 && !isQuotation) {
       try {
         await Payment.create({
           customerId,

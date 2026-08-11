@@ -119,6 +119,10 @@ const BillModule = dynamic(() => import('@/components/erp/bill-module'), {
   ssr: false,
   loading: () => <ModuleSkeleton />,
 })
+const QuotationModule = dynamic(() => import('@/components/erp/quotation-module'), {
+  ssr: false,
+  loading: () => <ModuleSkeleton />,
+})
 
 // Simple skeleton shown while a module chunk loads. Same look as the
 // dashboard loading state, so the user sees a consistent placeholder.
@@ -160,6 +164,7 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   electricity: ElectricityModule,
   factoryStuff: FactoryStuffModule,
   bills: BillModule,
+  quotations: QuotationModule,
 }
 
 // Map of ModuleKey → dynamic importer function. Calling the importer
@@ -189,6 +194,7 @@ const modulePrefetchers: Record<ModuleKey, () => Promise<unknown>> = {
   electricity: () => import('@/components/erp/electricity-module'),
   factoryStuff: () => import('@/components/erp/factory-stuff-module'),
   bills: () => import('@/components/erp/bill-module'),
+  quotations: () => import('@/components/erp/quotation-module'),
 }
 
 export default function Home() {
@@ -321,9 +327,9 @@ function ModuleRenderer() {
 
   // Role-based module access guard
   const accessMap: Record<string, string[]> = {
-    admin: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'settings', 'users', 'admin', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff', 'bills'],
-    operator: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff', 'bills'],
-    accountant: ['dashboard', 'payments', 'expenses', 'reports', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff', 'bills'],
+    admin: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'settings', 'users', 'admin', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff', 'bills', 'quotations'],
+    operator: ['dashboard', 'customers', 'production', 'stock', 'orders', 'dispatch', 'payments', 'expenses', 'reports', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff', 'bills', 'quotations'],
+    accountant: ['dashboard', 'payments', 'expenses', 'reports', 'dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff', 'bills', 'quotations'],
   }
 
   const allowedModules = accessMap[user?.role || ''] || ['dashboard']

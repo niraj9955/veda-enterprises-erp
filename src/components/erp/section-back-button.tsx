@@ -29,6 +29,7 @@ const MODULE_LABEL: Record<Exclude<ModuleKey, 'dashboard'>, string> = {
   electricity:      'Electricity',
   factoryStuff:     'Factory Stuff',
   bills:            'Billing',
+  quotations:       'Quotations',
 }
 
 interface Props {
