@@ -1,120 +1,90 @@
 import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/db'
 import { AiConfig } from '@/lib/models'
-import { getSession } from '@/lib/auth'
+import { requireAdmin } from '@/lib/auth'
 import OpenAI from 'openai'
 
-// Force dynamic
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 // POST /api/ai/test
-// Admin-only. Sends a tiny "ping" request to the configured AI provider
-// using the saved key+model. Returns 200 with latency if the call succeeds,
-// or 4xx/5xx with a human-readable error if it fails.
-//
-// This is called by the "Test Connection" button in the Admin Panel so the
-// admin can immediately see whether their key+model+endpoint combination
-// actually works, instead of having to navigate to a form, open the AI
-// widget, type something, and try to interpret the failure.
+// Sends a tiny test prompt to the configured AI provider to verify
+// that the saved API key + model actually work. Admin-only.
 export async function POST() {
   try {
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+
     await connectDB()
 
-    const session = await getSession()
-    if (!session || session.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Unauthorized — only admins can test AI configuration' },
-        { status: 403 }
-      )
+    const config = await AiConfig.findOne().lean()
+    if (!config) {
+      return NextResponse.json({
+        ok: false,
+        error: 'No AI configuration found. Please save your API key first.',
+      })
     }
 
-    const configDoc = await AiConfig.findOne().lean()
-    const apiKey = String((configDoc as Record<string, unknown> | null)?.openaiApiKey || '')
-    const enabled = !!(configDoc as Record<string, unknown> | null)?.enabled
-    const provider = String((configDoc as Record<string, unknown> | null)?.provider || 'openai')
-    const model = String((configDoc as Record<string, unknown> | null)?.model || 'gpt-4o-mini')
+    const key = String((config as Record<string, unknown>).openaiApiKey || '')
+    const provider = String((config as Record<string, unknown>).provider || 'openai')
+    const model = String((config as Record<string, unknown>).model || 'gpt-4o-mini')
 
-    if (!apiKey) {
-      return NextResponse.json(
-        { ok: false, error: 'No API key configured. Please save an API key first.' },
-        { status: 400 }
-      )
-    }
-    if (!enabled) {
-      return NextResponse.json(
-        { ok: false, error: 'AI is disabled. Toggle it on and save first.' },
-        { status: 400 }
-      )
+    if (!key) {
+      return NextResponse.json({
+        ok: false,
+        error: 'No API key saved. Please enter and save an API key first.',
+      })
     }
 
-    // Build the OpenAI-compatible client — Groq uses a different baseURL
-    const clientOptions: ConstructorParameters<typeof OpenAI>[0] = {
-      apiKey,
-      timeout: 10_000,
-      maxRetries: 0, // no retries on test — fail fast
-    }
-    if (provider === 'groq') {
-      clientOptions.baseURL = 'https://api.groq.com/openai/v1'
-    }
-    const client = new OpenAI(clientOptions)
+    // Build the OpenAI client — for Groq we override the baseURL
+    const client = new OpenAI({
+      apiKey: key,
+      baseURL: provider === 'groq'
+        ? 'https://api.groq.com/openai/v1'
+        : undefined,
+    })
 
-    const t0 = Date.now()
-    // Minimal ping — "Reply with OK" with json_object response_format so we
-    // exercise the same code path as the real parse endpoint.
+    const start = Date.now()
+
     const response = await client.chat.completions.create({
       model,
       messages: [
-        {
-          role: 'system',
-          content:
-            'You are a connectivity-test bot. Reply with a JSON object: {"status":"ok"}. Do not say anything else.',
-        },
-        { role: 'user', content: 'ping' },
+        { role: 'system', content: 'You are a test assistant. Reply with exactly: OK' },
+        { role: 'user', content: 'Say OK' },
       ],
-      temperature: 0,
-      max_tokens: 50,
-      response_format: { type: 'json_object' },
+      max_tokens: 10,
     })
-    const latencyMs = Date.now() - t0
 
-    const content = response.choices[0]?.message?.content || ''
-    let parsedOk = false
-    try {
-      const j = JSON.parse(content)
-      parsedOk = j?.status === 'ok' || typeof j === 'object'
-    } catch {
-      parsedOk = false
-    }
+    const latencyMs = Date.now() - start
+    const preview = response.choices?.[0]?.message?.content || ''
 
     return NextResponse.json({
       ok: true,
       provider,
       model,
       latencyMs,
-      responsePreview: content.slice(0, 120),
-      parsedOk,
-      message: `Success — ${provider === 'groq' ? 'Groq' : 'OpenAI'} responded in ${latencyMs}ms using model "${model}".`,
+      responsePreview: preview.slice(0, 100),
+      message: `Connected to ${provider === 'groq' ? 'Groq' : 'OpenAI'} (${model}) in ${latencyMs}ms`,
     })
-  } catch (error) {
-    console.error('Error in /api/ai/test:', error)
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error)
+    const status = (error as { status?: number }).status
 
-    // Try to extract a useful message from OpenAI SDK errors. The SDK throws
-    // APIError subclasses that have .status, .message, and .error.code.
-    let message = 'Unknown error'
-    let status = 500
-    if (error instanceof Error) {
-      message = error.message
-      // Common patterns:
-      //  - "401 Incorrect API key provided"
-      //  - "404 The model ... does not exist"
-      //  - "429 Rate limit exceeded"
-      const m = message.match(/^(\d{3})\s/)
-      if (m) status = Number(m[1])
+    // Map common errors to helpful messages
+    let hint = ''
+    if (errMsg.includes('401') || errMsg.includes('Incorrect API key') || errMsg.includes('invalid_api_key')) {
+      hint = ' (incorrect API key — check for typos or extra spaces)'
+    } else if (errMsg.includes('404') || errMsg.includes('model_not_found')) {
+      hint = ' (model not found — try a different model)'
+    } else if (errMsg.includes('429') || errMsg.includes('rate_limit')) {
+      hint = ' (rate limit reached — wait a moment or check your plan)'
     }
-    return NextResponse.json(
-      { ok: false, error: message, status },
-      { status }
-    )
+
+    console.error('AI test connection error:', errMsg)
+
+    return NextResponse.json({
+      ok: false,
+      error: `${errMsg}${hint}`,
+    })
   }
 }
