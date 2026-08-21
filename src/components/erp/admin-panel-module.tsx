@@ -1703,10 +1703,9 @@ function AiConfigSection() {
       { value: 'gpt-3.5-turbo', label: 'gpt-3.5-turbo (cheapest)' },
     ],
     groq: [
-      { value: 'llama-3.1-8b-instant', label: 'llama-3.1-8b-instant (recommended — FREE, 14,400 req/day)' },
+      { value: 'openai/gpt-oss-20b', label: 'gpt-oss-20b (recommended — fast, FREE)' },
       { value: 'qwen/qwen3.6-27b', label: 'qwen3.6-27b (great reasoning, free tier)' },
-      { value: 'meta-llama/llama-4-scout-17b-16e-instruct', label: 'llama-4-scout-17b (latest, may need paid plan)' },
-      { value: 'meta-llama/llama-4-maverick-17b-128e-instruct', label: 'llama-4-maverick-17b (most capable, may need paid plan)' },
+      { value: 'openai/gpt-oss-120b', label: 'gpt-oss-120b (most capable, free tier)' },
     ],
   }
 
@@ -1862,9 +1861,9 @@ function AiConfigSection() {
               <SelectContent>
                 <SelectItem value="groq">
                   <div className="flex flex-col">
-                    <span>Groq (Llama 4) — FREE tier available</span>
+                    <span>Groq — FREE tier available</span>
                     <span className="text-xs text-muted-foreground">
-                      Free models available. Recommended for zero cost.
+                      Free models: gpt-oss-20b, qwen3.6-27b, gpt-oss-120b
                     </span>
                   </div>
                 </SelectItem>
@@ -1971,8 +1970,8 @@ function AiConfigSection() {
             <p className="text-xs text-muted-foreground">
               {provider === 'groq' ? (
                 <>
-                  <strong>llama-3.1-8b-instant</strong> is recommended — FREE, fast, 14,400 req/day.
-                  Try qwen3.6-27b for better reasoning.
+                  <strong>gpt-oss-20b</strong> is recommended — fast, FREE on Groq.
+                  Try qwen3.6-27b for better reasoning or gpt-oss-120b for best quality.
                 </>
               ) : (
                 <>

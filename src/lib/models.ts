@@ -413,7 +413,7 @@ BillSchema.index({ customerId: 1 });
 // Supports two providers:
 //   • openai (default) — OpenAI's official API
 //   • groq — GroqCloud (OpenAI-compatible endpoint at api.groq.com/openai/v1)
-//            Free tier: llama-4-scout-17b, llama-3.1-8b-instant, qwen3.6-27b
+//            Free models: openai/gpt-oss-20b, qwen/qwen3.6-27b, openai/gpt-oss-120b
 const AiConfigSchema = new mongoose.Schema({
   // Which AI provider to use ('openai' | 'groq')
   provider: { type: String, default: 'openai', enum: ['openai', 'groq'] },
@@ -422,7 +422,7 @@ const AiConfigSchema = new mongoose.Schema({
   // Whether AI features are enabled (admin can toggle off without deleting the key)
   enabled: { type: Boolean, default: false },
   // Which model to use — defaults to gpt-4o-mini (cheap + fast + good Hindi)
-  // For Groq, admin will typically switch this to 'llama-4-scout-17b-16e-instruct'
+  // For Groq, admin will typically switch this to 'openai/gpt-oss-20b'
   model: { type: String, default: 'gpt-4o-mini' },
 }, { timestamps: true });
 
