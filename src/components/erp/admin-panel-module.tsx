@@ -1703,9 +1703,10 @@ function AiConfigSection() {
       { value: 'gpt-3.5-turbo', label: 'gpt-3.5-turbo (cheapest)' },
     ],
     groq: [
-      { value: 'llama-3.3-70b-versatile', label: 'llama-3.3-70b-versatile (recommended — FREE tier)' },
-      { value: 'llama-3.1-8b-instant', label: 'llama-3.1-8b-instant (fastest, more free calls)' },
-      { value: 'meta-llama/llama-4-scout-17b-16e-instruct', label: 'llama-4-scout-17b (newest)' },
+      { value: 'llama-4-scout-17b-16e-instruct', label: 'llama-4-scout-17b (recommended — latest Llama 4)' },
+      { value: 'llama-4-maverick-17b-128e-instruct', label: 'llama-4-maverick-17b (most capable)' },
+      { value: 'llama-3.1-8b-instant', label: 'llama-3.1-8b-instant (fastest, 14,400 free req/day)' },
+      { value: 'qwen/qwen3.6-27b', label: 'qwen3.6-27b (great reasoning, free tier)' },
     ],
   }
 
@@ -1861,9 +1862,9 @@ function AiConfigSection() {
               <SelectContent>
                 <SelectItem value="groq">
                   <div className="flex flex-col">
-                    <span>Groq (Llama 3) — FREE tier available</span>
+                    <span>Groq (Llama 4) — FREE tier available</span>
                     <span className="text-xs text-muted-foreground">
-                      1,000 free requests/day on llama-3.3-70b. Recommended for cost.
+                      Free models available. Recommended for zero cost.
                     </span>
                   </div>
                 </SelectItem>
@@ -1970,8 +1971,8 @@ function AiConfigSection() {
             <p className="text-xs text-muted-foreground">
               {provider === 'groq' ? (
                 <>
-                  <strong>llama-3.3-70b-versatile</strong> is recommended — fast, accurate, FREE.
-                  Switch to 8b-instant if you need more daily requests (14,400 vs 1,000).
+                  <strong>llama-4-scout-17b</strong> is recommended — latest Llama 4, fast & FREE.
+                  Switch to 8b-instant for highest daily free requests (14,400/day).
                 </>
               ) : (
                 <>

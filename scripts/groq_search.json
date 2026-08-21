@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://console.groq.com/docs/models",
+    "name": "Supported Models - GroqDocs",
+    "snippet": "Explore all available models on GroqCloud. Hosted models are directly accessible through the GroqCloud Models API endpoint. JSON list of all active models :",
+    "host_name": "console.groq.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://console.groq.com/docs/deprecations",
+    "name": "Model Deprecation - GroqDocs",
+    "snippet": "All API deprecations along with recommended replacements are listed below. Production Models llama-3.1-70b-specdec 01/24/25 llama-3.3-70b-specdec January 6,  ...",
+    "host_name": "console.groq.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.ampcome.com/post/how-to-use-groq-api-the-comprehensive-guide-you-need",
+    "name": "How to Use Groq API: The Comprehensive Guide You Need",
+    "snippet": "Mar 26, 2024 — This guide now includes new Groq models (Llama 4 Scout, GPT-OSS, Kimi K2, Qwen3), Here are all currently available models as of March 2026 :  ...",
+    "host_name": "www.ampcome.com",
+    "rank": 2,
+    "date": "Mar 26, 2024",
+    "favicon": ""
+  },
+  {
+    "url": "https://console.groq.com/docs/api-reference",
+    "name": "API Reference - GroqDocs",
+    "snippet": "Comprehensive reference documentation for the Groq API, including endpoints, parameters, and examples. List all available models .",
+    "host_name": "console.groq.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.cloudzero.com/blog/groq-pricing",
+    "name": "Groq Pricing In 2026: Every Model, Tier, And Cost Compared",
+    "snippet": "May 4, 2026 — Groq pricing starts at $0.05 per million input tokens . Compare every model, free tier limits, batch discounts, and see how Groq stacks up ...",
+    "host_name": "www.cloudzero.com",
+    "rank": 4,
+    "date": "May 4, 2026",
+    "favicon": ""
+  }
+]

@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://console.groq.com/docs/models",
+    "name": "Supported Models - GroqDocs",
+    "snippet": "Explore all available models on GroqCloud. a JSON list of all active models: Python curl -X",
+    "host_name": "console.groq.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://console.groq.com/docs/vision",
+    "name": "Images and Vision - GroqDocs",
+    "snippet": "A 27B multimodal model that processes both text and image inputs, with thinking and non-thinking modes, tool use, and JSON mode.",
+    "host_name": "console.groq.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://console.groq.com/docs/overview",
+    "name": "Overview - GroqDocs",
+    "snippet": "Connect your AI agents to Gmail, Google Calendar, and Google Drive with ready-made connectors. Groq API Models See all the models Groq offers API Reference. ...",
+    "host_name": "console.groq.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://console.groq.com/docs/deprecations",
+    "name": "Model Deprecation - GroqDocs",
+    "snippet": "Track deprecated models , their shutdown dates, and recommended replacements for models on Groq.",
+    "host_name": "console.groq.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://console.groq.com/docs/batch",
+    "name": "Groq Batch API - GroqDocs",
+    "snippet": "A batch is composed of a list of API requests and every batch job starts with a JSON Lines (JSONL) file that contains the requests you want processed.",
+    "host_name": "console.groq.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  }
+]

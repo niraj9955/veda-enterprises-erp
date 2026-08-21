@@ -101,7 +101,6 @@ export async function POST(request: Request) {
     // false + a permissive object with all keys as optional strings/numbers.
     //
     // PERFORMANCE: temperature=0 for deterministic, fast reasoning. Groq's
-    // llama-3.3-70b is incredibly fast at temp=0 — often <800ms.
     // max_tokens=500 is plenty for form fields (response is a tiny JSON).
     const response = await client.chat.completions.create({
       model,
