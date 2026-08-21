@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://console.groq.com/docs/model/meta-llama/llama-4-scout-17b-16e-instruct",
+    "name": "Llama 4 Scout - GroqDocs",
+    "snippet": "Model card for Llama 4 Scout : multimodal, 17B parameters, 16 experts, 12 languages, text and image understanding, and Groq fast inference.",
+    "host_name": "console.groq.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.typingmind.com/guide/groq/meta-llama-llama-4-scout-17b-16e-instruct",
+    "name": "Connect and use Llama 4 Scout 17B 16E from Groq with",
+    "snippet": "Apr 4, 2025 — Learn how to access and use Llama 4 Scout 17B 16E with your Groq API key through TypingMind. Get started with this powerful AI model in minutes. Read more",
+    "host_name": "www.typingmind.com",
+    "rank": 1,
+    "date": "Apr 4, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://forums.developer.nvidia.com/t/llama-4-scout-17b-16e-instruct-not-accessible-through-api/363822",
+    "name": "Llama-4-scout-17b-16e-instruct not accessible through API",
+    "snippet": "Mar 17, 2026 — Getting this error when trying to call through the API . Other models work fine. HTTP request failed with status 404 : {“status”: 404 ,“title”:“ Not ... Read more",
+    "host_name": "forums.developer.nvidia.com",
+    "rank": 2,
+    "date": "Mar 17, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://pulsetic.com/status/groq/incidents/3283",
+    "name": "meta-llama/llama-4-scout-17b-16e-instruct Degraded",
+    "snippet": "We are currently investigating reports of an issue with meta- llama / llama - 4 - scout - 17b - 16e - instruct . Users may be experiencing **elevated error rates and or slow ...",
+    "host_name": "pulsetic.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.promptfoo.dev/docs/providers/llamaApi",
+    "name": "Meta Llama API",
+    "snippet": "Llama-4-Scout-17B-16E-Instruct-FP8 : Class-leading multimodal model with superior visual intelligence . Both Llama 4 models support: Input: Text and images ... Read more",
+    "host_name": "www.promptfoo.dev",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  }
+]
