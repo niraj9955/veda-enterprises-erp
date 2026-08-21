@@ -1703,10 +1703,10 @@ function AiConfigSection() {
       { value: 'gpt-3.5-turbo', label: 'gpt-3.5-turbo (cheapest)' },
     ],
     groq: [
-      { value: 'llama-4-scout-17b-16e-instruct', label: 'llama-4-scout-17b (recommended — latest Llama 4)' },
-      { value: 'llama-4-maverick-17b-128e-instruct', label: 'llama-4-maverick-17b (most capable)' },
-      { value: 'llama-3.1-8b-instant', label: 'llama-3.1-8b-instant (fastest, 14,400 free req/day)' },
+      { value: 'llama-3.1-8b-instant', label: 'llama-3.1-8b-instant (recommended — FREE, 14,400 req/day)' },
       { value: 'qwen/qwen3.6-27b', label: 'qwen3.6-27b (great reasoning, free tier)' },
+      { value: 'meta-llama/llama-4-scout-17b-16e-instruct', label: 'llama-4-scout-17b (latest, may need paid plan)' },
+      { value: 'meta-llama/llama-4-maverick-17b-128e-instruct', label: 'llama-4-maverick-17b (most capable, may need paid plan)' },
     ],
   }
 
@@ -1971,8 +1971,8 @@ function AiConfigSection() {
             <p className="text-xs text-muted-foreground">
               {provider === 'groq' ? (
                 <>
-                  <strong>llama-4-scout-17b</strong> is recommended — latest Llama 4, fast & FREE.
-                  Switch to 8b-instant for highest daily free requests (14,400/day).
+                  <strong>llama-3.1-8b-instant</strong> is recommended — FREE, fast, 14,400 req/day.
+                  Try qwen3.6-27b for better reasoning.
                 </>
               ) : (
                 <>
