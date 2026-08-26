@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { VoiceInput } from '@/components/ui/voice-input'
-import { Sparkles, X, Loader2, Send, Bot, User, Zap, Trash2, Mic, MicOff } from 'lucide-react'
+import { Sparkles, X, Loader2, Send, Bot, User, Zap, Trash2, Mic, MicOff, RefreshCw, AlertTriangle } from 'lucide-react'
 import { useAiConfig } from '@/hooks/use-ai-config'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -43,6 +43,7 @@ export function AiChatWidget() {
   const [conversationId, setConversationId] = React.useState('')
   const [voiceSupported, setVoiceSupported] = React.useState(true)
   const [voiceListening, setVoiceListening] = React.useState(false)
+  const [micError, setMicError] = React.useState('')
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
 
   React.useEffect(() => {
@@ -51,7 +52,10 @@ export function AiChatWidget() {
 
   // Check speech support on mount
   React.useEffect(() => {
-    setVoiceSupported(isSpeechSupported())
+    if (typeof window === 'undefined') { setVoiceSupported(false); return }
+    const hasSupport = !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition
+    setVoiceSupported(hasSupport)
+    console.log('[AI Chat] SpeechRecognition supported:', hasSupport, '| Browser:', navigator.userAgent)
   }, [])
 
   if (configLoading) return null
@@ -92,6 +96,7 @@ export function AiChatWidget() {
   }
 
   const handleVoiceResult = (finalText: string) => {
+    setMicError('')
     setInput((prev) => {
       const sep = prev && !prev.endsWith(' ') ? ' ' : ''
       return prev + sep + finalText
@@ -187,6 +192,28 @@ export function AiChatWidget() {
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Mic Error Banner - with Refresh button */}
+          {micError && !voiceListening && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-orange-50 dark:bg-orange-950/40 border-t border-orange-200 dark:border-orange-800/40">
+              <AlertTriangle className="size-4 text-orange-600 shrink-0" />
+              <p className="flex-1 text-[11px] text-orange-800 dark:text-orange-300 leading-snug">{micError}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-orange-600 text-white hover:bg-orange-700 transition-colors"
+                title="Page refresh karo"
+              >
+                <RefreshCw className="size-3" /> Refresh
+              </button>
+              <button
+                onClick={() => setMicError('')}
+                className="shrink-0 p-1 rounded text-orange-400 hover:text-orange-600 transition-colors"
+                title="Dismiss"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Voice Recording Banner */}
           {voiceListening && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-950/40 border-t border-red-200 dark:border-red-800/40">
@@ -220,7 +247,7 @@ export function AiChatWidget() {
                 onError={(err) => {
                   setVoiceListening(false)
                   setInterim('')
-                  setMessages((prev) => [...prev, { role: 'assistant', content: `Mic error: ${err}` }])
+                  setMicError(err)
                 }}
                 onListeningChange={setVoiceListening}
                 disabled={loading}
@@ -230,9 +257,9 @@ export function AiChatWidget() {
             ) : (
               <button
                 type="button"
-                disabled
-                className="shrink-0 inline-flex items-center justify-center rounded-md p-2 text-muted-foreground/40 cursor-not-allowed"
-                title="Voice not supported in this browser. Use Chrome or Edge."
+                onClick={() => setMicError('Voice Chrome ya Edge mein hi kaam karta hai. Aapka browser support nahi karta. Chrome ya Edge open karo.')}
+                className="shrink-0 inline-flex items-center justify-center rounded-md p-2 text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+                title="Voice not supported - Chrome ya Edge use karo"
               >
                 <MicOff className="size-4" />
               </button>
