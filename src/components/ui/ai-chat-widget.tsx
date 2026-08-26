@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { VoiceInput } from '@/components/ui/voice-input'
-import { Sparkles, X, Loader2, Send, Bot, User, Zap, Trash2 } from 'lucide-react'
+import { Sparkles, X, Loader2, Send, Bot, User, Zap, Trash2, Mic, MicOff } from 'lucide-react'
 import { useAiConfig } from '@/hooks/use-ai-config'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,12 @@ const QUICK_ACTIONS = [
   { label: 'Recent sales', prompt: 'recent daily sales dikhao' },
 ]
 
+// Check if browser supports speech recognition
+function isSpeechSupported(): boolean {
+  if (typeof window === 'undefined') return false
+  return !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition
+}
+
 export function AiChatWidget() {
   const { isEnabled, loading: configLoading } = useAiConfig()
   const [open, setOpen] = React.useState(false)
@@ -35,11 +41,18 @@ export function AiChatWidget() {
   const [interim, setInterim] = React.useState('')
   const [loading, setLoading] = React.useState(false)
   const [conversationId, setConversationId] = React.useState('')
+  const [voiceSupported, setVoiceSupported] = React.useState(true)
+  const [voiceListening, setVoiceListening] = React.useState(false)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
 
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
+
+  // Check speech support on mount
+  React.useEffect(() => {
+    setVoiceSupported(isSpeechSupported())
+  }, [])
 
   if (configLoading) return null
   if (!isEnabled) return null
@@ -84,6 +97,7 @@ export function AiChatWidget() {
       return prev + sep + finalText
     })
     setInterim('')
+    setVoiceListening(false)
   }
 
   const showQuick = messages.length < 2 && !loading
@@ -104,6 +118,7 @@ export function AiChatWidget() {
 
       {open && (
         <div className="fixed bottom-24 right-5 z-50 w-[calc(100vw-2.5rem)] sm:w-[420px] h-[600px] sm:h-[65vh] flex flex-col bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-border overflow-hidden animate-in slide-in-from-bottom-5 fade-in-0 duration-200">
+          {/* Header */}
           <div className="flex items-center justify-between bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-4 py-3 shrink-0">
             <div className="flex items-center gap-2.5">
               <div className="size-8 rounded-full bg-white/20 flex items-center justify-center">
@@ -126,6 +141,7 @@ export function AiChatWidget() {
             </div>
           </div>
 
+          {/* Messages */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-muted/30">
             {messages.map((msg, i) => (
               <div key={i} className={cn('flex gap-2', msg.role === 'user' && 'flex-row-reverse')}>
@@ -171,17 +187,56 @@ export function AiChatWidget() {
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Voice Recording Banner */}
+          {voiceListening && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-950/40 border-t border-red-200 dark:border-red-800/40">
+              <div className="flex items-center gap-1.5">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+                </span>
+                <span className="text-[11px] font-medium text-red-700 dark:text-red-400">
+                  {interim ? interim : 'Sun raha hoon...'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Input Area */}
           <div className="border-t border-border bg-white dark:bg-zinc-900 p-2 flex items-end gap-1.5 shrink-0">
             <textarea
               value={displayInput}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
-              placeholder="Kuch bhi bolo... (Enter to send)"
+              placeholder={voiceListening ? 'Boltein raho...' : 'Kuch bhi bolo... (Enter to send)'}
               rows={1}
               disabled={loading}
               className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm max-h-20 ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
             />
-            <VoiceInput onResult={handleVoiceResult} onInterim={setInterim} disabled={loading} className="shrink-0" />
+            {voiceSupported ? (
+              <VoiceInput
+                onResult={handleVoiceResult}
+                onInterim={setInterim}
+                onError={(err) => {
+                  setVoiceListening(false)
+                  setInterim('')
+                  setMessages((prev) => [...prev, { role: 'assistant', content: `Mic error: ${err}` }])
+                }}
+                onListeningChange={setVoiceListening}
+                disabled={loading}
+                language="hi-IN"
+                className="shrink-0"
+              />
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="shrink-0 inline-flex items-center justify-center rounded-md p-2 text-muted-foreground/40 cursor-not-allowed"
+                title="Voice not supported in this browser. Use Chrome or Edge."
+              >
+                <MicOff className="size-4" />
+              </button>
+            )}
             <Button size="icon" onClick={() => handleSend()} disabled={loading || !input.trim()} className="shrink-0 bg-emerald-600 hover:bg-emerald-700 rounded-lg">
               <Send className="size-4" />
             </Button>

@@ -4,44 +4,13 @@ import * as React from 'react'
 import { Mic, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
-// ─── VoiceInput ─────────────────────────────────────────────────────────────
-//
-// Browser-based speech-to-text using the Web Speech API (webkitSpeechRecognition).
-// Supports Hindi (hi-IN) and English (en-IN).
-//
-// RELIABILITY FIX (v3): the previous versions used `continuous = true` which is
-// flaky in Chrome — it stops after the first phrase and the auto-restart logic
-// frequently lost words. We now use a much simpler, more robust approach:
-//
-//   1. `continuous = false` — Chrome returns ONE complete phrase per session,
-//      which is exactly what we want for short voice inputs (names, amounts,
-//      addresses, single sentences).
-//   2. After each phrase ends (onend), if the user still wants to listen, we
-//      start a new session. Final results accumulate across sessions.
-//   3. We use a STABLE ref-based architecture so parent re-renders never
-//      recreate or restart the recognition mid-phrase.
-//   4. Multiple final results are joined with a space and passed to onResult.
-//
-// This pattern is used by every production voice-input library (e.g.
-// react-speech-recognition, @mui/x-voice) because it's the only one that
-// actually works reliably on Chrome.
-//
-// ─── GLOBAL SINGLETON (mic-reliability fix) ─────────────────────────────────
-//
-// Browsers only allow ONE active SpeechRecognition session at a time. We share
-// the same singleton controller that FieldVoiceInput uses, so that only ONE
-// mic (per-field OR AI Fill dialog OR AI Chat widget) is ever listening at a
-// time across the whole app. This is the #1 cause of "mic not working
-// everywhere".
-
-// Re-use the same singleton controller as FieldVoiceInput.
-// We import it lazily to avoid circular imports — but since field-voice-input
-// has no other dependencies on this file, we can import directly.
 import { activeVoiceControllerLike } from '@/components/ui/voice-active-controller'
 
 interface VoiceInputProps {
   onResult: (text: string) => void
   onInterim?: (text: string) => void
+  onError?: (error: string) => void
+  onListeningChange?: (listening: boolean) => void
   disabled?: boolean
   language?: 'hi-IN' | 'en-IN'
   className?: string
@@ -61,7 +30,6 @@ interface SpeechRecognitionLike {
   onstart: (() => void) | null
 }
 
-// Unique id generator for each VoiceInput instance
 let _voiceInputIdCounter = 0
 function nextVoiceInputId(): string {
   _voiceInputIdCounter += 1
@@ -71,6 +39,8 @@ function nextVoiceInputId(): string {
 export function VoiceInput({
   onResult,
   onInterim,
+  onError,
+  onListeningChange,
   disabled,
   language = 'en-IN',
   className,
@@ -78,18 +48,26 @@ export function VoiceInput({
   const [listening, setListening] = React.useState(false)
   const [supported, setSupported] = React.useState(true)
 
-  // STABLE refs — never cause re-render or effect re-run
   const instanceIdRef = React.useRef<string>(nextVoiceInputId())
   const onResultRef = React.useRef(onResult)
   const onInterimRef = React.useRef(onInterim)
+  const onErrorRef = React.useRef(onError)
+  const onListeningChangeRef = React.useRef(onListeningChange)
   const userWantsToListenRef = React.useRef(false)
   const recognitionRef = React.useRef<SpeechRecognitionLike | null>(null)
   const restartTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const notifyListening = React.useCallback((val: boolean) => {
+    setListening(val)
+    onListeningChangeRef.current?.(val)
+  }, [])
+
   React.useEffect(() => {
     onResultRef.current = onResult
     onInterimRef.current = onInterim
-  }, [onResult, onInterim])
+    onErrorRef.current = onError
+    onListeningChangeRef.current = onListeningChange
+  }, [onResult, onInterim, onError, onListeningChange])
 
   React.useEffect(() => {
     const SpeechRecognition =
@@ -103,18 +81,17 @@ export function VoiceInput({
 
     const recognition = new SpeechRecognition() as SpeechRecognitionLike
     recognition.lang = language
-    // KEY FIX: continuous=false is far more reliable in Chrome for short phrases.
-    // The browser returns one complete utterance per session, then fires onend.
-    // We restart manually for the next phrase if the user still wants to listen.
     recognition.continuous = false
     recognition.interimResults = true
     recognition.maxAlternatives = 1
 
+    recognition.onstart = () => {
+      notifyListening(true)
+    }
+
     recognition.onresult = (event: any) => {
       let interimText = ''
       let finalText = ''
-      // Iterate over ALL results in this event — Chrome may batch multiple
-      // final results in a single event when speech was fast.
       for (let i = 0; i < event.results.length; i++) {
         const result = event.results[i]
         const transcript = result[0].transcript
@@ -133,18 +110,21 @@ export function VoiceInput({
 
     recognition.onerror = (event: any) => {
       console.warn('[VoiceInput] error:', event.error)
-      // 'no-speech' just means silence — not fatal, onend will handle restart.
-      // 'aborted' is triggered by our own stop() — onend will fire next.
-      // 'not-allowed' / 'service-not-allowed' mean mic permission denied.
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         userWantsToListenRef.current = false
-        setListening(false)
+        notifyListening(false)
+        onErrorRef.current?.(event.error === 'not-allowed' ? 'Microphone permission denied. Browser settings se allow karo.' : 'Speech service not available. Chrome ya Edge use karo.')
+      } else if (event.error === 'audio-capture') {
+        userWantsToListenRef.current = false
+        notifyListening(false)
+        onErrorRef.current?.('Microphone nahi mila. Koi mic connected hai?')
+      } else if (event.error === 'network') {
+        onErrorRef.current?.('Network error. Internet connection check karo.')
       }
+      // 'no-speech' and 'aborted' are non-fatal — onend handles them
     }
 
     recognition.onend = () => {
-      // Session ended (either Chrome auto-stopped on silence, or we stopped it).
-      // If the user still wants to listen, restart after a tiny delay.
       if (userWantsToListenRef.current) {
         if (restartTimerRef.current) clearTimeout(restartTimerRef.current)
         restartTimerRef.current = setTimeout(() => {
@@ -152,15 +132,13 @@ export function VoiceInput({
             try {
               recognitionRef.current.start()
             } catch {
-              // If start() throws (already started or shutting down),
-              // try once more after a longer delay.
               restartTimerRef.current = setTimeout(() => {
                 if (userWantsToListenRef.current && recognitionRef.current) {
                   try {
                     recognitionRef.current.start()
                   } catch {
                     userWantsToListenRef.current = false
-                    setListening(false)
+                    notifyListening(false)
                   }
                 }
               }, 300)
@@ -168,7 +146,7 @@ export function VoiceInput({
           }
         }, 150)
       } else {
-        setListening(false)
+        notifyListening(false)
       }
     }
 
@@ -188,12 +166,11 @@ export function VoiceInput({
       recognitionRef.current = null
       activeVoiceControllerLike.release(instanceIdRef.current)
     }
-  }, [language])
+  }, [language, notifyListening])
 
   const toggle = () => {
     if (!recognitionRef.current) return
     if (listening) {
-      // User explicitly stopped — prevent onend from restarting.
       userWantsToListenRef.current = false
       if (restartTimerRef.current) {
         clearTimeout(restartTimerRef.current)
@@ -204,11 +181,9 @@ export function VoiceInput({
       } catch {
         // ignore
       }
-      setListening(false)
+      notifyListening(false)
       activeVoiceControllerLike.release(instanceIdRef.current)
     } else {
-      // ─── KEY FIX ──────────────────────────────────────────────────────
-      // Take over the global mic slot — stops any other active mic first.
       activeVoiceControllerLike.takeOver(instanceIdRef.current, () => {
         userWantsToListenRef.current = false
         if (restartTimerRef.current) {
@@ -220,25 +195,23 @@ export function VoiceInput({
         } catch {
           // ignore
         }
-        setListening(false)
+        notifyListening(false)
       })
 
       userWantsToListenRef.current = true
       try {
         recognitionRef.current.start()
-        setListening(true)
+        // onstart will call notifyListening(true)
       } catch {
-        // start() throws if a session is still shutting down.
-        // Wait a moment and retry once.
         restartTimerRef.current = setTimeout(() => {
           if (userWantsToListenRef.current && recognitionRef.current) {
             try {
               recognitionRef.current.start()
-              setListening(true)
             } catch {
               userWantsToListenRef.current = false
-              setListening(false)
+              notifyListening(false)
               activeVoiceControllerLike.release(instanceIdRef.current)
+              onErrorRef.current?.('Microphone start nahi ho paya. Dobara try karo.')
             }
           }
         }, 250)
@@ -255,7 +228,7 @@ export function VoiceInput({
       size="icon"
       onClick={toggle}
       disabled={disabled}
-      title={listening ? 'Stop listening' : 'Speak (Hindi/English)'}
+      title={listening ? 'Stop listening' : `Bolo (${language === 'hi-IN' ? 'Hindi' : 'English'})`}
       className={className}
     >
       {listening ? (
