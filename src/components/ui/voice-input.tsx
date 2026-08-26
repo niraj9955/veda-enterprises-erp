@@ -1,8 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import { Mic, Square } from 'lucide-react'
+import { Mic, Square, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 import { activeVoiceControllerLike } from '@/components/ui/voice-active-controller'
 
@@ -36,6 +37,19 @@ function nextVoiceInputId(): string {
   return `voice-${_voiceInputIdCounter}`
 }
 
+/**
+ * Check microphone permission using the Permissions API.
+ * Returns 'granted' | 'denied' | 'prompt' | 'unsupported'.
+ */
+async function getMicPermissionState(): Promise<string> {
+  try {
+    const result = await navigator.permissions.query({ name: 'microphone' as any })
+    return result.state // 'granted' | 'denied' | 'prompt'
+  } catch {
+    return 'unsupported' // Permissions API not available (e.g., Firefox)
+  }
+}
+
 export function VoiceInput({
   onResult,
   onInterim,
@@ -47,6 +61,7 @@ export function VoiceInput({
 }: VoiceInputProps) {
   const [listening, setListening] = React.useState(false)
   const [supported, setSupported] = React.useState(true)
+  const [permBlocked, setPermBlocked] = React.useState(false)
 
   const instanceIdRef = React.useRef<string>(nextVoiceInputId())
   const onResultRef = React.useRef(onResult)
@@ -69,17 +84,38 @@ export function VoiceInput({
     onListeningChangeRef.current = onListeningChange
   }, [onResult, onInterim, onError, onListeningChange])
 
+  // Check speech support on mount
   React.useEffect(() => {
-    const SpeechRecognition =
-      (typeof window !== 'undefined' &&
-        ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) ||
-      null
-    if (!SpeechRecognition) {
-      setSupported(false)
-      return
-    }
+    if (typeof window === 'undefined') { setSupported(false); return }
+    const hasSupport = !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition
+    setSupported(hasSupport)
+  }, [])
 
-    const recognition = new SpeechRecognition() as SpeechRecognitionLike
+  // Cleanup on unmount
+  React.useEffect(() => {
+    return () => {
+      userWantsToListenRef.current = false
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current)
+        restartTimerRef.current = null
+      }
+      try { recognitionRef.current?.abort() } catch { /* ignore */ }
+      recognitionRef.current = null
+      activeVoiceControllerLike.release(instanceIdRef.current)
+    }
+  }, [])
+
+  /**
+ * Create a FRESH SpeechRecognition instance.
+ * Called every time the user clicks the mic button so that
+ * permission changes (deny → allow) are picked up.
+ */
+  const createRecognition = React.useCallback((): SpeechRecognitionLike | null => {
+    const SpeechRecognitionCtor =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognitionCtor) return null
+
+    const recognition = new SpeechRecognitionCtor() as SpeechRecognitionLike
     recognition.lang = language
     recognition.continuous = false
     recognition.interimResults = true
@@ -110,15 +146,23 @@ export function VoiceInput({
 
     recognition.onerror = (event: any) => {
       console.warn('[VoiceInput] error:', event.error)
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+      const err = event.error
+
+      if (err === 'not-allowed' || err === 'service-not-allowed') {
         userWantsToListenRef.current = false
         notifyListening(false)
-        onErrorRef.current?.(event.error === 'not-allowed' ? 'Microphone permission denied. Browser settings se allow karo.' : 'Speech service not available. Chrome ya Edge use karo.')
-      } else if (event.error === 'audio-capture') {
+        setPermBlocked(true)
+        onErrorRef.current?.(
+          'Mic permission blocked! Browser settings > Site settings > Microphone > Allow. ' +
+          'Phir PAGE REFRESH karo (F5) — bina refresh ke nahi chalega.'
+        )
+      } else if (err === 'audio-capture') {
         userWantsToListenRef.current = false
         notifyListening(false)
         onErrorRef.current?.('Microphone nahi mila. Koi mic connected hai?')
-      } else if (event.error === 'network') {
+      } else if (err === 'network') {
+        userWantsToListenRef.current = false
+        notifyListening(false)
         onErrorRef.current?.('Network error. Internet connection check karo.')
       }
       // 'no-speech' and 'aborted' are non-fatal — onend handles them
@@ -150,76 +194,101 @@ export function VoiceInput({
       }
     }
 
-    recognitionRef.current = recognition
-
-    return () => {
-      userWantsToListenRef.current = false
-      if (restartTimerRef.current) {
-        clearTimeout(restartTimerRef.current)
-        restartTimerRef.current = null
-      }
-      try {
-        recognition.abort()
-      } catch {
-        // ignore
-      }
-      recognitionRef.current = null
-      activeVoiceControllerLike.release(instanceIdRef.current)
-    }
+    return recognition
   }, [language, notifyListening])
 
-  const toggle = () => {
-    if (!recognitionRef.current) return
+  const toggle = async () => {
     if (listening) {
+      // ── STOP ──
       userWantsToListenRef.current = false
       if (restartTimerRef.current) {
         clearTimeout(restartTimerRef.current)
         restartTimerRef.current = null
       }
-      try {
-        recognitionRef.current.stop()
-      } catch {
-        // ignore
-      }
+      try { recognitionRef.current?.stop() } catch { /* ignore */ }
       notifyListening(false)
       activeVoiceControllerLike.release(instanceIdRef.current)
-    } else {
-      activeVoiceControllerLike.takeOver(instanceIdRef.current, () => {
-        userWantsToListenRef.current = false
-        if (restartTimerRef.current) {
-          clearTimeout(restartTimerRef.current)
-          restartTimerRef.current = null
-        }
-        try {
-          recognitionRef.current?.stop()
-        } catch {
-          // ignore
-        }
-        notifyListening(false)
-      })
+      return
+    }
 
-      userWantsToListenRef.current = true
-      try {
-        recognitionRef.current.start()
-        // onstart will call notifyListening(true)
-      } catch {
-        restartTimerRef.current = setTimeout(() => {
-          if (userWantsToListenRef.current && recognitionRef.current) {
-            try {
-              recognitionRef.current.start()
-            } catch {
-              userWantsToListenRef.current = false
-              notifyListening(false)
-              activeVoiceControllerLike.release(instanceIdRef.current)
-              onErrorRef.current?.('Microphone start nahi ho paya. Dobara try karo.')
-            }
-          }
-        }, 250)
+    // ── START ──
+    setPermBlocked(false)
+
+    // Check permission FIRST using Permissions API
+    const permState = await getMicPermissionState()
+    if (permState === 'denied') {
+      setPermBlocked(true)
+      onErrorRef.current?.(
+        'Mic permission BLOCKED hai! Browser settings > Site settings > Microphone > Allow karo. ' +
+        'Phir PAGE REFRESH karo (F5) — bina refresh ke permission change nahi lega.'
+      )
+      return
+    }
+
+    // Register with global controller (stops any other voice input)
+    activeVoiceControllerLike.takeOver(instanceIdRef.current, () => {
+      userWantsToListenRef.current = false
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current)
+        restartTimerRef.current = null
       }
+      try { recognitionRef.current?.stop() } catch { /* ignore */ }
+      notifyListening(false)
+    })
+
+    // Kill any previous recognition and create a FRESH instance
+    // This is KEY: after user grants permission in settings,
+    // a new instance is needed — the old one is stuck in denied state.
+    try { recognitionRef.current?.abort() } catch { /* ignore */ }
+    recognitionRef.current = null
+
+    const recognition = createRecognition()
+    if (!recognition) {
+      activeVoiceControllerLike.release(instanceIdRef.current)
+      return
+    }
+
+    recognitionRef.current = recognition
+    userWantsToListenRef.current = true
+
+    try {
+      recognition.start()
+      // onstart will call notifyListening(true)
+    } catch {
+      restartTimerRef.current = setTimeout(() => {
+        if (userWantsToListenRef.current && recognitionRef.current) {
+          try {
+            recognitionRef.current.start()
+          } catch {
+            userWantsToListenRef.current = false
+            notifyListening(false)
+            activeVoiceControllerLike.release(instanceIdRef.current)
+            onErrorRef.current?.('Microphone start nahi ho paya. Page refresh karo (F5) aur dubara try karo.')
+          }
+        }
+      }, 250)
     }
   }
 
   if (!supported) return null
+
+  // ── Permission Blocked State ──
+  // Show a distinct UI with refresh guidance
+  if (permBlocked) {
+    return (
+      <Button
+        type="button"
+        variant="destructive"
+        size="icon"
+        onClick={toggle}
+        disabled={disabled}
+        title="Mic blocked — click to retry (make sure you refreshed the page after allowing)"
+        className={cn(className, 'animate-pulse')}
+      >
+        <RefreshCw className="size-4" />
+      </Button>
+    )
+  }
 
   return (
     <Button
@@ -239,5 +308,7 @@ export function VoiceInput({
     </Button>
   )
 }
+
+
 
 export default VoiceInput
