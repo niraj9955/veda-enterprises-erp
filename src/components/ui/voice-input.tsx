@@ -1,9 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { Mic, Square, RefreshCw } from 'lucide-react'
+import { Mic, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 
 import { activeVoiceControllerLike } from '@/components/ui/voice-active-controller'
 
@@ -37,19 +36,6 @@ function nextVoiceInputId(): string {
   return `voice-${_voiceInputIdCounter}`
 }
 
-/**
- * Check microphone permission using the Permissions API.
- * Returns 'granted' | 'denied' | 'prompt' | 'unsupported'.
- */
-async function getMicPermissionState(): Promise<string> {
-  try {
-    const result = await navigator.permissions.query({ name: 'microphone' as any })
-    return result.state // 'granted' | 'denied' | 'prompt'
-  } catch {
-    return 'unsupported' // Permissions API not available (e.g., Firefox)
-  }
-}
-
 export function VoiceInput({
   onResult,
   onInterim,
@@ -61,7 +47,6 @@ export function VoiceInput({
 }: VoiceInputProps) {
   const [listening, setListening] = React.useState(false)
   const [supported, setSupported] = React.useState(true)
-  const [permBlocked, setPermBlocked] = React.useState(false)
 
   const instanceIdRef = React.useRef<string>(nextVoiceInputId())
   const onResultRef = React.useRef(onResult)
@@ -106,10 +91,8 @@ export function VoiceInput({
   }, [])
 
   /**
- * Create a FRESH SpeechRecognition instance.
- * Called every time the user clicks the mic button so that
- * permission changes (deny → allow) are picked up.
- */
+   * Create a FRESH SpeechRecognition instance each time mic is clicked.
+   */
   const createRecognition = React.useCallback((): SpeechRecognitionLike | null => {
     const SpeechRecognitionCtor =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -151,15 +134,13 @@ export function VoiceInput({
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         userWantsToListenRef.current = false
         notifyListening(false)
-        setPermBlocked(true)
         onErrorRef.current?.(
-          'Mic permission blocked! Browser settings > Site settings > Microphone > Allow. ' +
-          'Phir PAGE REFRESH karo (F5) — bina refresh ke nahi chalega.'
+          'Mic BLOCKED hai! Chrome address bar mein 🔒 (lock) icon pe click karo → Microphone → Allow select karo → phir page refresh (F5) karo.'
         )
       } else if (err === 'audio-capture') {
         userWantsToListenRef.current = false
         notifyListening(false)
-        onErrorRef.current?.('Microphone nahi mila. Koi mic connected hai?')
+        onErrorRef.current?.('Microphone device nahi mila. Koi mic connected hai?')
       } else if (err === 'network') {
         userWantsToListenRef.current = false
         notifyListening(false)
@@ -212,20 +193,31 @@ export function VoiceInput({
     }
 
     // ── START ──
-    setPermBlocked(false)
-
-    // Check permission FIRST using Permissions API
-    const permState = await getMicPermissionState()
-    if (permState === 'denied') {
-      setPermBlocked(true)
-      onErrorRef.current?.(
-        'Mic permission BLOCKED hai! Browser settings > Site settings > Microphone > Allow karo. ' +
-        'Phir PAGE REFRESH karo (F5) — bina refresh ke permission change nahi lega.'
-      )
+    //
+    // STEP 1: Request mic permission via getUserMedia.
+    // - If state is 'prompt' → browser shows the REAL native permission popup.
+    // - If state is 'granted' → resolves instantly, no popup.
+    // - If state is 'denied'  → rejects with NotAllowedError → we show precise steps.
+    // This is THE reliable way — the Permissions API can lie, getUserMedia never does.
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      // Permission granted! Release the mic immediately (SpeechRecognition opens its own).
+      stream.getTracks().forEach((track) => track.stop())
+    } catch (err: any) {
+      console.warn('[VoiceInput] getUserMedia failed:', err?.name, err?.message)
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError' || err?.name === 'SecurityError') {
+        onErrorRef.current?.(
+          'Mic BLOCKED hai! Fix: Chrome address bar mein 🔒 icon pe click karo → "Microphone" → "Allow" select karo → phir page REFRESH (F5) karo. Ye site ki permission hai, browser ki nahi.'
+        )
+      } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
+        onErrorRef.current?.('Microphone device nahi mila. Mic connect hai kya?')
+      } else {
+        onErrorRef.current?.(`Mic error: ${err?.message || err?.name || 'Unknown'}`)
+      }
       return
     }
 
-    // Register with global controller (stops any other voice input)
+    // STEP 2: Permission OK — register with global controller
     activeVoiceControllerLike.takeOver(instanceIdRef.current, () => {
       userWantsToListenRef.current = false
       if (restartTimerRef.current) {
@@ -236,9 +228,7 @@ export function VoiceInput({
       notifyListening(false)
     })
 
-    // Kill any previous recognition and create a FRESH instance
-    // This is KEY: after user grants permission in settings,
-    // a new instance is needed — the old one is stuck in denied state.
+    // STEP 3: Kill old instance, create FRESH one
     try { recognitionRef.current?.abort() } catch { /* ignore */ }
     recognitionRef.current = null
 
@@ -263,7 +253,7 @@ export function VoiceInput({
             userWantsToListenRef.current = false
             notifyListening(false)
             activeVoiceControllerLike.release(instanceIdRef.current)
-            onErrorRef.current?.('Microphone start nahi ho paya. Page refresh karo (F5) aur dubara try karo.')
+            onErrorRef.current?.('Microphone start nahi ho paya. Page refresh (F5) karke dubara try karo.')
           }
         }
       }, 250)
@@ -271,24 +261,6 @@ export function VoiceInput({
   }
 
   if (!supported) return null
-
-  // ── Permission Blocked State ──
-  // Show a distinct UI with refresh guidance
-  if (permBlocked) {
-    return (
-      <Button
-        type="button"
-        variant="destructive"
-        size="icon"
-        onClick={toggle}
-        disabled={disabled}
-        title="Mic blocked — click to retry (make sure you refreshed the page after allowing)"
-        className={cn(className, 'animate-pulse')}
-      >
-        <RefreshCw className="size-4" />
-      </Button>
-    )
-  }
 
   return (
     <Button
@@ -308,7 +280,5 @@ export function VoiceInput({
     </Button>
   )
 }
-
-
 
 export default VoiceInput

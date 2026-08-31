@@ -214,9 +214,14 @@ export function FieldVoiceInput({
     // ── START ──
     setPermBlocked(false)
 
-    // Check permission FIRST using Permissions API
-    const permState = await getMicPermissionState()
-    if (permState === 'denied') {
+    // STEP 1: Request mic via getUserMedia — triggers the REAL browser prompt
+    // if state is 'prompt'; gives a clear error if denied. Never lies like the
+    // Permissions API can.
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      stream.getTracks().forEach((track) => track.stop())
+    } catch (err: any) {
+      console.warn('[FieldVoiceInput] getUserMedia failed:', err?.name, err?.message)
       setPermBlocked(true)
       return
     }
@@ -273,7 +278,7 @@ export function FieldVoiceInput({
         disabled={disabled}
         title={
           permBlocked
-            ? `Mic BLOCKED — browser settings > site settings > microphone > allow, PHIR PAGE REFRESH (F5) karo`
+            ? `Mic BLOCKED — address bar mein 🔒 icon pe click karo → Microphone → Allow → page refresh (F5)`
             : listening
               ? `Listening to ${fieldLabel}... click to stop`
               : `Speak ${fieldLabel} (voice input)`
@@ -315,8 +320,8 @@ export function FieldVoiceInput({
 
       {/* Permission blocked tooltip */}
       {permBlocked && (
-        <div className="absolute bottom-full right-0 mb-1 z-30 w-[220px] max-w-[calc(100vw-2rem)] px-2 py-1.5 rounded-md bg-orange-600 text-white text-[11px] shadow-lg pointer-events-none">
-          Mic blocked! Settings &gt; Allow, phir <b>page refresh (F5)</b> karo
+        <div className="absolute bottom-full right-0 mb-1 z-30 w-[240px] max-w-[calc(100vw-2rem)] px-2 py-1.5 rounded-md bg-orange-600 text-white text-[11px] shadow-lg pointer-events-none">
+          Mic blocked! Address bar 🔒 icon → Microphone → Allow, phir <b>page refresh (F5)</b> karo
         </div>
       )}
     </div>
