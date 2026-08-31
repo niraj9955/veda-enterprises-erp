@@ -205,15 +205,36 @@ export function VoiceInput({
       stream.getTracks().forEach((track) => track.stop())
     } catch (err: any) {
       console.warn('[VoiceInput] getUserMedia failed:', err?.name, err?.message)
-      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError' || err?.name === 'SecurityError') {
+
+      if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
         onErrorRef.current?.(
-          'Mic BLOCKED hai! Fix: Chrome address bar mein 🔒 icon pe click karo → "Microphone" → "Allow" select karo → phir page REFRESH (F5) karo. Ye site ki permission hai, browser ki nahi.'
+          'Microphone device nahi mila. Mic connect karo, phir Windows Settings > System > Sound > Input mein check karo ki mic dikhta hai.'
         )
-      } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
-        onErrorRef.current?.('Microphone device nahi mila. Mic connect hai kya?')
-      } else {
-        onErrorRef.current?.(`Mic error: ${err?.message || err?.name || 'Unknown'}`)
+        return
       }
+
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError' || err?.name === 'SecurityError') {
+        // Site permission alag se check karo taaki pata chale Windows problem hai ya site permission
+        let sitePerm = 'unknown'
+        try {
+          const p = await navigator.permissions.query({ name: 'microphone' as any })
+          sitePerm = p.state
+        } catch { /* Permissions API not supported */ }
+
+        if (sitePerm === 'granted') {
+          // Site permission ON hai, phir bhi fail → WINDOWS OS level block!
+          onErrorRef.current?.(
+            'Site permission ON hai lekin WINDOWS ne mic block kiya hai! Fix: Windows Settings search karo "Microphone privacy settings" → "Allow desktop apps to access your microphone" ON karo → phir Chrome band karke dubara kholo. (Windows Settings > Privacy & Security > Microphone)'
+          )
+        } else {
+          onErrorRef.current?.(
+            'Mic BLOCKED hai! Fix: Chrome address bar mein 🔒 icon pe click karo → "Microphone" → "Allow" select karo → phir page REFRESH (F5) karo.'
+          )
+        }
+        return
+      }
+
+      onErrorRef.current?.(`Mic error: ${err?.message || err?.name || 'Unknown'}`)
       return
     }
 
