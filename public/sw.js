@@ -18,7 +18,7 @@
  *  - Images from external CDN            → CacheFirst, 24h
  */
 
-const SW_VERSION = "veda-erp-v1";
+const SW_VERSION = "veda-erp-v2";
 const STATIC_CACHE = `${SW_VERSION}-static`;
 const API_CACHE = `${SW_VERSION}-api`;
 const PAGE_CACHE = `${SW_VERSION}-pages`;

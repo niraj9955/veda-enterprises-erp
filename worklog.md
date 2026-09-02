@@ -2156,3 +2156,25 @@ Stage Summary:
   form fields auto-fill). Live bars show mic is hearing; muted-mic case gets a clear
   diagnostic message.
 - Login card properly centered on mobile (svh).
+
+---
+Task ID: 4
+Agent: Main Agent (GLM 5.3 session)
+Task: ASR multi-format fix (iPhone mp4/aac + Firefox ogg failed)
+
+Work Log:
+- Tested /api/asr with REAL browser containers (ffmpeg-generated from known-good WAV):
+  WAV ✅, webm/opus ✅ (Chrome/Android), mp4/aac ❌ (iOS Safari HTTP 500), ogg/opus untested.
+- iPhone failure confirmed: ASR API rejects mp4/aac bytes outright.
+- Server-side fix in /api/asr: magic-byte format detection (RIFF=wav, EBML=webm pass
+  through directly); every other container (mp4/aac, ogg/opus, 3gpp...) converted to
+  16kHz mono PCM WAV via ffmpeg temp files before hitting the ASR API.
+- Added [ASR] request logs (size, format, conversion, result) for remote diagnosis.
+- Bumped SW_VERSION v1 -> v2: service worker used StaleWhileRevalidate so users kept
+  getting the OLD cached build after deploys (likely why new voice UI wasn't visible).
+  skipWaiting+clients.claim already present, so v2 activates immediately.
+- Re-tested: ALL FOUR formats now transcribe correctly (wav/webm/m4a/ogg, ~450ms each).
+
+Stage Summary:
+- /api/asr accepts every browser audio format now (iPhone + Firefox fixed).
+- SW cache version bumped so all users get the new voice UI on next load.
