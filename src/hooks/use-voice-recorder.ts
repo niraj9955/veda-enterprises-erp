@@ -248,7 +248,7 @@ export function useVoiceRecorder({
       }
       if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError' || err?.name === 'SecurityError') {
         onErrorRef.current(
-          'Mic permission BLOCK hai! Fix: browser ke address bar mein 🔒 (lock) icon pe tap karo → Microphone → "Allow" select karo → page refresh karo.',
+          'Mic permission BLOCK hai! Fix: (1) address bar me 🔒 lock icon tap karo → Microphone → "Allow" karo. Nahi hua to (2) phone Settings → Apps → Chrome → Permissions → Microphone → "Allow" karo. Phir page refresh karo.',
           'permission'
         )
         return
