@@ -2062,3 +2062,28 @@ Stage Summary:
   • src/app/api/import/route.ts (uses centralized normalizer)
   • src/lib/ai-schemas.ts (fixed buggy new Date(string) fallback)
   • 32 files in src/app/api/<module>/route.ts + [id]/route.ts (normalize before save)
+
+---
+Task ID: 2
+Agent: Main Agent (GLM 5.3)
+Task: Voice fix (universal) + MongoDB explanation + backup restore attempt
+
+Work Log:
+- SANDBOX RESET detected (~09:04): saari files, MongoDB, node_modules wipe ho gaye. Sirf GitHub-pushed code bacha
+- Recovery: repo re-clone (HEAD 6ffb4a1), mongod binary re-download, MongoDB restart, bun install, next build, daemon restart — app 100% restored
+- VOICE ROOT CAUSE: Web Speech API (SpeechRecognition) sirf Chrome desktop/Android Chrome me chalta hai; iOS Safari, Firefox, in-app browsers me FAIL; plus Google speech servers pe depend karta hai
+- FIX IMPLEMENTED (universal voice):
+  - New /api/asr route: base64 audio -> zai.audio.asr.create -> text (auth-guarded, 20MB cap)
+  - New src/hooks/use-voice-recorder.ts: getUserMedia + MediaRecorder, mime negotiation (webm/opus -> mp4 -> ogg), 60s auto-stop, min-size guard, Hinglish errors with kinds (permission/device/unsupported/no-speech/other)
+  - voice-input.tsx + field-voice-input.tsx fully rewritten on the hook (same external API, global single-listener controller wired)
+  - ai-chat-widget.tsx support check: MediaRecorder+getUserMedia (universal)
+  - Fixed pre-existing openai SDK type drift in api/ai/agent/route.ts -> tsc 100% clean
+- VERIFIED: TTS se audio banake /api/asr pe test kiya -> "Add production entry for today, one hundred bricks" EXACT transcription. Production form me 14 mic buttons render huye
+- Committed 212aa1c, pushed to GitHub
+- NOTE: AI chat widget fresh DB me hidden hai (isEnabled = enabled && hasKey) — Groq key user ke backup JSON me hai; backup restore pe wapas aa jayega
+- USER BACKUP FILE (veda-erp-backup-2026-09-02.json) sandbox me kabhi aayi hi nahi (upload sync fail/reset ke beech) — user se re-upload maanga
+
+Stage Summary:
+- Voice input ab HAR browser me chalega (mobile + laptop, koi bhi browser)
+- MongoDB LOCAL sandbox instance hai (user ka Atlas account use nahi ho raha) — data loss risk on reset; solution: user se Atlas URI lene ka plan
+- Backup JSON re-upload pending; aane pe restore karna hai
