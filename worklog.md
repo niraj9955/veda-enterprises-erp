@@ -2225,3 +2225,20 @@ Stage Summary:
 - Root cause: user's device was running a stale cached build (SW never triggered a page reload on update) — old voice code had no auto-submit/no server request.
 - New behavior: after this deploy, user's first visit auto-updates SW and reloads once → fresh build guaranteed. Login card shows "Veda ERP v3.1" so any future screenshot confirms the build.
 - Voice pipeline server-side remains fully working (verified again post-restart).
+
+---
+Task ID: 6
+Agent: main (Super Z)
+Task: 1) Experimental site-wide animations/motion  2) Voice still not working — "koi api chahiye?"
+
+Work Log:
+- Voice: server.log again shows ZERO ASR requests from user's device (only local test runs). Confirmed no API needed — pipeline already integrated & verified. Added iframe/embed detection in use-voice-recorder.ts: if mic permission fails while app runs inside an iframe (embedded preview viewer), error now says to open the link in a NEW TAB (browsers block mic in cross-origin iframes regardless of our Permissions-Policy).
+- Motion: created src/components/ui/motion.tsx (FadeIn, FadeUp, Stagger, StaggerItem, AnimatedNumber, HoverCard) on framer-motion (already in deps). All transform/opacity-only, useReducedMotion-aware.
+- Integrated: ModuleRenderer (page.tsx) wraps active module in keyed FadeIn → soft fade on every module switch. Login card wrapped in FadeUp. Dashboard tiles wrapped in Stagger/StaggerItem (className="w-full [&>*]:w-full" to preserve grid sizing). Sidebar nav buttons got active:scale-[0.97] press feedback.
+- globals.css: global prefers-reduced-motion kill-switch for CSS animations/transitions.
+- SW v4→v5, APP_VERSION v3.1→v3.2. Rebuilt, restarted, verified via agent-browser: login page (centered card + v3.2 chip), dashboard tiles render with correct sizing, Production module switch works, floating chat widget unaffected, zero console errors.
+- Committed 40eed73, pushed to main.
+
+Stage Summary:
+- Motion is EXPERIMENTAL and easy to revert: all usages are commented 'motion system (experimental)'; revert = git revert 40eed73.
+- Voice: no new API needed. Next user steps: open app in a REAL browser tab (not embedded preview), confirm v3.2 badge, tap mic once, watch green bars; if orange error appears it now includes exact fix (iframe → new tab / lock icon → Allow / phone settings).
