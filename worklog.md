@@ -2205,3 +2205,23 @@ Work Log:
 Stage Summary:
 - Server logs now prove client reachability; version chip lets us confirm the user's build.
 - VAD is mobile-safe (gesture-ordered ctx creation + graceful fallbacks).
+
+---
+Task ID: 5
+Agent: main (Super Z)
+Task: User report "voice nhi kr rha kaam avi v" — diagnose and fix
+
+Work Log:
+- Checked server.log: ZERO [ASR] requests from user's device — all [ASR] lines were from local test scripts. User's voice attempts never reach the server → client-side failure (stale cached build or blocked mic permission).
+- Found RegisterSW only checked for SW updates hourly and never reloaded the page when a new SW activated → users could stay on old JS indefinitely (root cause of persistent "voice not working").
+- register-sw.tsx: reg.update() on every page load + auto-reload once when an updated SW takes control (controllerchange, guarded against first-visit and loops).
+- public/sw.js: bumped veda-erp-v3 → v4 (purges all old caches on devices).
+- src/lib/version.ts: APP_VERSION v3.0 → v3.1 (visible in login card footer + chat header for remote build verification).
+- use-voice-recorder.ts: permission error now also covers Android phone Settings → Apps → Chrome → Microphone path.
+- Rebuilt, restarted daemon, verified: SW v4 served, Permissions-Policy microphone=*, E2E test TTS→login→ASR passed.
+- Committed 47a8d89 and pushed to GitHub main.
+
+Stage Summary:
+- Root cause: user's device was running a stale cached build (SW never triggered a page reload on update) — old voice code had no auto-submit/no server request.
+- New behavior: after this deploy, user's first visit auto-updates SW and reloads once → fresh build guaranteed. Login card shows "Veda ERP v3.1" so any future screenshot confirms the build.
+- Voice pipeline server-side remains fully working (verified again post-restart).
