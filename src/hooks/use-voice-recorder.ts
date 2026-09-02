@@ -247,6 +247,17 @@ export function useVoiceRecorder({
         return
       }
       if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError' || err?.name === 'SecurityError') {
+        // Browsers BLOCK mic inside cross-origin iframes (embedded preview
+        // viewers) no matter what our own Permissions-Policy says. Detect it
+        // and tell the user to open the app in a real tab.
+        const inIframe = (() => { try { return window.self !== window.top } catch { return true } })()
+        if (inIframe) {
+          onErrorRef.current(
+            'Mic embedded/preview window me block hota hai! App ka link ko NEW TAB me kholo: link pe long-press karo → "Open in new tab" (ya link ko copy karke Chrome me directly kholo). Wahan mic kaam karega.',
+            'permission'
+          )
+          return
+        }
         onErrorRef.current(
           'Mic permission BLOCK hai! Fix: (1) address bar me 🔒 lock icon tap karo → Microphone → "Allow" karo. Nahi hua to (2) phone Settings → Apps → Chrome → Permissions → Microphone → "Allow" karo. Phir page refresh karo.',
           'permission'

@@ -3,6 +3,7 @@
 import React from 'react'
 import { useAppStore, type ModuleKey } from '@/lib/store'
 import { Card, CardContent } from '@/components/ui/card'
+import { Stagger, StaggerItem } from '@/components/ui/motion' // motion system (experimental)
 
 // ─── Tile configuration ──────────────────────────────────────────────────────
 // Each tile carries: real image URL, label, target module, accent gradient
@@ -225,15 +226,17 @@ export default function DashboardModule() {
       </div>
 
       {/* Tiles grid — bigger cards, real photos, no data */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+      {/* Motion (experimental): tiles cascade in one by one */}
+      <Stagger className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5" step={0.04}>
         {TILES.map((tile) => (
-          <DashboardTile
-            key={tile.module}
-            tile={tile}
-            onClick={() => setActiveModule(tile.module)}
-          />
+          <StaggerItem key={tile.module} className="w-full [&>*]:w-full">
+            <DashboardTile
+              tile={tile}
+              onClick={() => setActiveModule(tile.module)}
+            />
+          </StaggerItem>
         ))}
-      </div>
+      </Stagger>
 
       {/* Footer hint card */}
       <Card className="border-dashed">

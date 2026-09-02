@@ -263,3 +263,20 @@
     margin: 12mm;
   }
 }
+
+/* ─── Motion accessibility (experimental motion system) ─────────────────
+   Users who enable "reduce motion" in their OS settings get instant,
+   animation-free UI. framer-motion components in motion.tsx also check
+   useReducedMotion() — this covers the CSS side (Tailwind/shadcn
+   transitions + keyframes).
+   ---------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -259,7 +259,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
               key={item.key}
               onClick={() => setActiveModule(item.key)}
               className={cn(
-                'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
+                'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 active:scale-[0.97]',
                 activeModule === item.key
                   ? 'bg-[#013D29] text-white shadow-md ring-1 ring-white/30'
                   : 'text-white/90 hover:bg-white/15 hover:text-white'
@@ -287,7 +287,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
                 <button
                   onClick={() => toggleSection(section.id)}
                   className={cn(
-                    'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 group',
+                    'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 group active:scale-[0.97]',
                     isActive ? cn(colors.headerText, colors.headerBg) : cn(colors.headerText, colors.headerHover)
                   )}
                 >
@@ -318,7 +318,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
                         key={item.key}
                         onClick={() => setActiveModule(item.key)}
                         className={cn(
-                          'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium transition-all duration-200',
+                          'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium transition-all duration-200 active:scale-[0.97]',
                           activeModule === item.key
                             ? cn(colors.activeItem, colors.activeItemText, 'shadow-md ring-1 ring-white/30')
                             : 'text-white/90 hover:bg-white/15 hover:text-white'
@@ -348,7 +348,7 @@ function SidebarContent({ user, activeModule, setActiveModule, sidebarOpen, logo
               key={item.key}
               onClick={() => setActiveModule(item.key)}
               className={cn(
-                'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
+                'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 active:scale-[0.97]',
                 activeModule === item.key
                   ? 'bg-[#013D29] text-white shadow-md ring-1 ring-white/30'
                   : 'text-white/90 hover:bg-white/15 hover:text-white'

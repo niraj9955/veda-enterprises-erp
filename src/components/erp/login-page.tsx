@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { FadeUp } from '@/components/ui/motion' // motion system (experimental)
 import { ThemeToggle } from '@/components/erp/theme-toggle'
 import { toast } from '@/hooks/use-toast'
 import {
@@ -251,6 +252,8 @@ export default function LoginPage() {
         <ThemeToggle />
       </div>
 
+      {/* Motion (experimental): card gently rises into place on load */}
+      <FadeUp className="w-full max-w-md">
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center space-y-2">
           {logo}
@@ -543,6 +546,7 @@ export default function LoginPage() {
           )}
         </CardContent>
       </Card>
+      </FadeUp>
       {/* Version chip — cache/update verification: user can confirm they're on the latest build */}
       <p className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-emerald-700/40 dark:text-emerald-300/30 select-none">
         Veda ERP {APP_VERSION}
