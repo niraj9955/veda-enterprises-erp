@@ -25,6 +25,7 @@ import {
   Clock,
   RefreshCw,
 } from 'lucide-react'
+import { APP_VERSION } from '@/lib/version'
 
 type Mode = 'login' | 'forgot-email' | 'forgot-otp' | 'forgot-reset' | 'forgot-success'
 
@@ -542,6 +543,10 @@ export default function LoginPage() {
           )}
         </CardContent>
       </Card>
+      {/* Version chip — cache/update verification: user can confirm they're on the latest build */}
+      <p className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-emerald-700/40 dark:text-emerald-300/30 select-none">
+        Veda ERP {APP_VERSION}
+      </p>
     </div>
   )
 }

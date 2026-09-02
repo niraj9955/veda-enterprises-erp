@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 
 import { activeVoiceControllerLike } from '@/components/ui/voice-active-controller'
 import { useVoiceRecorder } from '@/hooks/use-voice-recorder'
+import { APP_VERSION } from '@/lib/version'
 
 interface VoiceInputProps {
   onResult: (text: string) => void
@@ -127,10 +128,13 @@ export function VoiceInput({
         <div className="absolute bottom-full right-0 mb-2 z-40 flex items-center gap-2 whitespace-nowrap rounded-full bg-zinc-900/95 dark:bg-zinc-100/95 text-white dark:text-zinc-900 pl-2.5 pr-3 py-1.5 shadow-xl backdrop-blur-sm">
           <LevelBars level={level} />
           <span className="text-[11px] leading-none font-medium">
-            {level < 6 ? 'Mic se awaz nahi aa rahi — bolo!' : 'Sun raha hoon... chup hone par apne aap bhej dunga'}
+            {level >= 6
+              ? 'Sun raha hoon... chup hone par apne aap bhej dunga'
+              : 'Sun raha hoon... bolo (thoda chup hone par bhi bhej dunga)'}
           </span>
         </div>
       )}
+      {/* Version chip removed from here — shown in login card + chat header only */}
       <Button
         type="button"
         variant={listening ? 'destructive' : 'outline'}

@@ -2178,3 +2178,30 @@ Work Log:
 Stage Summary:
 - /api/asr accepts every browser audio format now (iPhone + Firefox fixed).
 - SW cache version bumped so all users get the new voice UI on next load.
+
+---
+Task ID: 5
+Agent: Main Agent (GLM 5.3 session)
+Task: Voice still "not detecting" — diagnosis: ZERO client requests reach server
+
+Work Log:
+- server.log proof: all [ASR] entries are my own tests — the user's device has never
+  POSTed to /api/asr. Their browser is running a STALE build (SW StaleWhileRevalidate
+  kept serving old JS even after deploys; old flow needed a second tap + manual send,
+  so users who never tapped again saw "nothing happens").
+- use-voice-recorder.ts hardening:
+  * AudioContext now created BEFORE the first await (still inside the click gesture) —
+    on iOS Safari creating it after await getUserMedia() loses user activation and it
+    stays suspended forever (VAD would falsely report silence).
+  * If ctx suspended/unavailable -> time-based auto-stop after 8s (recording still works).
+  * Bytes fallback: at the 10s no-signal check, if MediaRecorder has >16KB of real audio,
+    stop + transcribe instead of erroring (mic works, VAD is just deaf).
+  * Genuine no-signal error only when literally nothing was captured (muted mic etc.).
+- Added APP_VERSION (src/lib/version.ts, v3.0) chip: login card footer + AI chat header,
+  so the user can VERIFY which build they're on (cache check).
+- SW_VERSION bumped to v3 (new cache names -> activate deletes old caches immediately).
+- Rebuilt, restarted, re-verified ASR (wav/webm/m4a all OK).
+
+Stage Summary:
+- Server logs now prove client reachability; version chip lets us confirm the user's build.
+- VAD is mobile-safe (gesture-ordered ctx creation + graceful fallbacks).

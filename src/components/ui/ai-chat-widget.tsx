@@ -4,6 +4,7 @@ import * as React from 'react'
 import { VoiceInput } from '@/components/ui/voice-input'
 import { Sparkles, X, Loader2, Send, Bot, User, Zap, Trash2, Mic, MicOff, RefreshCw, AlertTriangle } from 'lucide-react'
 import { useAiConfig } from '@/hooks/use-ai-config'
+import { APP_VERSION } from '@/lib/version'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
@@ -137,6 +138,7 @@ export function AiChatWidget() {
                 <p className="font-semibold text-sm tracking-tight">Veda AI Agent</p>
                 <p className="text-[10px] opacity-90 flex items-center gap-1">
                   <Zap className="size-2.5" /> Full access - sab modules
+                  <span className="ml-1 rounded-full bg-white/20 px-1.5 py-[1px] text-[9px] font-bold">{APP_VERSION}</span>
                 </p>
               </div>
             </div>
