@@ -25,7 +25,10 @@ const QUICK_ACTIONS = [
 // Check if browser supports speech recognition
 function isSpeechSupported(): boolean {
   if (typeof window === 'undefined') return false
-  return !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition
+  // Universal check: MediaRecorder + getUserMedia work on EVERY modern browser
+  // (Chrome/Firefox/Safari, Android/iOS/desktop). Voice now records audio and
+  // transcribes server-side via /api/asr — no Google speech servers needed.
+  return !!(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== 'undefined'
 }
 
 export function AiChatWidget() {
@@ -53,7 +56,7 @@ export function AiChatWidget() {
   // Check speech support on mount
   React.useEffect(() => {
     if (typeof window === 'undefined') { setVoiceSupported(false); return }
-    const hasSupport = !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition
+    const hasSupport = !!(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== 'undefined'
     setVoiceSupported(hasSupport)
     console.log('[AI Chat] SpeechRecognition supported:', hasSupport, '| Browser:', navigator.userAgent)
   }, [])

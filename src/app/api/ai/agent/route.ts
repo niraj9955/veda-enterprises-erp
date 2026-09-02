@@ -734,7 +734,7 @@ export async function POST(request: Request) {
       const toolResults: { role: 'tool'; tool_call_id: string; content: string }[] = []
       let actionSummary = ''
 
-      for (const tc of assistantMsg.tool_calls) {
+      for (const tc of assistantMsg.tool_calls as any[]) {
         const toolName = tc.function.name
         let toolArgs: Record<string, unknown>
         try {
@@ -757,7 +757,7 @@ export async function POST(request: Request) {
       // Send tool results back to AI for a natural language summary
       const followUpMessages: OpenAI.ChatCompletionMessageParam[] = [
         ...apiMessages,
-        { role: 'assistant', content: assistantMsg.content || '', tool_calls: assistantMsg.tool_calls.map((tc) => ({ id: tc.id, type: 'function' as const, function: { name: tc.function.name, arguments: tc.function.arguments } })) },
+        { role: 'assistant', content: assistantMsg.content || '', tool_calls: (assistantMsg.tool_calls as any[]).map((tc) => ({ id: tc.id, type: 'function' as const, function: { name: tc.function.name, arguments: tc.function.arguments } })) },
         ...toolResults,
       ]
 
