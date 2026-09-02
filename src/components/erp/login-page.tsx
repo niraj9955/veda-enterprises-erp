@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { FadeUp } from '@/components/ui/motion' // motion system (experimental)
+import { LoginScene3D } from '@/components/ui/login-scene-3d' // 3D scene (experimental)
+import { TiltCard } from '@/components/ui/tilt-card' // 3D tilt (experimental)
+import { MicTest } from '@/components/ui/mic-test'
 import { ThemeToggle } from '@/components/erp/theme-toggle'
 import { toast } from '@/hooks/use-toast'
 import {
@@ -246,15 +248,21 @@ export default function LoginPage() {
     // 100vh includes the area behind the browser URL bar, so a 100vh-centered
     // card renders BELOW the visible area (looked like "card at the bottom").
     // svh always matches the guaranteed-visible area → true centering.
-    <div className="min-h-svh flex items-center justify-center bg-gradient-to-br from-emerald-50 to-amber-50 dark:from-gray-950 dark:to-gray-900 p-4 py-10 relative">
-      {/* Theme toggle top right */}
-      <div className="absolute top-4 right-4">
+    <div className="min-h-svh flex flex-col items-center justify-center p-4 py-10 relative overflow-hidden bg-[#010f0b]">
+      {/* 3D animated scene (experimental): aurora, grid floor, glass cubes */}
+      <LoginScene3D />
+
+      {/* Theme toggle top right (glass chip so it reads on the dark scene) */}
+      <div className="absolute top-4 right-4 rounded-full ring-1 ring-white/15 backdrop-blur-sm">
         <ThemeToggle />
       </div>
 
-      {/* Motion (experimental): card gently rises into place on load */}
-      <FadeUp className="w-full max-w-md">
-      <Card className="w-full max-w-md shadow-xl">
+      {/* Glow halo behind the card */}
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[70vmin] w-[70vmin] max-w-[560px] max-h-[560px] rounded-full bg-emerald-500/18 blur-[90px] pointer-events-none" aria-hidden />
+
+      {/* Motion (experimental): card tilts in 3D with the mouse + rises in */}
+      <TiltCard className="relative z-10 w-full max-w-md">
+      <Card className="w-full max-w-md bg-background/85 dark:bg-background/70 backdrop-blur-2xl ring-1 ring-white/40 dark:ring-white/12 shadow-[0_35px_90px_-20px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.06)_inset]">
         <CardHeader className="text-center space-y-2">
           {logo}
           <CardTitle className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{companyName}</CardTitle>
@@ -546,9 +554,15 @@ export default function LoginPage() {
           )}
         </CardContent>
       </Card>
-      </FadeUp>
+      </TiltCard>
+
+      {/* Mic self-test — instantly diagnoses WHY voice isn't working */}
+      <div className="relative z-10 mt-4">
+        <MicTest />
+      </div>
+
       {/* Version chip — cache/update verification: user can confirm they're on the latest build */}
-      <p className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-emerald-700/40 dark:text-emerald-300/30 select-none">
+      <p className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-emerald-100/30 select-none z-10">
         Veda ERP {APP_VERSION}
       </p>
     </div>

@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { useAppStore, type ModuleKey } from '@/lib/store'
 import { api } from '@/lib/api'
-import { FadeIn } from '@/components/ui/motion' // motion system (experimental)
+import { FadeScaleIn } from '@/components/ui/motion' // motion system (experimental)
 import LoginPage from '@/components/erp/login-page'
 import AppShell from '@/components/erp/app-shell'
 
@@ -336,11 +336,11 @@ function ModuleRenderer() {
   const allowedModules = accessMap[user?.role || ''] || ['dashboard']
   const safeModule = allowedModules.includes(activeModule) ? activeModule : 'dashboard'
   const Component = moduleComponents[safeModule]
-  // Motion (experimental): soft fade when switching modules. Keyed by module
-  // so every switch re-plays. Opacity-only — safe around fixed elements.
+  // Motion (experimental): noticeable fade+rise+scale when switching modules.
+  // Keyed by module so every switch re-plays.
   return (
-    <FadeIn key={safeModule}>
+    <FadeScaleIn key={safeModule}>
       <Component />
-    </FadeIn>
+    </FadeScaleIn>
   )
 }

@@ -280,3 +280,52 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ─── 3D Login Scene (experimental) ─────────────────────────────────────
+   Pure-CSS animated background for the login page: drifting aurora
+   blobs, a scrolling perspective grid floor, a rotating 3D glass cube,
+   floating orbs and twinkling sparkles. All transform/opacity only.
+   The global prefers-reduced-motion rule above neuters all of these.
+   ---------------------------------------------------------------------- */
+
+@keyframes ved-drift-a {
+  0%   { transform: translate3d(-8%, -6%, 0) scale(1); }
+  50%  { transform: translate3d(10%, 8%, 0) scale(1.25); }
+  100% { transform: translate3d(-8%, -6%, 0) scale(1); }
+}
+@keyframes ved-drift-b {
+  0%   { transform: translate3d(6%, 10%, 0) scale(1.15); }
+  50%  { transform: translate3d(-10%, -4%, 0) scale(0.9); }
+  100% { transform: translate3d(6%, 10%, 0) scale(1.15); }
+}
+@keyframes ved-drift-c {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(-6%, -12%, 0) scale(1.2); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes ved-grid-move {
+  from { background-position: 0 0, 0 0; }
+  to   { background-position: 0 44px, 0 0; }
+}
+@keyframes ved-cube-spin {
+  from { transform: rotateX(-18deg) rotateY(0deg); }
+  to   { transform: rotateX(-18deg) rotateY(360deg); }
+}
+@keyframes ved-float-y {
+  0%   { transform: translateY(0); }
+  50%  { transform: translateY(-14px); }
+  100% { transform: translateY(0); }
+}
+@keyframes ved-twinkle {
+  0%, 100% { opacity: 0.15; transform: scale(0.8); }
+  50%      { opacity: 0.9;  transform: scale(1.15); }
+}
+
+.ved-drift-a { animation: ved-drift-a 22s ease-in-out infinite; }
+.ved-drift-b { animation: ved-drift-b 26s ease-in-out infinite; }
+.ved-drift-c { animation: ved-drift-c 19s ease-in-out infinite; }
+.ved-grid-move { animation: ved-grid-move 1.8s linear infinite; }
+.ved-cube-spin { animation: ved-cube-spin 22s linear infinite; }
+.ved-float { animation: ved-float-y 7s ease-in-out infinite; }
+.ved-float-slow { animation: ved-float-y 11s ease-in-out infinite; }
+.ved-twinkle { animation: ved-twinkle 3.2s ease-in-out infinite; }

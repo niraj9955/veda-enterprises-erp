@@ -51,6 +51,26 @@ export function FadeIn({ children, className, delay = 0, duration = 0.28 }: Moti
 }
 
 /**
+ * FadeScaleIn — MORE VISIBLE module-switch transition: fade + 18px rise +
+ * subtle scale-up (0.98 → 1). Used by ModuleRenderer so switching modules
+ * clearly feels animated. Keep duration ≤ 0.35s so it feels snappy, not slow.
+ */
+export function FadeScaleIn({ children, className, delay = 0, duration = 0.34 }: MotionProps) {
+  const reduce = useReducedMotion()
+  if (reduce) return <div className={className}>{children}</div>
+  return (
+    <motion.div
+      className={className}
+      initial={{ opacity: 0, y: 18, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration, delay, ease: [0.22, 0.61, 0.36, 1] }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+/**
  * FadeUp — fade + gentle 12px rise. Use for cards, headers, standalone
  * blocks. Do NOT wrap fixed-position elements (chat widget etc.).
  */
@@ -150,4 +170,4 @@ export function HoverCard({ children, className }: MotionProps) {
   )
 }
 
-export default { FadeIn, FadeUp, Stagger, StaggerItem, AnimatedNumber, HoverCard }
+export default { FadeIn, FadeScaleIn, FadeUp, Stagger, StaggerItem, AnimatedNumber, HoverCard }
