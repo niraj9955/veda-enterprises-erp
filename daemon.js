@@ -1,23 +1,21 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
 
-// Detach completely - this process becomes a session leader
+// Open log file as raw fd (no pipe streams -> parent has no refs -> exits instantly)
+const out = fs.openSync('/home/z/my-project/server.log', 'a');
+
 const child = spawn('node', ['node_modules/.bin/next', 'start', '-p', '3000'], {
   cwd: '/home/z/my-project',
-  env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=4096' },
+  env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=3072' },
   detached: true,
-  stdio: ['ignore', 'pipe', 'pipe']
+  stdio: ['ignore', out, out]
 });
 
 // Write PID file
 fs.writeFileSync('/home/z/my-project/server.pid', child.pid.toString());
 
-// Pipe output to log file
-const logStream = fs.createWriteStream('/home/z/my-project/server.log', { flags: 'a' });
-child.stdout.pipe(logStream);
-child.stderr.pipe(logStream);
-
-// Unref so parent can exit
+// Unref so parent can exit immediately
 child.unref();
 
 console.log('Server daemon started with PID:', child.pid);
+process.exit(0);
