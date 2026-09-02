@@ -58,3 +58,11 @@ node_modules.bak/
 android-apk/.gradle/
 android-apk/app/build/
 /tmp/
+mongodb-data/
+mongodb/
+mongodb-data/
+server.log
+server.pid
+dev.log
+verify-*.png
+scripts/

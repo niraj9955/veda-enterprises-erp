@@ -2087,3 +2087,36 @@ Stage Summary:
 - Voice input ab HAR browser me chalega (mobile + laptop, koi bhi browser)
 - MongoDB LOCAL sandbox instance hai (user ka Atlas account use nahi ho raha) — data loss risk on reset; solution: user se Atlas URI lene ka plan
 - Backup JSON re-upload pending; aane pe restore karna hai
+
+---
+Task ID: 2
+Agent: Main Agent (GLM 5.3 session)
+Task: Voice input fix (AI feature) + MongoDB Atlas migration
+
+Work Log:
+- Voice root cause found: next.config.ts Permissions-Policy header had 'microphone=()' which DENIED
+  mic access for ALL origins on EVERY device (mobile + laptop) — getUserMedia always threw
+  NotAllowedError. Server-side ASR was verified working end-to-end (TTS-generated speech ->
+  /api/asr -> transcribed text).
+- Fix: Permissions-Policy changed to 'camera=(), microphone=*, geolocation=(), browsing-topics=()'
+  in next.config.ts. Rebuilt + restarted. Verified header live via curl.
+- User provided their MongoDB Atlas credentials (cluster0.q5b2ye0.mongodb.net, user vedaerp).
+- Atlas connectivity tested OK from sandbox (scripts/test-atlas.mjs). Old Veda data found intact:
+  veda-erp DB with 12 customers, 61 productions, 61 stocks, 6 orders, 5 dailysells, 12 electricities,
+  6 customerpayments, 4 payments, 2 users, 1 bill, 1 company.
+- .env updated: MONGODB_URI -> Atlas URI (db: veda-erp), JWT_SECRET added (openssl rand -hex 32).
+  Local mongo URI kept as commented fallback. Server rebuilt + restarted on Atlas.
+- Login verified against Atlas: admin@veda.com / admin123 works. Old data served via API (12 customers).
+- operator@veda.com password field contained corrupted reset token 'veda-reset-x4jmykg6' (old session
+  bug) — fixed: set bcrypt hash of 'operator123' (scripts/fix-operator-password.mjs).
+- Git cleanup: sandbox auto-commit 17635a8 contained 212MB mongodb binary + 100MB journal files
+  (exceeds GitHub 100MB limit, push rejected). History rewritten: reset to origin/main (df32ea4),
+  large files dropped, .env untracked (contains credentials), mongodb-data/ + mongodb/ + logs +
+  screenshots added to .gitignore. Clean commit pushed.
+
+Stage Summary:
+- VOICE FIXED: Permissions-Policy microphone=* — voice now requests mic normally on all devices.
+  Users must still Allow mic in browser prompt (and preview iframe must delegate allow="microphone").
+- App now runs on user's MongoDB Atlas (cloud) — data persists across sandbox restarts.
+- Login: admin@veda.com / admin123 (operator@veda.com / operator123 also fixed).
+- JWT_SECRET properly set. Old business data is BACK (customers/productions/stocks/orders etc.).

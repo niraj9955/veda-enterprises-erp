@@ -47,7 +47,14 @@ const nextConfig: NextConfig = {
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()' },
+          // ⚠️ microphone=* is REQUIRED for the AI voice feature (mic input on
+          // AI chat + field voice inputs). 'microphone=()' DENIES the mic for
+          // every origin including our own page — that silently broke voice on
+          // ALL devices (mobile + laptop) with a NotAllowedError. '*' allows
+          // the browser to grant mic (user still sees the normal permission
+          // prompt) including inside preview iframes whose parent delegates
+          // allow="microphone". Camera/geolocation stay fully denied.
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=*, geolocation=(), browsing-topics=()' },
           { key: 'X-DNS-Prefetch-Control', value: 'on' },
           // HSTS — only meaningful over HTTPS. Behind Vercel/Caddy this is
           // always HTTPS so the header is safe.
