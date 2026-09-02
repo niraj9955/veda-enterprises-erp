@@ -2120,3 +2120,39 @@ Stage Summary:
 - App now runs on user's MongoDB Atlas (cloud) — data persists across sandbox restarts.
 - Login: admin@veda.com / admin123 (operator@veda.com / operator123 also fixed).
 - JWT_SECRET properly set. Old business data is BACK (customers/productions/stocks/orders etc.).
+
+---
+Task ID: 3
+Agent: Main Agent (GLM 5.3 session)
+Task: Voice "one-tap auto-submit" UX upgrade + login card centering fix
+
+Work Log:
+- User report: mic shows "Sun raha hoon..." but nothing happens; also asked if a separate
+  voice API is needed (answer: NO — /api/asr uses the built-in ZAI SDK, verified working).
+- Root cause of confusion: old flow required a SECOND tap on the mic to stop, then the
+  transcribed text only filled the input box (chat did not auto-send). Users thought voice
+  was dead. No live feedback either, so a muted/wrong mic was indistinguishable from a
+  working one.
+- use-voice-recorder.ts upgraded:
+  * Live mic level metering via AudioContext AnalyserNode (level 0-100, ~10fps) — returned
+    to UI components.
+  * Silence auto-stop (VAD): after speech is detected, 2s of silence auto-stops and
+    submits — one-tap UX (tap mic → speak → pause → text appears).
+  * No-signal detection: if NO sound for 10s, stops with a diagnostic error (mic muted /
+    wrong device / covered) instead of wasting an ASR call.
+  * Manual second-tap stop still works; 60s hard cap retained.
+- voice-input.tsx: floating pill with REAL level bars above the mic button ("Mic se awaz
+  nahi aa rahi — bolo!" when silent), mic button pulses with loudness.
+- field-voice-input.tsx: same live bars + auto-fill hint in the floating indicator.
+- ai-chat-widget.tsx: voice result now AUTO-SENDS the message; banner text updated
+  ("chup hone par apne aap send ho jayega").
+- login-page.tsx: min-h-screen → min-h-svh (100vh includes area behind mobile URL bar,
+  so the "centered" card rendered below the visible area — user saw it at the bottom).
+  svh guarantees centering in the always-visible viewport. Added py-10 breathing room.
+- Rebuilt, restarted, re-verified ASR E2E (TTS -> /api/asr -> text OK).
+
+Stage Summary:
+- Voice is now one-tap: tap mic, speak, pause — auto-submits everywhere (chat auto-sends,
+  form fields auto-fill). Live bars show mic is hearing; muted-mic case gets a clear
+  diagnostic message.
+- Login card properly centered on mobile (svh).

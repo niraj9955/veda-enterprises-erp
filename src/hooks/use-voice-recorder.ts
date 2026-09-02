@@ -10,13 +10,19 @@ import * as React from 'react'
  * depends on Google speech servers (often blocked/slow). MediaRecorder +
  * server-side ASR works on EVERY modern browser — mobile and laptop.
  *
- * Flow: getUserMedia → MediaRecorder records until stop() →
- * audio blob → base64 → POST /api/asr → transcribed text.
+ * Flow: getUserMedia → MediaRecorder records → AudioContext meter runs a
+ * live level loop → auto-stop triggers:
+ *   1. user stays silent for `silenceStopMs` AFTER speaking → stop + submit
+ *      (one-tap UX: tap mic, speak, pause — text appears, no second tap)
+ *   2. no meaningful sound at all for `noSpeechTimeoutMs` → stop with a
+ *      "mic mute / wrong device" diagnostic error (catches muted mics)
+ *   3. maxDurationMs hard cap → stop + submit
+ * Manual stop (second tap) still works anytime.
  */
 
 export type VoiceRecorderStatus = 'idle' | 'requesting' | 'recording' | 'processing'
 
-export type VoiceErrorKind = 'permission' | 'device' | 'unsupported' | 'network' | 'no-speech' | 'other'
+export type VoiceErrorKind = 'permission' | 'device' | 'unsupported' | 'network' | 'no-speech' | 'no-signal' | 'other'
 
 interface UseVoiceRecorderOptions {
   /** Called with the final transcribed text after stop() succeeds. */
@@ -25,6 +31,10 @@ interface UseVoiceRecorderOptions {
   onError: (message: string, kind?: VoiceErrorKind) => void
   /** Max recording length in ms (auto-stop). Default 60s. */
   maxDurationMs?: number
+  /** Silence length (after speech was detected) that auto-submits. Default 2s. */
+  silenceStopMs?: number
+  /** If NO meaningful sound at all for this long, report mic-signal problem. Default 10s. */
+  noSpeechTimeoutMs?: number
 }
 
 /** Pick the best supported audio container for this browser. */
@@ -57,14 +67,30 @@ function blobToBase64(blob: Blob): Promise<string> {
   })
 }
 
-export function useVoiceRecorder({ onResult, onError, maxDurationMs = 60000 }: UseVoiceRecorderOptions) {
+export function useVoiceRecorder({
+  onResult,
+  onError,
+  maxDurationMs = 60000,
+  silenceStopMs = 2000,
+  noSpeechTimeoutMs = 10000,
+}: UseVoiceRecorderOptions) {
   const [status, setStatus] = React.useState<VoiceRecorderStatus>('idle')
+  /** Live mic loudness 0-100, updated ~10x/sec while recording (for UI bars). */
+  const [level, setLevel] = React.useState(0)
 
   const streamRef = React.useRef<MediaStream | null>(null)
   const recorderRef = React.useRef<MediaRecorder | null>(null)
   const chunksRef = React.useRef<Blob[]>([])
   const maxTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const startTsRef = React.useRef(0)
+  // Live metering / VAD
+  const audioCtxRef = React.useRef<AudioContext | null>(null)
+  const meterTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null)
+  const hasSpeechRef = React.useRef(false)
+  const lastVoiceTsRef = React.useRef(0)
+  // When a no-signal stop happens, onstop must NOT transcribe — it should
+  // just clean up (the error is reported directly by the no-signal path).
+  const skipTranscribeRef = React.useRef(false)
   // Keep latest callbacks without re-creating the public API functions
   const onResultRef = React.useRef(onResult)
   const onErrorRef = React.useRef(onError)
@@ -78,6 +104,14 @@ export function useVoiceRecorder({ onResult, onError, maxDurationMs = 60000 }: U
       clearTimeout(maxTimerRef.current)
       maxTimerRef.current = null
     }
+    if (meterTimerRef.current) {
+      clearInterval(meterTimerRef.current)
+      meterTimerRef.current = null
+    }
+    if (audioCtxRef.current) {
+      try { void audioCtxRef.current.close() } catch { /* ignore */ }
+      audioCtxRef.current = null
+    }
     try {
       recorderRef.current?.state !== 'inactive' && recorderRef.current?.stop()
     } catch { /* ignore */ }
@@ -85,6 +119,8 @@ export function useVoiceRecorder({ onResult, onError, maxDurationMs = 60000 }: U
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
     chunksRef.current = []
+    hasSpeechRef.current = false
+    setLevel(0)
   }, [])
 
   // Cleanup on unmount no matter what
@@ -180,6 +216,8 @@ export function useVoiceRecorder({ onResult, onError, maxDurationMs = 60000 }: U
 
     streamRef.current = stream
     chunksRef.current = []
+    skipTranscribeRef.current = false
+    hasSpeechRef.current = false
 
     const mimeType = pickMimeType()
     let recorder: MediaRecorder
@@ -202,6 +240,11 @@ export function useVoiceRecorder({ onResult, onError, maxDurationMs = 60000 }: U
       if (e.data && e.data.size > 0) chunksRef.current.push(e.data)
     }
     recorder.onstop = () => {
+      if (skipTranscribeRef.current) {
+        // no-signal path already reported the error — nothing to transcribe
+        skipTranscribeRef.current = false
+        return
+      }
       const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
       cleanup()
       // Fire-and-forget transcription; status handled inside transcribe()
@@ -221,13 +264,72 @@ export function useVoiceRecorder({ onResult, onError, maxDurationMs = 60000 }: U
     startTsRef.current = Date.now()
     setStatus('recording')
 
+    // ── Live metering + silence auto-stop (VAD) ────────────────────────────
+    // AudioContext + AnalyserNode give us the mic loudness ~10x/sec. This
+    // powers the UI bars AND the one-tap auto-submit: once the user has
+    // spoken (level above threshold) and then stays quiet for silenceStopMs,
+    // we stop + transcribe automatically. If NO sound is ever detected for
+    // noSpeechTimeoutMs, the mic is probably muted/wrong-device — report a
+    // diagnostic error instead of wasting an ASR call on silence.
+    try {
+      const Ctx: typeof AudioContext | undefined =
+        window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (Ctx) {
+        const ctx = new Ctx()
+        const source = ctx.createMediaStreamSource(stream)
+        const analyser = ctx.createAnalyser()
+        analyser.fftSize = 512
+        source.connect(analyser)
+        audioCtxRef.current = ctx
+        const buf = new Uint8Array(analyser.fftSize)
+        meterTimerRef.current = setInterval(() => {
+          const a = audioCtxRef.current?.state === 'closed' ? null : analyser
+          if (!a) return
+          a.getByteTimeDomainData(buf)
+          let sum = 0
+          for (let i = 0; i < buf.length; i++) {
+            const v = (buf[i] - 128) / 128
+            sum += v * v
+          }
+          const rms = Math.sqrt(sum / buf.length) // 0..1
+          const lvl = Math.min(100, Math.round(rms * 400))
+          setLevel(lvl)
+          const now = Date.now()
+          if (lvl >= 6) {
+            // speech/noise detected — remember the last time we "heard" them
+            hasSpeechRef.current = true
+            lastVoiceTsRef.current = now
+          }
+          const rec = recorderRef.current
+          if (!rec || rec.state !== 'recording') return
+          if (hasSpeechRef.current && now - lastVoiceTsRef.current >= silenceStopMs) {
+            // user finished speaking → auto-submit
+            try { rec.stop() } catch { /* onstop handles the rest */ }
+          } else if (!hasSpeechRef.current && now - startTsRef.current >= noSpeechTimeoutMs) {
+            // mic produced no meaningful signal the whole time → muted mic?
+            skipTranscribeRef.current = true
+            try { rec.stop() } catch { /* ignore */ }
+            cleanup()
+            setStatus('idle')
+            onErrorRef.current(
+              'Mic se awaz nahi pahunch rahi! Check karo: (1) device ka mic MUTE to nahi hai, (2) phone/laptop me sahi mic selected hai, (3) mic pe hath ya cover to nahi hai. Phir dubara try karo.',
+              'no-signal'
+            )
+          }
+        }, 100)
+      }
+    } catch (err) {
+      // Metering is optional — recording still works without it (manual stop)
+      console.warn('[VoiceRecorder] meter setup failed (voice still works, no auto-stop):', err)
+    }
+
     // Safety: auto-stop after maxDurationMs
     maxTimerRef.current = setTimeout(() => {
       if (recorderRef.current?.state === 'recording') {
         try { recorderRef.current.stop() } catch { /* ignore */ }
       }
     }, maxDurationMs)
-  }, [status, transcribe, cleanup])
+  }, [status, transcribe, cleanup, silenceStopMs, noSpeechTimeoutMs])
 
   const stop = React.useCallback(() => {
     const recorder = recorderRef.current
@@ -245,7 +347,7 @@ export function useVoiceRecorder({ onResult, onError, maxDurationMs = 60000 }: U
     // while 'requesting'/'processing' ignore taps
   }, [status, start, stop])
 
-  return { status, isRecording: status === 'recording', isBusy: status !== 'idle' && status !== 'recording', start, stop, toggle }
+  return { status, isRecording: status === 'recording', isBusy: status !== 'idle' && status !== 'recording', level, start, stop, toggle }
 }
 
 export default useVoiceRecorder

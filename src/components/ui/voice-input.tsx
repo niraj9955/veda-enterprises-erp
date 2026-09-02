@@ -26,6 +26,22 @@ function nextVoiceInputId(): string {
   return `voice-${_voiceInputIdCounter}`
 }
 
+/** Live 5-bar mic level indicator — heights driven by real mic loudness. */
+function LevelBars({ level }: { level: number }) {
+  const factors = [1, 0.72, 0.5, 0.72, 1]
+  return (
+    <span className="flex items-end gap-[2px] h-4 shrink-0" aria-hidden>
+      {factors.map((f, i) => (
+        <span
+          key={i}
+          className="w-[3px] rounded-sm bg-emerald-400 transition-[height] duration-100"
+          style={{ height: `${Math.max(3, Math.min(16, level * f * 0.16))}px` }}
+        />
+      ))}
+    </span>
+  )
+}
+
 export function VoiceInput({
   onResult,
   onInterim,
@@ -59,7 +75,7 @@ export function VoiceInput({
     [onError]
   )
 
-  const { status, isRecording, isBusy, start, stop } = useVoiceRecorder({
+  const { status, isRecording, isBusy, level, start, stop } = useVoiceRecorder({
     onResult: handleResult,
     onError: handleError,
   })
@@ -101,31 +117,45 @@ export function VoiceInput({
   }
 
   const listening = isRecording
+  // Mic pulse scale follows live loudness (subtle 1.0–1.15x)
+  const pulse = listening ? 1 + Math.min(0.15, level * 0.0015) : 1
 
   return (
-    <Button
-      type="button"
-      variant={listening ? 'destructive' : 'outline'}
-      size="icon"
-      onClick={toggle}
-      disabled={disabled || isBusy}
-      title={
-        status === 'processing'
-          ? 'Samajh rahe hain...'
-          : listening
-            ? 'Stop karo'
-            : `Bolo (${language === 'hi-IN' ? 'Hindi' : 'English'})`
-      }
-      className={className}
-    >
-      {status === 'requesting' || status === 'processing' ? (
-        <Loader2 className="size-4 animate-spin" />
-      ) : listening ? (
-        <Square className="size-4 animate-pulse" />
-      ) : (
-        <Mic className="size-4" />
+    <div className="relative shrink-0">
+      {/* Live "mic is hearing you" pill — real level bars prove sound is reaching us */}
+      {listening && (
+        <div className="absolute bottom-full right-0 mb-2 z-40 flex items-center gap-2 whitespace-nowrap rounded-full bg-zinc-900/95 dark:bg-zinc-100/95 text-white dark:text-zinc-900 pl-2.5 pr-3 py-1.5 shadow-xl backdrop-blur-sm">
+          <LevelBars level={level} />
+          <span className="text-[11px] leading-none font-medium">
+            {level < 6 ? 'Mic se awaz nahi aa rahi — bolo!' : 'Sun raha hoon... chup hone par apne aap bhej dunga'}
+          </span>
+        </div>
       )}
-    </Button>
+      <Button
+        type="button"
+        variant={listening ? 'destructive' : 'outline'}
+        size="icon"
+        onClick={toggle}
+        disabled={disabled || isBusy}
+        title={
+          status === 'processing'
+            ? 'Samajh rahe hain...'
+            : listening
+              ? 'Stop karo (ya chup ho jao — apne aap ho jayega)'
+              : `Bolo (${language === 'hi-IN' ? 'Hindi' : 'English'})`
+        }
+        className={className}
+        style={listening ? { transform: `scale(${pulse.toFixed(3)})` } : undefined}
+      >
+        {status === 'requesting' || status === 'processing' ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : listening ? (
+          <Square className="size-4" />
+        ) : (
+          <Mic className="size-4" />
+        )}
+      </Button>
+    </div>
   )
 }
 

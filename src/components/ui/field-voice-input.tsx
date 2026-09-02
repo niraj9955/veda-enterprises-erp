@@ -67,7 +67,7 @@ export function FieldVoiceInput({
     [onChange]
   )
 
-  const { isRecording, isBusy, start, stop } = useVoiceRecorder({
+  const { isRecording, isBusy, level, start, stop } = useVoiceRecorder({
     onResult: handleResult,
     onError: handleError,
   })
@@ -113,7 +113,7 @@ export function FieldVoiceInput({
           permBlocked
             ? `Mic BLOCKED — address bar mein 🔒 icon pe click karo → Microphone → Allow → page refresh (F5)`
             : isRecording
-              ? `Listening to ${fieldLabel}... click to stop`
+              ? `Listening to ${fieldLabel}... chup hone par apne aap fill ho jayega (click to stop)`
               : `Speak ${fieldLabel} (voice input)`
         }
         aria-label={
@@ -145,11 +145,24 @@ export function FieldVoiceInput({
         )}
       </button>
 
-      {/* Floating recording indicator while listening */}
+      {/* Floating recording indicator while listening — live level bars prove
+          the mic is actually hearing sound (diagnoses muted mics instantly) */}
       {isRecording && (
-        <div className="absolute bottom-full right-0 mb-1 z-30 w-[180px] max-w-[calc(100vw-2rem)] px-2 py-1 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[11px] shadow-lg break-words pointer-events-none overflow-hidden">
-          <span className="block line-clamp-3">Sun raha hoon... {fieldLabel} bolo, phir dabao</span>
-          <span className="ml-1 inline-block w-1 h-1 rounded-full bg-current animate-pulse align-middle" />
+        <div className="absolute bottom-full right-0 mb-1 z-30 w-[210px] max-w-[calc(100vw-2rem)] px-2 py-1.5 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[11px] shadow-lg break-words pointer-events-none overflow-hidden">
+          <span className="flex items-center gap-2">
+            <span className="flex items-end gap-[2px] h-3 shrink-0" aria-hidden>
+              {[1, 0.7, 0.45, 0.7, 1].map((f, i) => (
+                <span
+                  key={i}
+                  className="w-[3px] rounded-sm bg-emerald-400 transition-[height] duration-100"
+                  style={{ height: `${Math.max(2, Math.min(12, level * f * 0.12))}px` }}
+                />
+              ))}
+            </span>
+            <span className="line-clamp-2">
+              {level < 6 ? 'Awaz nahi aa rahi — bolo!' : `${fieldLabel} bolo... chup hone par apne aap bhar jayega`}
+            </span>
+          </span>
         </div>
       )}
 

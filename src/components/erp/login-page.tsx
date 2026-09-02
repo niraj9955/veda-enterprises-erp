@@ -240,7 +240,11 @@ export default function LoginPage() {
   )
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-amber-50 dark:from-gray-950 dark:to-gray-900 p-4 relative">
+    // min-h-svh (smallest viewport height) instead of min-h-screen: on mobile,
+    // 100vh includes the area behind the browser URL bar, so a 100vh-centered
+    // card renders BELOW the visible area (looked like "card at the bottom").
+    // svh always matches the guaranteed-visible area → true centering.
+    <div className="min-h-svh flex items-center justify-center bg-gradient-to-br from-emerald-50 to-amber-50 dark:from-gray-950 dark:to-gray-900 p-4 py-10 relative">
       {/* Theme toggle top right */}
       <div className="absolute top-4 right-4">
         <ThemeToggle />

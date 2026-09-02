@@ -98,14 +98,15 @@ export function AiChatWidget() {
     setConversationId('')
   }
 
+  // Voice result → AUTO-SEND. One-tap flow: tap mic → speak → pause →
+  // message sends itself. (Old behavior only filled the input box, which
+  // made users think voice "did nothing" because they never pressed Send.)
   const handleVoiceResult = (finalText: string) => {
     setMicError('')
-    setInput((prev) => {
-      const sep = prev && !prev.endsWith(' ') ? ' ' : ''
-      return prev + sep + finalText
-    })
     setInterim('')
     setVoiceListening(false)
+    const text = finalText.trim()
+    if (text) void handleSend(text)
   }
 
   const showQuick = messages.length < 2 && !loading
@@ -226,7 +227,7 @@ export function AiChatWidget() {
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
                 </span>
                 <span className="text-[11px] font-medium text-red-700 dark:text-red-400">
-                  {interim ? interim : 'Sun raha hoon...'}
+                  {interim ? interim : 'Sun raha hoon... bolo, chup hone par apne aap send ho jayega'}
                 </span>
               </div>
             </div>
@@ -238,7 +239,7 @@ export function AiChatWidget() {
               value={displayInput}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
-              placeholder={voiceListening ? 'Boltein raho...' : 'Kuch bhi bolo... (Enter to send)'}
+              placeholder={voiceListening ? 'Boltein raho... (chup hone par auto-send)' : 'Kuch bhi bolo... (Enter to send)'}
               rows={1}
               disabled={loading}
               className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm max-h-20 ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
