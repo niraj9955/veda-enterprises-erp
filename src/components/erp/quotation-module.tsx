@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
+import { ProductSuggestInput } from '@/components/ui/product-suggest-input'
 import { toast } from '@/hooks/use-toast'
 import {
   Plus, Trash2, Edit, Printer, FileText, Search, UserCheck, X,
@@ -835,16 +836,14 @@ function QuotationCreatePage({
               </div>
               {items.map((item, idx) => (
                 <div key={idx} className="grid grid-cols-12 gap-2 items-start">
-                  <Input
-                    list="quotation-product-list"
+                  <ProductSuggestInput
                     className="col-span-12 md:col-span-4"
                     placeholder="Item description"
+                    ariaLabel={`Item description ${idx + 1}`}
                     value={item.description}
-                    onChange={(e) => updateItem(idx, 'description', e.target.value)}
+                    onChange={(v) => updateItem(idx, 'description', v)}
+                    options={PRODUCT_PRESETS}
                   />
-                  <datalist id="quotation-product-list">
-                    {PRODUCT_PRESETS.map((p) => <option key={p} value={p} />)}
-                  </datalist>
                   <Input
                     className="col-span-4 md:col-span-2"
                     placeholder="HSN"
