@@ -43,6 +43,19 @@ export const maxDuration = 60
  *   2. DB AiConfig (provider='groq' && enabled) — settable from the app's
  *      AI Settings page without redeploying.
  *
+ * Accuracy chain (the "bolta kuchh hu sunta kuchh aur" fix):
+ *   - ERP vocabulary prompt anchors decoding toward business terms.
+ *   - verbose_json returns per-segment avg_logprob; when confidence is weak
+ *     the clip is retried once with language=hi (Whisper auto-detect often
+ *     mishears short Hinglish clips as another language) and the more
+ *     confident result wins.
+ *   - ffmpeg trims leading/trailing silence (0.3s lead kept) — silence
+ *     padding is the #1 hallucination trigger for Whisper.
+ *   - Common hallucinations ("Thank you.", "मैं आपकी...", "amara.org"...) are
+ *     filtered out instead of being filled into form fields.
+ *   - Body may include optional `lang` ('hi' | 'en' | 'hi-IN' | 'en-IN') to
+ *     force a language (skips auto-detect + retry).
+ *
  * Empty results return HTTP 200 with { text: '' } and a `kind` hint so the
  * client can show the right message (silence vs error vs too-short vs
  * no-provider — the last one NAMES the exact missing API).
@@ -81,15 +94,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    /** One ZAI ASR attempt. Returns trimmed text, throws on API failure.
+    /** One ZAI ASR attempt. Returns cleaned text, throws on API failure.
      *  Noise/silence can make the engine "transcribe" symbol garbage (e.g. "#",
-     *  "...") — that is treated as empty so the retry chain still runs. */
-    const hasRealContent = (t: string) => /[a-zA-Z0-9\u0900-\u097F]/.test(t)
+     *  "...") or classic Whisper-style hallucinations — all treated as empty
+     *  so the retry chain still runs. */
     const tryAsr = async (b64: string): Promise<string> => {
       const zai = await ZAI.create()
       const response = await zai.audio.asr.create({ file_base64: b64 })
-      const t = (response?.text || '').trim()
-      return hasRealContent(t) ? t : ''
+      return cleanTranscript(response?.text || '')
     }
 
     let text = ''
@@ -136,11 +148,38 @@ export async function POST(request: NextRequest) {
 
     // Attempt 3: Groq Whisper fallback — REQUIRED on Vercel where the ZAI
     // engine has no credentials. Also useful when ZAI has a transient outage.
+    let usedEngine: 'zai' | 'groq' | '' = ''
+    let groqLanguage = ''
     if (!text) {
       try {
         const wav = await convertToWav(bin)
-        const g = await tryGroqAsr(wav || bin)
-        text = hasRealContent(g) ? g : ''
+        const audio = wav || bin
+        const forced = normalizeLang(body?.lang)
+        let best = await tryGroqAsr(audio, forced || undefined)
+        let g = cleanTranscript(best.text)
+        // Whisper auto-detect often mishears short Hindi/Hinglish clips as
+        // some other language ("bolta kuchh hu sunta kuchh aur"). When no
+        // explicit language was requested and confidence is weak, retry once
+        // with a Hindi hint and keep the more confident result.
+        if (!forced && g && best.meanLogprob !== null && best.meanLogprob < -1.0) {
+          console.log(`[ASR] weak confidence (avg_logprob ${best.meanLogprob.toFixed(2)}), retrying with language=hi`)
+          try {
+            const r2 = await tryGroqAsr(audio, 'hi')
+            const g2 = cleanTranscript(r2.text)
+            if (g2 && (r2.meanLogprob ?? -9) > (best.meanLogprob ?? -9)) {
+              best = r2
+              g = g2
+              console.log('[ASR] hi-retry won with better confidence')
+            }
+          } catch (e2: any) {
+            console.warn('[ASR] hi-retry failed (keeping first pass):', e2?.message || e2)
+          }
+        }
+        text = g
+        if (text) {
+          usedEngine = 'groq'
+          groqLanguage = best.detectedLanguage || ''
+        }
       } catch (err: any) {
         groqErr = String(err?.message || err)
         console.warn(`[ASR] attempt 3 failed (groq): ${groqErr}`)
@@ -148,8 +187,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (text) {
-      console.log(`[ASR] ok${groqErr ? ' (groq)' : ''}: "${text.slice(0, 60)}"`)
-      return NextResponse.json({ text, engine: groqErr ? 'groq' : 'zai' })
+      if (!usedEngine) usedEngine = 'zai'
+      console.log(`[ASR] ok (${usedEngine}${groqLanguage ? `, lang=${groqLanguage}` : ''}): "${text.slice(0, 60)}"`)
+      return NextResponse.json({
+        text,
+        engine: usedEngine,
+        ...(usedEngine === 'groq' && groqLanguage ? { language: groqLanguage } : {}),
+      })
     }
 
     // Voice engine chain is down: ZAI threw AND no usable Groq key.
@@ -204,10 +248,24 @@ export async function POST(request: NextRequest) {
 /**
  * Groq Whisper fallback — works everywhere including Vercel serverless.
  * Key: env GROQ_API_KEY first, then DB AiConfig (provider='groq', enabled).
- * Returns trimmed text; throws Error('no-groq-key') when no key is usable
- * and Error('groq-<status>: ...') when Groq rejects the request.
+ * Returns { text, meanLogprob, detectedLanguage }:
+ *   - meanLogprob: duration-weighted avg_logprob of segments (null if unknown).
+ *     Closer to 0 = more confident. Used by the caller for the Hindi retry.
+ *   - detectedLanguage: Whisper's language guess (verbose_json).
+ * Throws Error('no-groq-key') when no key is usable and
+ * Error('groq-<status>: ...') when Groq rejects the request.
+ *
+ * The ERP vocabulary `prompt` biases decoding toward business terms — this
+ * alone removes a big chunk of the "bolta kuchh sunta kuchh aur" problem on
+ * short commands. Prompt must stay under Whisper's 224-token limit.
  */
-async function tryGroqAsr(bin: Buffer): Promise<string> {
+const ERP_ASR_PROMPT =
+  'Veda Enterprises ERP voice command. Hindi business words: बिल बनाओ, पेमेंट, कस्टमर, ग्राहक, नाम, मोबाइल नंबर, रुपये, रकम, जमा, बाकी, बकाया, टोटल बैलेंस, ऑर्डर, प्रोडक्ट, सामान, कील, पेच, सीमेंट, तार, वेतन, किराया, बिजली, खर्च, आज का, कल का, नया कस्टमर जोड़ो, दिखाओ, बताओ. English: customer, bill, payment, balance, order, product, total, amount, rupees.'
+
+async function tryGroqAsr(
+  bin: Buffer,
+  language?: string
+): Promise<{ text: string; meanLogprob: number | null; detectedLanguage: string }> {
   let key = process.env.GROQ_API_KEY || ''
   if (!key) {
     try {
@@ -222,11 +280,19 @@ async function tryGroqAsr(bin: Buffer): Promise<string> {
   }
   if (!key) throw new Error('no-groq-key')
 
+  // Label the upload honestly — Whisper sniffs bytes but correct container
+  // naming avoids edge cases (raw webm/mp4 was previously named audio.wav).
+  const kind = detectFormat(bin)
+  const mime = kind === 'wav' ? 'audio/wav' : kind === 'webm' ? 'audio/webm' : kind === 'ogg' ? 'audio/ogg' : 'audio/mp4'
+  const name = mime.replace('audio/', 'audio.')
+
   const form = new FormData()
-  form.append('file', new Blob([new Uint8Array(bin)], { type: 'audio/wav' }), 'audio.wav')
+  form.append('file', new Blob([new Uint8Array(bin)], { type: mime }), name)
   form.append('model', 'whisper-large-v3')
-  form.append('response_format', 'json')
+  form.append('response_format', 'verbose_json')
   form.append('temperature', '0')
+  form.append('prompt', ERP_ASR_PROMPT)
+  if (language) form.append('language', language)
 
   const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
     method: 'POST',
@@ -237,8 +303,79 @@ async function tryGroqAsr(bin: Buffer): Promise<string> {
     const detail = (await res.text().catch(() => '')).slice(0, 200)
     throw new Error(`groq-${res.status}: ${detail}`)
   }
-  const data = (await res.json()) as { text?: string }
-  return (data?.text || '').trim()
+  const data = (await res.json()) as {
+    text?: string
+    language?: string
+    segments?: Array<{ avg_logprob?: number; start?: number; end?: number }>
+  }
+
+  // Duration-weighted mean of segment avg_logprob (defensive: if Groq ever
+  // omits segments, confidence is unknown → caller skips the retry logic).
+  let meanLogprob: number | null = null
+  const segs = Array.isArray(data?.segments) ? data.segments : []
+  if (segs.length) {
+    let wsum = 0
+    let w = 0
+    let plain = 0
+    for (const s of segs) {
+      const lp = typeof s.avg_logprob === 'number' ? s.avg_logprob : null
+      if (lp === null) continue
+      const dur = Math.max(0.1, (Number(s.end) || 0) - (Number(s.start) || 0))
+      wsum += lp * dur
+      w += dur
+      plain += lp
+    }
+    meanLogprob = w > 0 ? wsum / w : plain / segs.length
+  }
+
+  return {
+    text: (data?.text || '').trim(),
+    meanLogprob,
+    detectedLanguage: typeof data?.language === 'string' ? data.language : '',
+  }
+}
+
+/** Normalize an optional client language hint to a Whisper ISO code. */
+function normalizeLang(v: unknown): string {
+  if (typeof v !== 'string') return ''
+  const s = v.trim().toLowerCase()
+  if (s.startsWith('hi')) return 'hi'
+  if (s.startsWith('en')) return 'en'
+  return ''
+}
+
+/** Whisper hallucinates whole sentences on silence/noise (subtitle training
+ *  data). These are real words so hasRealContent passes them — blocklist the
+ *  known ones so they never land in form fields. Only applied to short
+ *  texts (<80 chars) so genuine long speech is never nuked. */
+const HALLUCINATION_PATTERNS: RegExp[] = [
+  /^thank(s| you)[ .!]*$/i,
+  /^thanks for watching[ .!]*$/i,
+  /^like and subscribe[ .!]*$/i,
+  /^subscribe[ .!]*$/i,
+  /^(www\.|https?:\/\/|amara\.org)\S*$/i,
+  /^\S+\.(com|org|net)[ .!]*$/i,
+  /^(मैं आपकी|मुझे उम्मीद|आपके वीडियो|चैनल को सब्सक्राइब)/,
+  /^धन्यवाद[ .!]*$/,
+  /^सबसे (बड़ी|अच्छी)/,
+  /^(गुड बाय|बाय बाय)[ .!]*$/i,
+]
+
+function isHallucination(t: string): boolean {
+  const s = t.trim().replace(/[.!।?]+$/, '').trim()
+  if (!s) return true
+  if (s.length > 80) return false
+  return HALLUCINATION_PATTERNS.some((re) => re.test(s))
+}
+
+/** Final cleanup for any engine output: keep only text that has real
+ *  letters/digits/Devanagari AND is not a known silence hallucination. */
+function cleanTranscript(t: string): string {
+  const s = (t || '').trim()
+  if (!s) return ''
+  if (!/[a-zA-Z0-9\u0900-\u097F]/.test(s)) return ''
+  if (isHallucination(s)) return ''
+  return s
 }
 
 /** Audio duration in seconds (best-effort, for better error messages). */
@@ -259,14 +396,20 @@ async function decodeDuration(bin: Buffer, format: string): Promise<number> {
 }
 
 /** Detect audio container from magic bytes. */
-function detectFormat(buf: Buffer): 'wav' | 'webm' | 'other' {
+function detectFormat(buf: Buffer): 'wav' | 'webm' | 'ogg' | 'other' {
   if (buf.length > 12 && buf.toString('ascii', 0, 4) === 'RIFF') return 'wav'
   // EBML header = WebM / Matroska
   if (buf.length > 4 && buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return 'webm'
+  // OggS = ogg/opus (Firefox MediaRecorder default)
+  if (buf.length > 4 && buf.toString('ascii', 0, 4) === 'OggS') return 'ogg'
   return 'other'
 }
 
-/** Convert any audio container to 16kHz mono PCM WAV via ffmpeg (temp files). */
+/** Convert any audio container to 16kHz mono PCM WAV via ffmpeg (temp files).
+ *  Also trims leading/trailing silence (keeping a 0.3s lead-in and 0.15s
+ *  tail) — trailing VAD silence padding is the main trigger for Whisper
+ *  hallucinations on short commands. If trimming collapses the clip
+ *  (all-silence input), returns null so callers fall back to raw bytes. */
 async function convertToWav(bin: Buffer): Promise<Buffer | null> {
   const id = crypto.randomUUID()
   const inPath = path.join(tmpdir(), `asr-${id}.bin`)
@@ -275,10 +418,23 @@ async function convertToWav(bin: Buffer): Promise<Buffer | null> {
     await writeFile(inPath, bin)
     await execFileAsync(
       'ffmpeg',
-      ['-y', '-loglevel', 'error', '-i', inPath, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', outPath],
+      [
+        '-y', '-loglevel', 'error', '-i', inPath,
+        '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le',
+        '-af',
+        'silenceremove=start_periods=1:start_threshold=-40dB:start_silence=0.3,areverse,silenceremove=start_periods=1:start_threshold=-40dB:start_silence=0.15,areverse',
+        outPath,
+      ],
       { timeout: 20000 }
     )
-    return await readFile(outPath)
+    const out = await readFile(outPath)
+    // WAV header is 44 bytes; anything under ~1.5KB of PCM after trimming is
+    // effectively an all-silence clip — fall back to the raw original.
+    if (out.length < 1536) {
+      console.log('[ASR] trimmed WAV too small (all silence?), falling back to untrimmed')
+      return null
+    }
+    return out
   } catch (err: any) {
     console.error('[ASR] ffmpeg convert error:', err?.message || err)
     return null
