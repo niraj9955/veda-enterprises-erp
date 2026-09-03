@@ -121,3 +121,21 @@ Stage Summary:
 - ASR accuracy chain on Vercel: raw webm → (no ffmpeg there) → Groq whisper-large-v3 with ERP prompt anchor + temp 0 → auto-detect; weak confidence (<-1.0 logprob) → language=hi retry; hallucination blocklist; better result wins
 - USER ACTION NEEDED: Vercel → Deployments → Redeploy (to get v3.8), then verify v3.8 badge in login footer, then voice accuracy test
 - Groq unreachable from sandbox — any future Groq live-testing must run on Vercel or another clean IP
+
+---
+Task ID: R6
+Agent: Super Z (main)
+Task: "quotation create time item pe click krne pe product nhi dikhta — laptop me dikh rha, mobile me nhi" — mobile product picker fix
+
+Work Log:
+- Root cause: item description used native <input list> + <datalist> (quotation-module.tsx:845, bill-module.tsx:870). Desktop Chrome shows native dropdown on click, but mobile browsers (Android Chrome / iOS Safari / WebViews) only show suggestions AFTER typing — tapping the empty field shows nothing. Classic laptop-vs-mobile datalist trap.
+- NEW src/components/ui/product-suggest-input.tsx: custom touch-friendly dropdown replacing datalist — opens on focus AND click (re-tap on already-focused input fires no focus event — classic mobile trap, caught during browser testing), live filter, keyboard nav (arrows/Enter/Escape), outside-pointerdown close, z-50, max-h-52 scroll, free-typing preserved (custom names like "Transportation Charge" work, no match -> dropdown hides)
+- Replaced datalist in BOTH quotation-module.tsx and bill-module.tsx (same bug, same fix)
+- Verified in headless browser at 390x844 mobile viewport: tap opens 15 products, filter "zig zag grey" -> 2 matches, selection fills+closes, RE-TAP reopens (bug found & fixed during verification), geometry within viewport, screenshot saved download/quotation-product-dropdown-mobile.png
+- Infra note: during verification the stale next-server (pid 3265) survived pkill -f "node daemon.js" and served a mismatched build -> "Application error". Kill by PID from `ss -tlnp` before starting daemon.
+- Build OK, E2E 102 PASS / 0 WARN / 0 FAIL, v3.9 badge verified in browser
+- Pushed: bc0a6d0..02fa5a9
+
+Stage Summary:
+- v3.9 shipped: product suggestions now work on ALL devices (mobile + laptop) in Quotation and Billing item rows
+- USER ACTION: Vercel -> Redeploy, verify v3.9 badge, then quotation item field tap should show product list on phone
