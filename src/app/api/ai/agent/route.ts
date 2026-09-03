@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/db'
 import { getSession } from '@/lib/auth'
+import { makeAiChat } from '@/lib/ai-completions'
 import { AiConfig, Customer, DailySell, Production, CustomerPayment, LabourPayment, TractorPayment, DustPurchase, CementPurchase, Hardner, Electricity, FactoryStuff, Expense, Bill, Order, Dispatch, Payment } from '@/lib/models'
 import { normalizeDate } from '@/lib/date-utils'
 import OpenAI from 'openai'
-import ZAI from 'z-ai-web-dev-sdk'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -673,13 +673,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check AI config — if missing/disabled we STILL work via the built-in
-    // ZAI engine (fallback), so the AI agent never hard-fails again.
-    const configDoc = await AiConfig.findOne().lean() as Record<string, unknown> | null
-    const apiKey = String(configDoc?.openaiApiKey || '')
-    const enabled = !!configDoc?.enabled
-    const provider = String(configDoc?.provider || 'openai')
-    const model = String(configDoc?.model || 'gpt-4o-mini')
+    // Unified AI layer — stored provider first, built-in ZAI engine as
+    // automatic fallback. A missing/invalid/expired key can NEVER break the
+    // agent again (see src/lib/ai-completions.ts).
+    const ai = await makeAiChat()
+    const model = ai.model
 
     const body = await request.json() as { message: string; conversationId?: string }
     const { message, conversationId: cid } = body
@@ -699,63 +697,8 @@ export async function POST(request: Request) {
       ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     ]
 
-    // Create OpenAI client (only when a provider key is configured)
-    let client: OpenAI | null = null
-    if (enabled && apiKey) {
-      const clientOptions: ConstructorParameters<typeof OpenAI>[0] = {
-        apiKey,
-        timeout: 30_000,
-        maxRetries: 1,
-      }
-      if (provider === 'groq') {
-        clientOptions.baseURL = 'https://api.groq.com/openai/v1'
-      }
-      client = new OpenAI(clientOptions)
-    }
-
-    // ── Unified completion caller with built-in ZAI fallback ──
-    // If the configured provider fails (invalid/revoked key, quota, outage)
-    // we transparently switch to the platform ZAI engine for the rest of
-    // this request — the AI agent keeps working no matter what.
-    let usedFallback = !client
-    let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null
-    const chatCreate = async (body: Record<string, unknown>): Promise<any> => {
-      if (client && !usedFallback) {
-        try {
-          return await client.chat.completions.create(body as never)
-        } catch (err: any) {
-          const status = err?.status || err?.response?.status
-          console.warn(`[AI Agent] provider ${provider} failed (status ${status}): falling back to built-in ZAI engine`)
-          usedFallback = true
-        }
-      }
-      if (!zaiInstance) zaiInstance = await ZAI.create()
-      // ZAI speaks system/user/assistant only — flatten tool results
-      const zaiMessages = (body.messages as any[]).map((m) => {
-        if (m.role === 'tool') {
-          return { role: 'user' as const, content: `[Tool result] ${m.content}` }
-        }
-        return { role: m.role, content: m.content }
-      })
-      const zaiBody: Record<string, unknown> = { messages: zaiMessages }
-      if (body.tools) {
-        zaiBody.tools = body.tools
-        zaiBody.tool_choice = body.tool_choice
-      }
-      try {
-        return await zaiInstance.chat.completions.create(zaiBody as never)
-      } catch (err: any) {
-        // Some engines reject tools — retry as plain text chat
-        if (zaiBody.tools) {
-          console.warn(`[AI Agent] ZAI tools rejected (${err?.message || err}), retrying text-only`)
-          return zaiInstance.chat.completions.create({ messages: body.messages } as never)
-        }
-        throw err
-      }
-    }
-
     // First API call — may include tool calls
-    const response = await chatCreate({
+    const response = await ai.create({
       model,
       messages: apiMessages,
       tools: TOOLS,
@@ -800,7 +743,7 @@ export async function POST(request: Request) {
         ...toolResults,
       ]
 
-      const followUp = await chatCreate({
+      const followUp = await ai.create({
         model,
         messages: followUpMessages,
         temperature: 0.3,

@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/db'
-import { AiConfig } from '@/lib/models'
 import { getSession } from '@/lib/auth'
 import { AI_MODULE_MAP, buildSystemPrompt, coerceFieldValue } from '@/lib/ai-schemas'
-import OpenAI from 'openai'
+import { makeAiChat, extractJson } from '@/lib/ai-completions'
 
 // Force dynamic
 export const dynamic = 'force-dynamic'
@@ -13,11 +12,11 @@ export const revalidate = 0
 // Body: { module: string, text: string }
 // Returns: { fields: Record<string, unknown>, raw: Record<string, unknown> }
 //
-// Calls OpenAI with the module's system prompt + user input and returns the
-// extracted field values, coerced to the correct types per the schema.
+// Calls the AI (stored provider, or the built-in ZAI engine — never fails
+// for missing keys) with the module's system prompt + user input and returns
+// the extracted field values, coerced to the correct types per the schema.
 //
-// Any logged-in user can call this — the AI button is shown to everyone,
-// but disabled in the UI if no OpenAI key is configured.
+// Any logged-in user can call this — the AI button is shown to everyone.
 export async function POST(request: Request) {
   try {
     await connectDB()
@@ -55,55 +54,17 @@ export async function POST(request: Request) {
       )
     }
 
-    // ── Load AI config (API key + model + provider) ──────────────────
-    const configDoc = await AiConfig.findOne().lean()
-    const apiKey = String((configDoc as Record<string, unknown> | null)?.openaiApiKey || '')
-    const enabled = !!(configDoc as Record<string, unknown> | null)?.enabled
-    const provider = String((configDoc as Record<string, unknown> | null)?.provider || 'openai')
-    const model = String((configDoc as Record<string, unknown> | null)?.model || 'gpt-4o-mini')
-
-    if (!enabled) {
-      return NextResponse.json(
-        { error: 'AI features are disabled. Ask an admin to enable them in Admin Panel.' },
-        { status: 403 }
-      )
-    }
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'No AI API key configured. Ask an admin to add one in Admin Panel.' },
-        { status: 403 }
-      )
-    }
-
-    // ── Build OpenAI-compatible client ────────────────────────────────
-    // Groq exposes an OpenAI-compatible endpoint at https://api.groq.com/openai/v1
-    // — same request/response shapes, just a different baseURL + key prefix (gsk_).
-    // OpenAI SDK supports this via the baseURL option.
-    //
-    // PERFORMANCE: we set a short timeout so the user doesn't wait forever if
-    // the API is slow. Groq typically responds in 500-1500ms; OpenAI in 1-3s.
-    // We also use a lower max_tokens for form extraction (responses are tiny
-    // JSON objects, no need for 800 tokens).
-    const clientOptions: ConstructorParameters<typeof OpenAI>[0] = {
-      apiKey,
-      timeout: 12_000, // 12s hard cap — fail fast instead of hanging
-      maxRetries: 1,   // one retry on transient errors only
-    }
-    if (provider === 'groq') {
-      clientOptions.baseURL = 'https://api.groq.com/openai/v1'
-    }
-    // For OpenAI, we omit baseURL — the SDK defaults to api.openai.com/v1
-    const client = new OpenAI(clientOptions)
+    // ── AI completion — stored provider first, built-in ZAI fallback.
+    // NOTE: no API-key 403 gates here anymore. A missing/invalid/expired
+    // provider key no longer breaks this feature — the unified AI layer
+    // (see src/lib/ai-completions.ts) transparently uses the platform ZAI
+    // engine whenever the provider is absent or failing.
+    const ai = await makeAiChat()
     const systemPrompt = buildSystemPrompt(schema)
 
-    // Build a JSON schema for structured output. Each field is optional
-    // (the AI omits keys it couldn't extract), so we use additionalProperties
-    // false + a permissive object with all keys as optional strings/numbers.
-    //
-    // PERFORMANCE: temperature=0 for deterministic, fast reasoning. Groq's
-    // max_tokens=500 is plenty for form fields (response is a tiny JSON).
-    const response = await client.chat.completions.create({
-      model,
+    // temperature=0 for deterministic, fast extraction. Response is a tiny
+    // JSON object, so max_tokens=500 is plenty.
+    const response = await ai.create({
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: text.trim() },
@@ -114,10 +75,8 @@ export async function POST(request: Request) {
     })
 
     const rawContent = response.choices[0]?.message?.content || '{}'
-    let rawJson: Record<string, unknown>
-    try {
-      rawJson = JSON.parse(rawContent)
-    } catch {
+    const rawJson = extractJson(rawContent)
+    if (!rawJson) {
       console.error('[POST /api/ai/parse] Failed to parse AI response as JSON:', rawContent)
       return NextResponse.json(
         { error: 'AI returned invalid JSON. Please try rephrasing your input.' },
