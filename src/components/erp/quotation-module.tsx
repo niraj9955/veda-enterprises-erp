@@ -705,16 +705,18 @@ function QuotationCreatePage({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Top bar */}
-      <div className="flex items-center justify-between gap-3 sticky top-0 bg-background/95 backdrop-blur z-20 pb-2 border-b">
-        <div className="flex items-center gap-3">
-          <Button type="button" variant="ghost" size="sm" onClick={onBack}>
+      {/* Top bar — wraps to 2 rows on narrow phones (back+title / buttons)
+          instead of forcing a ~460px row that clipped the whole page left */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 sticky top-0 bg-background/95 backdrop-blur z-20 pb-2 border-b">
+        <div className="flex items-center gap-2 min-w-0">
+          <Button type="button" variant="ghost" size="sm" onClick={onBack} className="shrink-0">
             <ArrowLeft className="h-4 w-4 mr-1" /> Back
           </Button>
-          <h1 className="text-xl font-bold text-emerald-700 dark:text-emerald-400">
+          <h1 className="text-base sm:text-lg md:text-xl font-bold text-emerald-700 dark:text-emerald-400 min-w-0">
             {editingQuotation ? `Edit Quotation ${editingQuotation.billNumber}` : 'Create New Quotation'}
           </h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 grow justify-end sm:grow-0">
           <Button type="button" variant="outline" onClick={onBack}>Cancel</Button>
           <Button type="submit" disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
             {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
