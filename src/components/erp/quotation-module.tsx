@@ -151,8 +151,10 @@ interface CustomerBillHistory {
   }
 }
 
+// Finished-product presets for quotation item suggestions.
+// NOTE: raw materials (Cement/Dust/Hardner) and the catch-all "Other" were
+// removed on user request — quotations quote finished paver products only.
 const PRODUCT_PRESETS = [
-  'Cement',
   'Zig Zag Grey 80mm',
   'Zig Zag Red 80mm',
   'Zig Zag Yellow 80mm',
@@ -164,9 +166,6 @@ const PRODUCT_PRESETS = [
   'Dumble Grey 80mm',
   'Dumble Red 80mm',
   'Dumble Yellow 80mm',
-  'Dust',
-  'Hardner',
-  'Other',
 ]
 
 const STATUS_COLORS: Record<string, string> = {
