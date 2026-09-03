@@ -49,3 +49,24 @@ Work Log:
 Stage Summary:
 - AI features (chat agent + AI Fill parse) ab key-independent: koi bhi API key expire/invalid ho, ZAI engine khud handle karta hai
 - User ke liye critical instruction: saare tabs band karke app naye tab me kholo, v3.5 badge verify karo (SW v8 auto-update + auto-reload karega)
+
+---
+Task ID: R3 (mic-test-remove + api-clarity + env-guard)
+Agent: Main Agent (GLM)
+Task: Login se Mic Test hatana + "kon sa API chahiye" confusion khatam karna
+
+Work Log:
+- Login page se MicTest button removed (user request) — import commented, UI block hata
+- User ko clarity di: voice recognition (ASR) ke liye KOI API key nahi chahiye — built-in ZAI ASR hai. "API chahiye" errors Groq key (AI features) se aaye the, jo v3.5 me ZAI-fallback se fix ho chuke
+- CRITICAL BUG mila: .env file kisi sandbox process ne overwrite kar di — MONGODB_URI line gayab thi! App localhost:27017 pe connect kar raha tha -> LOGIN 500 FAIL ho raha tha (yehi user ke "kaam nahi kar raha" ka bada reason tha)
+- FIX 1: .env restore kiya
+- FIX 2 (self-healing): daemon.js me guard — har server start pe check karta hai MONGODB_URI hai ya nahi, nahi to auto-restore
+- FIX 3: SW navigation networkFirst timeout 5s -> 3s (slow network me stale HTML serve hone se bachane ke liye)
+- Browser verify: login page par Mic Test GONE, login OK, dashboard Atlas data OK, v3.6 chip OK
+- ASR sanity test: HTTP 200 + correct transcription
+- Version v3.6, SW v9. Commit 35e13e8 pushed
+
+Stage Summary:
+- Login se mic hata diya
+- Login 500 (DB disconnect) root-caused aur permanently self-healed
+- Voice ke liye koi API key requirement nahi — user ko clearly bataya
