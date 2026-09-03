@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
 import { requireSession } from '@/lib/auth'
+import { AiConfig } from '@/lib/models'
+import { connectDB } from '@/lib/db'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { writeFile, unlink, readFile } from 'fs/promises'
@@ -33,8 +35,17 @@ export const maxDuration = 60
  *
  * Resilience: if the first transcription attempt fails or returns empty,
  * the audio is ALWAYS retried as a freshly normalized 16kHz mono WAV.
+ *
+ * Engine chain: built-in ZAI ASR → Groq Whisper (whisper-large-v3).
+ * The ZAI engine needs sandbox credentials that do NOT exist on Vercel, so
+ * there the fallback engine is REQUIRED. Groq key resolution order:
+ *   1. process.env.GROQ_API_KEY   (Vercel env var — recommended)
+ *   2. DB AiConfig (provider='groq' && enabled) — settable from the app's
+ *      AI Settings page without redeploying.
+ *
  * Empty results return HTTP 200 with { text: '' } and a `kind` hint so the
- * client can show the right message (silence vs error vs too-short).
+ * client can show the right message (silence vs error vs too-short vs
+ * no-provider — the last one NAMES the exact missing API).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -70,15 +81,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    /** One ASR attempt. Returns trimmed text, throws on API failure. */
+    /** One ZAI ASR attempt. Returns trimmed text, throws on API failure.
+     *  Noise/silence can make the engine "transcribe" symbol garbage (e.g. "#",
+     *  "...") — that is treated as empty so the retry chain still runs. */
+    const hasRealContent = (t: string) => /[a-zA-Z0-9\u0900-\u097F]/.test(t)
     const tryAsr = async (b64: string): Promise<string> => {
       const zai = await ZAI.create()
       const response = await zai.audio.asr.create({ file_base64: b64 })
-      return (response?.text || '').trim()
+      const t = (response?.text || '').trim()
+      return hasRealContent(t) ? t : ''
     }
 
     let text = ''
     let lastErr: any = null
+    let zaiFailed = false // at least one ZAI attempt THREW (engine down/misconfigured)
+    let groqErr: string | null = null // Groq was attempted but failed (with reason)
 
     // Attempt 1: direct passthrough for WAV/WebM (native), converted for others
     let firstBase64 = base64
@@ -96,7 +113,8 @@ export async function POST(request: NextRequest) {
       text = await tryAsr(firstBase64)
     } catch (err: any) {
       lastErr = err
-      console.warn(`[ASR] attempt 1 failed: ${err?.message || err}`)
+      zaiFailed = true
+      console.warn(`[ASR] attempt 1 failed (zai): ${err?.message || err}`)
     }
 
     // Attempt 2: ALWAYS retry with a freshly normalized 16k mono WAV.
@@ -111,13 +129,48 @@ export async function POST(request: NextRequest) {
         }
       } catch (err: any) {
         lastErr = err
-        console.warn(`[ASR] attempt 2 failed: ${err?.message || err}`)
+        zaiFailed = true
+        console.warn(`[ASR] attempt 2 failed (zai): ${err?.message || err}`)
+      }
+    }
+
+    // Attempt 3: Groq Whisper fallback — REQUIRED on Vercel where the ZAI
+    // engine has no credentials. Also useful when ZAI has a transient outage.
+    if (!text) {
+      try {
+        const wav = await convertToWav(bin)
+        const g = await tryGroqAsr(wav || bin)
+        text = hasRealContent(g) ? g : ''
+      } catch (err: any) {
+        groqErr = String(err?.message || err)
+        console.warn(`[ASR] attempt 3 failed (groq): ${groqErr}`)
       }
     }
 
     if (text) {
-      console.log(`[ASR] ok: "${text.slice(0, 60)}"`)
-      return NextResponse.json({ text })
+      console.log(`[ASR] ok${groqErr ? ' (groq)' : ''}: "${text.slice(0, 60)}"`)
+      return NextResponse.json({ text, engine: groqErr ? 'groq' : 'zai' })
+    }
+
+    // Voice engine chain is down: ZAI threw AND no usable Groq key.
+    // This is the "Vercel pe voice kaam nahi kar raha" case — NAME the fix.
+    if (zaiFailed && groqErr === 'no-groq-key') {
+      console.error('[ASR] no engine available: ZAI unavailable + GROQ_API_KEY not set')
+      return NextResponse.json(
+        {
+          error:
+            'Voice engine is server par uplabdh nahi hai (Vercel). Isko theek karne ke liye Vercel environment me GROQ_API_KEY add karo — console.groq.com se free key milti hai. Ya app ki AI Settings me Groq key daal do.',
+          kind: 'no-provider',
+        },
+        { status: 503 }
+      )
+    }
+    // Groq key exists but was rejected/expired — say exactly that.
+    if (groqErr && groqErr.startsWith('groq-401')) {
+      return NextResponse.json(
+        { error: 'Groq API key invalid ya expire ho gayi hai. Nayi key generate karo (console.groq.com).', kind: 'no-provider' },
+        { status: 503 }
+      )
     }
 
     // Both attempts produced nothing — decide the user-facing message.
@@ -146,6 +199,46 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+/**
+ * Groq Whisper fallback — works everywhere including Vercel serverless.
+ * Key: env GROQ_API_KEY first, then DB AiConfig (provider='groq', enabled).
+ * Returns trimmed text; throws Error('no-groq-key') when no key is usable
+ * and Error('groq-<status>: ...') when Groq rejects the request.
+ */
+async function tryGroqAsr(bin: Buffer): Promise<string> {
+  let key = process.env.GROQ_API_KEY || ''
+  if (!key) {
+    try {
+      await connectDB()
+      const cfg = (await AiConfig.findOne().lean()) as Record<string, unknown> | null
+      if (cfg && cfg.provider === 'groq' && cfg.enabled && cfg.openaiApiKey) {
+        key = String(cfg.openaiApiKey)
+      }
+    } catch (e: any) {
+      console.warn('[ASR] AiConfig lookup failed:', e?.message || e)
+    }
+  }
+  if (!key) throw new Error('no-groq-key')
+
+  const form = new FormData()
+  form.append('file', new Blob([new Uint8Array(bin)], { type: 'audio/wav' }), 'audio.wav')
+  form.append('model', 'whisper-large-v3')
+  form.append('response_format', 'json')
+  form.append('temperature', '0')
+
+  const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}` },
+    body: form,
+  })
+  if (!res.ok) {
+    const detail = (await res.text().catch(() => '')).slice(0, 200)
+    throw new Error(`groq-${res.status}: ${detail}`)
+  }
+  const data = (await res.json()) as { text?: string }
+  return (data?.text || '').trim()
 }
 
 /** Audio duration in seconds (best-effort, for better error messages). */

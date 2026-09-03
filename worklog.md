@@ -70,3 +70,26 @@ Stage Summary:
 - Login se mic hata diya
 - Login 500 (DB disconnect) root-caused aur permanently self-healed
 - Voice ke liye koi API key requirement nahi — user ko clearly bataya
+
+---
+Task ID: R4 (full-site-testing + vercel-voice-fix)
+Agent: Main Agent (GLM)
+Task: "poora whole website ko testing me daal or bug fix — naya problem mat khada kar" + MongoDB/Vercel credentials question
+
+Work Log:
+- User ka device ab VERCEL deployment use kar raha hai — wahi asli root cause tha
+- ROOT CAUSE (voice): ZAI SDK ko sandbox credentials chahiye jo VERCEL par EXIST nahi karte -> wahan ASR hamesha fail ("Awaz samajh nahi paye"). Sandbox me voice bilkul theek thi
+- FIX 1: /api/asr me GROQ WHISPER (whisper-large-v3) fallback engine add kiya — key order: env GROQ_API_KEY (Vercel) -> DB AiConfig (provider=groq, app settings se). Ab Vercel par bhi voice chalegi jab user key daal dega
+- FIX 2: Error messages ab EXPLICIT engine batate hain: 'no-provider' kind = "Voice engine is server par nahi (Vercel) — GROQ_API_KEY chahiye"; groq-401 = key invalid. Kaun sa API fail hua — clear
+- FIX 3: Noise/sine tone pe ZAI garbage symbols ("#") return karta tha — hasRealContent() filter: sirf letters/digits/Devanagari valid text
+- FIX 4 (SECURITY): JWT_SECRET .env me MISSING tha — auth public fallback string use kar raha tha. Strong random secret generate karke .env + daemon.js self-heal guard me add kiya (ab kabhi missing nahi hogi). NOTE: Vercel env me JWT_SECRET bhi set karna hoga
+- FULL E2E SUITE banaya (scripts/test-full-site.js): auth (4 negative cases), 16 modules CRUD (create->update->delete->zero-residue verify), dashboard/reports/stock/company/ai-config smoke, AI parse+agent, ASR (silence + real speech), integrity snapshots (customers+stock drift check), ZTEST residue sweep
+- SAFETY: destructive endpoints (database DELETE = data wipe, reset-admin, init) kabhi call nahi kiye; ZTEST records delete-verified; ek residue (daily-sell auto-created customer) mila — swept
+- FINAL RESULT: 102 PASS / 0 WARN / 0 FAIL (full green)
+- Browser verify: login par mic GONE ✓, v3.7 badge ✓, admin login → dashboard saare modules render ✓
+- v3.7 / SW v10. Testing ke dauran mile findings: (a) operator@veda.com ka DB role 'admin' hai (user khud ne banaya hoga), (b) daily-sell delete hone par auto-created customer reh jata hai (design behavior, corruption nahi), (c) sab [id] routes PUT use karte hain (consistent)
+
+Stage Summary:
+- Voice ab 2-engine: ZAI (sandbox) + Groq Whisper (Vercel/user key) — Vercel pe GROQ_API_KEY env ya app AI Settings me Groq key daalo, voice chalega
+- JWT_SECRET security fix (Vercel me bhi set karna hai)
+- Poora site E2E-verified: 102/102 green, zero data residue

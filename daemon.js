@@ -5,6 +5,8 @@ const fs = require('fs');
 // Some sandbox processes clobber .env and drop MONGODB_URI — without it the
 // app silently falls back to localhost MongoDB (which doesn't exist here)
 // and every login 500s. Ensure the line exists before every server start.
+// Same for JWT_SECRET — without it auth falls back to a public dev string
+// (security hole) and sessions break unpredictably.
 const ENV_PATH = '/home/z/my-project/.env';
 const REQUIRED_LINE = 'MONGODB_URI=mongodb+srv://vedaerp:Veda0201@cluster0.q5b2ye0.mongodb.net/veda-erp';
 try {
@@ -14,6 +16,12 @@ try {
     env = env.trimEnd() + '\n' + REQUIRED_LINE + '\n';
     fs.writeFileSync(ENV_PATH, env);
     console.log('[daemon] .env was missing MONGODB_URI — restored it automatically');
+  }
+  if (!/^JWT_SECRET=.{16,}/m.test(env)) {
+    const secret = require('crypto').randomBytes(32).toString('hex');
+    env = env.trimEnd() + '\nJWT_SECRET=' + secret + '\n';
+    fs.writeFileSync(ENV_PATH, env);
+    console.log('[daemon] .env was missing JWT_SECRET — generated a strong random one');
   }
 } catch (e) {
   console.warn('[daemon] .env guard failed:', e.message);
