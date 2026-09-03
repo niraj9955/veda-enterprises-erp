@@ -29,3 +29,23 @@ Stage Summary:
 - AI agent self-healing: Groq/OpenAI key invalid ho to khud ZAI engine pe switch
 - Server restart command: cd /home/z/my-project && node daemon.js
 - Pending: user ke device pe SW v7 auto-update hoga (page 1-2 baar kholne par), voice dobara test karna
+
+---
+Task ID: R2 (api-chahiye-fix)
+Agent: Main Agent (GLM)
+Task: "bol rha api chahiye" — AI har jagah se API-key dependency hatana
+
+Work Log:
+- User report: app "API chahiye" bol raha hai, kal se ek cheez fix nahi ho rahi
+- Root cause 1: user ka device abhi bhi purana v3.3 cached build chala raha tha (jisme Groq key invalid hone par "AI is disabled or no API key" 403 aata tha)
+- Root cause 2 (code): /api/ai/parse (AI Fill dialog) me bhi wahi 403 gates thi jo sirf agent route me fix hui thi, parse me NAHI
+- FIX: shared layer src/lib/ai-completions.ts banaya — makeAiChat() factory: stored provider (Groq/OpenAI) healthy ho to wahan, warna transparently built-in ZAI engine. Dead-provider memory memo: 401/403/404 par 10 min, 429 par 1 min tak provider skip (har request par failed-key roundtrip tax nahi)
+- /api/ai/parse se API-key 403 gates PERMANENTLY removed — ab ye feature kabhi "API key chahiye" nahi bolega
+- /api/ai/agent ko bhi shared helper pe migrate kiya (duplicate code removed)
+- extractJson() helper: markdown fences/leading prose ke saath bhi JSON parse hota hai
+- E2E tests: agent-chat 200 OK, agent-tool 200 OK (real production data), parse 200 OK (Hinglish "Kal Rohit ko 250 zig zag..." → fields extracted correctly)
+- Version v3.5, SW v8. Commit 986f75c push ho gaya GitHub main (token user-provided)
+
+Stage Summary:
+- AI features (chat agent + AI Fill parse) ab key-independent: koi bhi API key expire/invalid ho, ZAI engine khud handle karta hai
+- User ke liye critical instruction: saare tabs band karke app naye tab me kholo, v3.5 badge verify karo (SW v8 auto-update + auto-reload karega)
