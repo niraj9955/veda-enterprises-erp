@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { LoginScene3D } from '@/components/ui/login-scene-3d' // 3D scene (experimental)
 import { TiltCard } from '@/components/ui/tilt-card' // 3D tilt (experimental)
-import { MicTest } from '@/components/ui/mic-test'
+// import { MicTest } from '@/components/ui/mic-test' // removed from login (user request)
 import { ThemeToggle } from '@/components/erp/theme-toggle'
 import { toast } from '@/hooks/use-toast'
 import {
@@ -556,10 +556,7 @@ export default function LoginPage() {
       </Card>
       </TiltCard>
 
-      {/* Mic self-test — instantly diagnoses WHY voice isn't working */}
-      <div className="relative z-10 mt-4">
-        <MicTest />
-      </div>
+      {/* Mic self-test removed from login (user request) — still available via AI chat if needed */}
 
       {/* Version chip — cache/update verification: user can confirm they're on the latest build */}
       <p className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-emerald-100/30 select-none z-10">

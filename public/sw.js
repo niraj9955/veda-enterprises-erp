@@ -18,7 +18,7 @@
  *  - Images from external CDN            → CacheFirst, 24h
  */
 
-const SW_VERSION = "veda-erp-v8";
+const SW_VERSION = "veda-erp-v9";
 const STATIC_CACHE = `${SW_VERSION}-static`;
 const API_CACHE = `${SW_VERSION}-api`;
 const PAGE_CACHE = `${SW_VERSION}-pages`;
@@ -154,8 +154,10 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Same-origin navigation (HTML pages) → NetworkFirst with offline fallback
+  // 3s cap: slow networks must not keep serving a stale cached shell —
+  // this was letting old builds stick around on flaky mobile connections.
   if (request.mode === "navigate") {
-    event.respondWith(networkFirst(request, PAGE_CACHE, 5000));
+    event.respondWith(networkFirst(request, PAGE_CACHE, 3000));
     return;
   }
 
