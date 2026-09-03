@@ -155,3 +155,19 @@ Work Log:
 Stage Summary:
 - v3.10: quotation suggestions = finished products only (11 items)
 - USER ACTION: Vercel Redeploy -> verify v3.10 badge
+
+---
+Task ID: R8
+Agent: Super Z (main)
+Task: "mobile responsive me shi kro" (screenshot: quotation create form at 400x652 DevTools — Date/Validity labels clipped at left edge)
+
+Work Log:
+- Root cause: create-form top bar was a single non-wrapping flex row: Back(~90px) + "Create New Quotation" text-xl + Cancel + Create Quotation ≈ 460px min-width > 400px viewport → horizontal overflow → mx-auto centered container → left edge (Date/Valid Until labels) clipped
+- Fix (both quotation-module.tsx:708 AND bill-module.tsx:727 — identical pattern): flex flex-wrap + gap-y-2; title text-xl → text-base sm:text-lg md:text-xl + min-w-0; Back button shrink-0; button group grow justify-end sm:grow-0 → row1 = Back+title, row2 = Cancel+Create right-aligned on phones; single row on md+
+- Verified in browser at user's exact 400x652 viewport: quotation create form scrollWidth-viewport = 0px (no horizontal scroll), bill create form = 0px; screenshots download/quotation-form-mobile-fixed.png + bill-form-mobile-fixed.png
+- Scanned rest of form for overflow sources (fixed widths, nowrap, grids) — all already responsive; top bar was the only offender
+- Version v3.10 -> v3.11, SW v13 -> v14; build OK; E2E 102 PASS / 0 WARN / 0 FAIL; pushed
+
+Stage Summary:
+- v3.11: create forms (quotation + bill) fully usable at 400px phones — no more clipped labels
+- USER ACTION: Vercel Redeploy -> verify v3.11 badge
