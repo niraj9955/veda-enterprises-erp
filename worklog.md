@@ -93,3 +93,31 @@ Stage Summary:
 - Voice ab 2-engine: ZAI (sandbox) + Groq Whisper (Vercel/user key) — Vercel pe GROQ_API_KEY env ya app AI Settings me Groq key daalo, voice chalega
 - JWT_SECRET security fix (Vercel me bhi set karna hai)
 - Poora site E2E-verified: 102/102 green, zero data residue
+
+---
+Task ID: R5
+Agent: Super Z (main)
+Task: "voice bolta kuchh hu sunta kuchh aur" — ASR accuracy fix (user's voice now WORKS on Vercel via Groq, but Whisper mishears words)
+
+Work Log:
+- Diagnosed 4 accuracy root causes: (1) no language hint to Whisper on short Hinglish clips, (2) no vocabulary prompt anchor, (3) 2s VAD trailing silence padding triggers Whisper hallucinations, (4) raw webm/mp4 uploads mislabeled audio.wav
+- src/app/api/asr/route.ts upgraded:
+  * ERP_ASR_PROMPT anchor (Hindi business vocab: बिल/पेमेंट/कस्टमर/बैलेंस + English terms) — biases Whisper decoding, <224 tokens
+  * response_format=verbose_json → duration-weighted mean avg_logprob as confidence
+  * Confidence-aware Hindi retry: if meanLogprob < -1.0 and no forced lang → one retry with language=hi, better-confidence result wins (fixes auto-detect mishearing Hindi as other languages)
+  * Optional body.lang ('hi'|'en'|'hi-IN'|'en-IN') passthrough to force language (normalizeLang)
+  * ffmpeg convertToWav now trims leading/trailing silence (silenceremove -40dB, keep 0.3s lead/0.15s tail); all-silence guard returns null → raw fallback
+  * HALLUCINATION_PATTERNS blocklist ("Thank you.", "amara.org", "मैं आपकी...", "धन्यवाद", subscribe spam etc.) via cleanTranscript — applied to ZAI + Groq output, short texts only (<80 chars)
+  * Honest container naming (wav/webm/ogg/mp4 via extended detectFormat with OggS magic)
+  * Fixed engine mislabel bug: groq success was reported as engine='zai' (groqErr only set on failure) → new usedEngine variable
+  * Response adds optional language field for groq engine (debug aid)
+- Version bump: APP_VERSION v3.7→v3.8, SW_VERSION veda-erp-v10→veda-erp-v11
+- scripts/test-groq-accuracy.js (NEW): live old-vs-new Groq param comparison w/ TTS Hindi phrases + VAD silence padding simulation + preflight IP-block probe
+- DISCOVERY: sandbox IP is BLOCKED by Groq's Cloudflare edge — even bogus key returns 403 JSON Forbidden on /models. Groq whisper CANNOT be live-tested from sandbox. DB AiConfig gsk key NOT proven dead (test inconclusive due to IP block). Vercel IPs are clean → voice works there.
+- Build OK, daemon restarted, full E2E: 102 PASS / 0 WARN / 0 FAIL (asr silence→too-short kind, speech→engine=zai)
+- Pushed to GitHub: 0d8a187..bc0a6d0 (v3.8 + 2 earlier image commits)
+
+Stage Summary:
+- ASR accuracy chain on Vercel: raw webm → (no ffmpeg there) → Groq whisper-large-v3 with ERP prompt anchor + temp 0 → auto-detect; weak confidence (<-1.0 logprob) → language=hi retry; hallucination blocklist; better result wins
+- USER ACTION NEEDED: Vercel → Deployments → Redeploy (to get v3.8), then verify v3.8 badge in login footer, then voice accuracy test
+- Groq unreachable from sandbox — any future Groq live-testing must run on Vercel or another clean IP
