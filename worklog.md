@@ -139,3 +139,19 @@ Work Log:
 Stage Summary:
 - v3.9 shipped: product suggestions now work on ALL devices (mobile + laptop) in Quotation and Billing item rows
 - USER ACTION: Vercel -> Redeploy, verify v3.9 badge, then quotation item field tap should show product list on phone
+
+---
+Task ID: R7
+Agent: Super Z (main)
+Task: "cement, dust, hardner, other ye htao quotation item me se" — trim quotation product presets
+
+Work Log:
+- Removed Cement, Dust, Hardner, Other from PRODUCT_PRESETS in quotation-module.tsx (suggestion dropdown now shows 11 finished paver products)
+- Safety check first: PRODUCT_PRESETS used ONLY by the suggestion dropdown (line 845); production auto-fill uses independent PROD_FIELD_TO_LABEL mapping (cement:'Cement (bags)' etc.) — unaffected. Bill module presets untouched (user asked quotation only).
+- Custom free-typing still allows any name (raw materials can still be typed manually if ever needed)
+- Version v3.9 -> v3.10, SW v12 -> v13; build OK; E2E 102 PASS / 0 WARN / 0 FAIL
+- Pushed to GitHub
+
+Stage Summary:
+- v3.10: quotation suggestions = finished products only (11 items)
+- USER ACTION: Vercel Redeploy -> verify v3.10 badge
