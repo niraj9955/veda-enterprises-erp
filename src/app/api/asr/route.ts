@@ -30,6 +30,11 @@ export const maxDuration = 60
  *  - everything else → converted to 16kHz mono WAV via ffmpeg ❌→✅
  *    (mp4/aac from iOS Safari FAILED on the ASR API before this conversion —
  *     that was the "iPhone pe voice kaam nahi karta" bug)
+ *
+ * Resilience: if the first transcription attempt fails or returns empty,
+ * the audio is ALWAYS retried as a freshly normalized 16kHz mono WAV.
+ * Empty results return HTTP 200 with { text: '' } and a `kind` hint so the
+ * client can show the right message (silence vs error vs too-short).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -56,31 +61,107 @@ export async function POST(request: NextRequest) {
     const format = detectFormat(bin)
     console.log(`[ASR] request: ${bin.length} bytes, format=${format}`)
 
-    let asrBase64 = base64
+    // Sanity: a recording under ~1.5KB of real audio is basically a mis-tap
+    if (bin.length < 1536) {
+      console.log('[ASR] rejected: recording too short')
+      return NextResponse.json(
+        { error: 'Recording bahut chhoti thi. Mic dabaye aur thoda lamba bolo.', kind: 'too-short' },
+        { status: 422 }
+      )
+    }
+
+    /** One ASR attempt. Returns trimmed text, throws on API failure. */
+    const tryAsr = async (b64: string): Promise<string> => {
+      const zai = await ZAI.create()
+      const response = await zai.audio.asr.create({ file_base64: b64 })
+      return (response?.text || '').trim()
+    }
+
+    let text = ''
+    let lastErr: any = null
+
+    // Attempt 1: direct passthrough for WAV/WebM (native), converted for others
+    let firstBase64 = base64
     if (format === 'other') {
-      // mp4/aac (iOS Safari), ogg/opus (Firefox), 3gpp, etc. — convert to WAV
       const converted = await convertToWav(bin)
       if (converted) {
-        asrBase64 = converted.toString('base64')
+        firstBase64 = converted.toString('base64')
         console.log(`[ASR] converted ${format} -> WAV (${converted.length} bytes)`)
       } else {
-        // conversion failed — try the original anyway (maybe it was supported)
         console.warn('[ASR] ffmpeg conversion failed, sending original bytes')
       }
     }
 
-    const zai = await ZAI.create()
-    const response = await zai.audio.asr.create({ file_base64: asrBase64 })
-    const text = (response?.text || '').trim()
-    console.log(`[ASR] ok: "${text.slice(0, 60)}"`)
+    try {
+      text = await tryAsr(firstBase64)
+    } catch (err: any) {
+      lastErr = err
+      console.warn(`[ASR] attempt 1 failed: ${err?.message || err}`)
+    }
 
-    return NextResponse.json({ text })
+    // Attempt 2: ALWAYS retry with a freshly normalized 16k mono WAV.
+    // Fixes: truncated Chrome webm blobs, odd sample rates, embedded headers,
+    // transient upstream errors — normalization repairs all of these.
+    if (!text) {
+      try {
+        const wav = await convertToWav(bin)
+        if (wav) {
+          console.log(`[ASR] retry with normalized WAV (${wav.length} bytes)`)
+          text = await tryAsr(wav.toString('base64'))
+        }
+      } catch (err: any) {
+        lastErr = err
+        console.warn(`[ASR] attempt 2 failed: ${err?.message || err}`)
+      }
+    }
+
+    if (text) {
+      console.log(`[ASR] ok: "${text.slice(0, 60)}"`)
+      return NextResponse.json({ text })
+    }
+
+    // Both attempts produced nothing — decide the user-facing message.
+    // If at least one decode path SUCCEEDED but text is empty → it was silence.
+    const decoded = await decodeDuration(bin, format).catch(() => 0)
+    if (decoded > 0 && decoded < 1.0) {
+      console.log(`[ASR] empty result, duration ${decoded.toFixed(2)}s -> too-short`)
+      return NextResponse.json(
+        { error: 'Bolna thoda lamba rakho — jaldi chala gaya tha.', kind: 'too-short' },
+        { status: 422 }
+      )
+    }
+    if (lastErr) {
+      console.error('[ASR] transcription failed:', lastErr?.message || lastErr)
+    } else {
+      console.log('[ASR] empty transcription (silence/noise only)')
+    }
+    return NextResponse.json(
+      { error: 'Awaz samajh nahi paye. Thoda saaf bolke dubara try karo.', kind: 'no-speech' },
+      { status: 200 }
+    )
   } catch (error: any) {
     console.error('[ASR] transcription failed:', error?.message || error)
     return NextResponse.json(
-      { error: 'Awaz samajh nahi paye. Thoda saaf bolke dubara try karo.' },
+      { error: 'Awaz samajh nahi paye. Thoda saaf bolke dubara try karo.', kind: 'error' },
       { status: 500 }
     )
+  }
+}
+
+/** Audio duration in seconds (best-effort, for better error messages). */
+async function decodeDuration(bin: Buffer, format: string): Promise<number> {
+  const id = crypto.randomUUID()
+  const inPath = path.join(tmpdir(), `asr-dur-${id}.bin`)
+  try {
+    await writeFile(inPath, bin)
+    const { stdout } = await execFileAsync(
+      'ffprobe',
+      ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', inPath],
+      { timeout: 8000 }
+    )
+    return parseFloat(stdout.trim()) || 0
+  } finally {
+    await unlink(inPath).catch(() => {})
   }
 }
 
