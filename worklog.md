@@ -193,3 +193,20 @@ Stage Summary:
 - Voice now: 1.2s silence submit (was 2s), Groq hits first on Vercel (saves the whole doomed-ZAI phase), single ffmpeg pass, chat skips language retry. Estimated user-perceived savings: ~1.5-4s per voice command on Vercel
 - test-full-site.js must be recreated or re-committed next session (was 102-test suite)
 - v3.12 pushed; user needs Vercel Redeploy
+
+---
+Task ID: R9
+Agent: Super Z (main)
+Task: "perfect nhi sun rha avi v or fast and perfect kro" — accuracy round 2
+
+Work Log:
+- Added DYNAMIC ASR vocabulary: buildVocabSuffix() in asr/route.ts pulls distinct DailySell products + 12 recent Customer names from DB, appends to Whisper prompt (5-min module cache, char-capped at 360 ≈ 90 tokens so total stays under Whisper's 224-token prompt limit, DB failure → static prompt only, 30s negative cache)
+- Static ERP_ASR_PROMPT tightened: removed English tail (dynamic list covers Latin), added Hindi numerals/time words (हज़ार, लाख, कितना, आज, कल)
+- tryGroqAsr now takes explicit prompt param; suffix built in parallel with key resolution via Promise.all
+- agent route search_customers: added fuzzy token-AND fallback (voice transcripts noisy — "rohit kumar" vs "Rohit"; each ≥2-char token must appear in name)
+- Version v3.12→v3.13, SW v15→v16; build OK; test-voice-speed: 11 PASS / 0 WARN / 0 FAIL; agent latency improved 5293ms→3155ms (max_tokens change compounding); pushed 652d62d
+
+Stage Summary:
+- Whisper now sees the shop's REAL product/customer names in its prompt — biggest single accuracy lever for domain vocabulary
+- Fuzzy customer search absorbs residual transcript noise at the agent layer
+- v3.13 pushed; user needs Vercel Redeploy
