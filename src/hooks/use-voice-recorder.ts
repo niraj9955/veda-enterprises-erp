@@ -40,8 +40,13 @@ interface UseVoiceRecorderOptions {
   onError: (message: string, kind?: VoiceErrorKind) => void
   /** Max recording length in ms (auto-stop). Default 60s. */
   maxDurationMs?: number
-  /** Silence length (after speech was detected) that auto-submits. Default 2s. */
+  /** Silence length (after speech was detected) that auto-submits. Default 1.2s
+   *  (was 2s — users waited a dead 2s after finishing a command before submit). */
   silenceStopMs?: number
+  /** Optional Whisper language hint ('hi' | 'en') forwarded to /api/asr.
+   *  Forcing a known language skips the server's auto-detect retry round trip
+   *  (faster) and anchors decoding (more accurate) for known-language UIs. */
+  lang?: string
   /** If NO sound at all for this long, run the bytes-fallback / no-signal check. Default 10s. */
   noSpeechTimeoutMs?: number
   /** Auto-stop deadline when VAD is unavailable (suspended AudioContext). Default 8s. */
@@ -81,8 +86,9 @@ function blobToBase64(blob: Blob): Promise<string> {
 export function useVoiceRecorder({
   onResult,
   onError,
+  lang,
   maxDurationMs = 60000,
-  silenceStopMs = 2000,
+  silenceStopMs = 1200,
   noSpeechTimeoutMs = 10000,
   fallbackStopMs = 8000,
 }: UseVoiceRecorderOptions) {
@@ -166,7 +172,7 @@ export function useVoiceRecorder({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ audio: base64 }),
+          body: JSON.stringify(lang ? { audio: base64, lang } : { audio: base64 }),
           signal: controller.signal,
         })
         const data = await res.json().catch(() => ({}))
@@ -194,7 +200,7 @@ export function useVoiceRecorder({
     } finally {
       setStatus('idle')
     }
-  }, [])
+  }, [lang])
 
   const start = React.useCallback(async () => {
     if (status !== 'idle') return

@@ -36,9 +36,10 @@ export const maxDuration = 60
  * Resilience: if the first transcription attempt fails or returns empty,
  * the audio is ALWAYS retried as a freshly normalized 16kHz mono WAV.
  *
- * Engine chain: built-in ZAI ASR → Groq Whisper (whisper-large-v3).
- * The ZAI engine needs sandbox credentials that do NOT exist on Vercel, so
- * there the fallback engine is REQUIRED. Groq key resolution order:
+ * Engine chain: Groq Whisper (whisper-large-v3) FIRST when a key exists
+ * (primary on Vercel — the built-in ZAI engine has no credentials there, so
+ * trying ZAI first wasted seconds on doomed attempts) → built-in ZAI ASR
+ * as automatic fallback. Groq key resolution order:
  *   1. process.env.GROQ_API_KEY   (Vercel env var — recommended)
  *   2. DB AiConfig (provider='groq' && enabled) — settable from the app's
  *      AI Settings page without redeploying.
@@ -94,13 +95,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    /** One ZAI ASR attempt. Returns cleaned text, throws on API failure.
+    /** One ZAI ASR attempt (lazy singleton — created at most once per request).
      *  Noise/silence can make the engine "transcribe" symbol garbage (e.g. "#",
      *  "...") or classic Whisper-style hallucinations — all treated as empty
      *  so the retry chain still runs. */
+    let zaiInst: Awaited<ReturnType<typeof ZAI.create>> | null = null
     const tryAsr = async (b64: string): Promise<string> => {
-      const zai = await ZAI.create()
-      const response = await zai.audio.asr.create({ file_base64: b64 })
+      if (!zaiInst) zaiInst = await ZAI.create()
+      const response = await zaiInst.audio.asr.create({ file_base64: b64 })
       return cleanTranscript(response?.text || '')
     }
 
@@ -108,63 +110,35 @@ export async function POST(request: NextRequest) {
     let lastErr: any = null
     let zaiFailed = false // at least one ZAI attempt THREW (engine down/misconfigured)
     let groqErr: string | null = null // Groq was attempted but failed (with reason)
-
-    // Attempt 1: direct passthrough for WAV/WebM (native), converted for others
-    let firstBase64 = base64
-    if (format === 'other') {
-      const converted = await convertToWav(bin)
-      if (converted) {
-        firstBase64 = converted.toString('base64')
-        console.log(`[ASR] converted ${format} -> WAV (${converted.length} bytes)`)
-      } else {
-        console.warn('[ASR] ffmpeg conversion failed, sending original bytes')
-      }
-    }
-
-    try {
-      text = await tryAsr(firstBase64)
-    } catch (err: any) {
-      lastErr = err
-      zaiFailed = true
-      console.warn(`[ASR] attempt 1 failed (zai): ${err?.message || err}`)
-    }
-
-    // Attempt 2: ALWAYS retry with a freshly normalized 16k mono WAV.
-    // Fixes: truncated Chrome webm blobs, odd sample rates, embedded headers,
-    // transient upstream errors — normalization repairs all of these.
-    if (!text) {
-      try {
-        const wav = await convertToWav(bin)
-        if (wav) {
-          console.log(`[ASR] retry with normalized WAV (${wav.length} bytes)`)
-          text = await tryAsr(wav.toString('base64'))
-        }
-      } catch (err: any) {
-        lastErr = err
-        zaiFailed = true
-        console.warn(`[ASR] attempt 2 failed (zai): ${err?.message || err}`)
-      }
-    }
-
-    // Attempt 3: Groq Whisper fallback — REQUIRED on Vercel where the ZAI
-    // engine has no credentials. Also useful when ZAI has a transient outage.
     let usedEngine: 'zai' | 'groq' | '' = ''
     let groqLanguage = ''
-    if (!text) {
+    const forced = normalizeLang(body?.lang)
+
+    // ONE trimmed-WAV conversion per request, shared by every engine path —
+    // previously ffmpeg could run up to 3 times on the same audio.
+    let wavCache: Promise<Buffer | null> | null = null
+    const getTrimmedWav = () => (wavCache ??= convertToWav(bin))
+
+    // ── Attempt 1: Groq Whisper FIRST (primary engine). On Vercel the ZAI
+    // engine has no credentials, so the old ZAI-first order wasted seconds on
+    // doomed attempts before the engine that actually works even started.
+    const groqKey = await resolveGroqKey()
+    if (!groqKey) groqErr = 'no-groq-key'
+    if (groqKey) {
       try {
-        const wav = await convertToWav(bin)
+        const wav = await getTrimmedWav()
         const audio = wav || bin
-        const forced = normalizeLang(body?.lang)
-        let best = await tryGroqAsr(audio, forced || undefined)
+        let best = await tryGroqAsr(audio, forced || undefined, groqKey)
         let g = cleanTranscript(best.text)
         // Whisper auto-detect often mishears short Hindi/Hinglish clips as
         // some other language ("bolta kuchh hu sunta kuchh aur"). When no
         // explicit language was requested and confidence is weak, retry once
-        // with a Hindi hint and keep the more confident result.
+        // with a Hindi hint and keep the more confident result. (A client-
+        // forced language skips this round trip entirely — faster.)
         if (!forced && g && best.meanLogprob !== null && best.meanLogprob < -1.0) {
           console.log(`[ASR] weak confidence (avg_logprob ${best.meanLogprob.toFixed(2)}), retrying with language=hi`)
           try {
-            const r2 = await tryGroqAsr(audio, 'hi')
+            const r2 = await tryGroqAsr(audio, 'hi', groqKey)
             const g2 = cleanTranscript(r2.text)
             if (g2 && (r2.meanLogprob ?? -9) > (best.meanLogprob ?? -9)) {
               best = r2
@@ -182,7 +156,47 @@ export async function POST(request: NextRequest) {
         }
       } catch (err: any) {
         groqErr = String(err?.message || err)
-        console.warn(`[ASR] attempt 3 failed (groq): ${groqErr}`)
+        console.warn(`[ASR] groq attempt failed: ${groqErr}`)
+      }
+    }
+
+    // ── Fallback: built-in ZAI engine (sandbox / Groq outage).
+    if (!text) {
+      // Direct passthrough for WAV/WebM (native), converted for others
+      let firstBase64 = base64
+      if (format === 'other') {
+        const converted = await getTrimmedWav()
+        if (converted) {
+          firstBase64 = converted.toString('base64')
+          console.log(`[ASR] converted ${format} -> WAV (${converted.length} bytes)`)
+        } else {
+          console.warn('[ASR] ffmpeg conversion failed, sending original bytes')
+        }
+      }
+
+      try {
+        text = await tryAsr(firstBase64)
+      } catch (err: any) {
+        lastErr = err
+        zaiFailed = true
+        console.warn(`[ASR] zai attempt 1 failed: ${err?.message || err}`)
+      }
+
+      // Retry with a freshly normalized 16k mono WAV — fixes truncated
+      // Chrome webm blobs, odd sample rates, embedded headers, transient
+      // upstream errors — normalization repairs all of these.
+      if (!text) {
+        try {
+          const wav = await getTrimmedWav()
+          if (wav) {
+            console.log(`[ASR] zai retry with normalized WAV (${wav.length} bytes)`)
+            text = await tryAsr(wav.toString('base64'))
+          }
+        } catch (err: any) {
+          lastErr = err
+          zaiFailed = true
+          console.warn(`[ASR] zai attempt 2 failed: ${err?.message || err}`)
+        }
       }
     }
 
@@ -262,22 +276,28 @@ export async function POST(request: NextRequest) {
 const ERP_ASR_PROMPT =
   'Veda Enterprises ERP voice command. Hindi business words: बिल बनाओ, पेमेंट, कस्टमर, ग्राहक, नाम, मोबाइल नंबर, रुपये, रकम, जमा, बाकी, बकाया, टोटल बैलेंस, ऑर्डर, प्रोडक्ट, सामान, कील, पेच, सीमेंट, तार, वेतन, किराया, बिजली, खर्च, आज का, कल का, नया कस्टमर जोड़ो, दिखाओ, बताओ. English: customer, bill, payment, balance, order, product, total, amount, rupees.'
 
+/** Resolve the Groq key ONCE per request: env var first, then DB AiConfig
+ *  (provider='groq' && enabled) — settable from the app's AI Settings page. */
+async function resolveGroqKey(): Promise<string> {
+  const envKey = process.env.GROQ_API_KEY || ''
+  if (envKey) return envKey
+  try {
+    await connectDB()
+    const cfg = (await AiConfig.findOne().lean()) as Record<string, unknown> | null
+    if (cfg && cfg.provider === 'groq' && cfg.enabled && cfg.openaiApiKey) {
+      return String(cfg.openaiApiKey)
+    }
+  } catch (e: any) {
+    console.warn('[ASR] AiConfig lookup failed:', e?.message || e)
+  }
+  return ''
+}
+
 async function tryGroqAsr(
   bin: Buffer,
-  language?: string
+  language: string | undefined,
+  key: string
 ): Promise<{ text: string; meanLogprob: number | null; detectedLanguage: string }> {
-  let key = process.env.GROQ_API_KEY || ''
-  if (!key) {
-    try {
-      await connectDB()
-      const cfg = (await AiConfig.findOne().lean()) as Record<string, unknown> | null
-      if (cfg && cfg.provider === 'groq' && cfg.enabled && cfg.openaiApiKey) {
-        key = String(cfg.openaiApiKey)
-      }
-    } catch (e: any) {
-      console.warn('[ASR] AiConfig lookup failed:', e?.message || e)
-    }
-  }
   if (!key) throw new Error('no-groq-key')
 
   // Label the upload honestly — Whisper sniffs bytes but correct container

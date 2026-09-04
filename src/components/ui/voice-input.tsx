@@ -79,6 +79,9 @@ export function VoiceInput({
   const { status, isRecording, isBusy, level, start, stop } = useVoiceRecorder({
     onResult: handleResult,
     onError: handleError,
+    // Chat commands are Hindi/Hinglish — force Hindi server-side so Whisper
+    // skips auto-detect and the weak-confidence retry round trip (faster).
+    lang: language === 'hi-IN' ? 'hi' : 'en',
   })
 
   // Keep latest stop available for the controller callback (avoids stale closure)

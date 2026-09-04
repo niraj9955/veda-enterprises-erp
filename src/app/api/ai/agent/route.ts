@@ -704,7 +704,7 @@ export async function POST(request: Request) {
       tools: TOOLS,
       tool_choice: 'auto',
       temperature: 0.3,
-      max_tokens: 1000,
+      max_tokens: 500, // tool-call args are short JSON — 500 keeps prefill+decode snappy
     })
 
     const choice = response.choices[0]
@@ -747,7 +747,7 @@ export async function POST(request: Request) {
         model,
         messages: followUpMessages,
         temperature: 0.3,
-        max_tokens: 1000,
+        max_tokens: 400, // Hindi summary is short — lower cap = faster reply
       })
 
       const finalText = followUp.choices[0]?.message?.content || 'Kuch gadbad ho gayi.'
