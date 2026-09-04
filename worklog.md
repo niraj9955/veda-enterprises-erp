@@ -171,3 +171,25 @@ Work Log:
 Stage Summary:
 - v3.11: create forms (quotation + bill) fully usable at 400px phones — no more clipped labels
 - USER ACTION: Vercel Redeploy -> verify v3.11 badge
+
+---
+Task ID: R8
+Agent: Super Z (main)
+Task: "fast listener kro fast execution kro" — voice pipeline speed optimization
+
+Work Log:
+- Traced full voice chain: use-voice-recorder.ts → /api/asr → /api/ai/agent
+- Found 4 latency sources: (1) silenceStopMs=2000 dead wait after speech ends, (2) ZAI-first engine order — on Vercel 2 guaranteed-fail ZAI attempts ran before Groq, (3) ffmpeg convertToWav ran up to 3x per request, (4) weak-confidence Hindi retry added a 2nd Groq round trip even for the chat mic which is always Hindi
+- use-voice-recorder.ts: silenceStopMs 2000→1200ms; added lang option forwarded to /api/asr body
+- voice-input.tsx (chat mic): passes lang='hi' (from language prop) — forced language skips auto-detect retry
+- field-voice-input.tsx: intentionally left on auto-detect (form fields may be numbers/English product names)
+- asr/route.ts RESTRUCTURED: Groq Whisper FIRST (resolveGroqKey() = env → DB, once per request), ZAI demoted to fallback; wavCache memoizes ONE ffmpeg run shared by all engine paths; ZAI client created lazily once per request; error-kind messages (no-provider / groq-401) preserved
+- ai/agent/route.ts: max_tokens 1000→500 (tool-call turn), 1000→400 (summary turn)
+- DISCOVERY: scripts/test-full-site.js (102-test E2E suite) is GONE — was never committed to git and no longer in working tree; created targeted scripts/test-voice-speed.js (11 tests) instead
+- TTS voice name for sandbox tests: 'tongtong' (NOT 'alloy' — error 1214 tone does not exist)
+- Version v3.11→v3.12, SW v14→v15; build OK; server restarted; test-voice-speed: 11 PASS / 0 WARN / 0 FAIL; pushed c7ac8e7
+
+Stage Summary:
+- Voice now: 1.2s silence submit (was 2s), Groq hits first on Vercel (saves the whole doomed-ZAI phase), single ffmpeg pass, chat skips language retry. Estimated user-perceived savings: ~1.5-4s per voice command on Vercel
+- test-full-site.js must be recreated or re-committed next session (was 102-test suite)
+- v3.12 pushed; user needs Vercel Redeploy
