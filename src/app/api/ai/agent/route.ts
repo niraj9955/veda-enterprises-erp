@@ -325,12 +325,13 @@ const TOOLS: OpenAI.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_recent_entries',
-      description: 'Get recent entries from any module. Use this when the user asks about recent sales, payments, production, etc.',
+      description: 'Get recent entries from any module (WITH entry IDs needed for update/delete). Use the search parameter to find a specific entry by customer/product/vendor name or bill number.',
       parameters: {
         type: 'object',
         properties: {
-          module: { type: 'string', enum: ['dailySell', 'production', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'orders', 'bills', 'expenses', 'dispatch'], description: 'Which module to fetch from' },
+          module: { type: 'string', enum: ['dailySell', 'production', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff', 'expenses', 'orders', 'bills'], description: 'Which module to fetch from' },
           limit: { type: 'number', description: 'Number of entries to return (default 5, max 20)' },
+          search: { type: 'string', description: 'Optional filter text — customer/product/vendor name, bill number, category etc.' },
         },
         required: ['module'],
       },
@@ -344,15 +345,113 @@ const TOOLS: OpenAI.ChatCompletionTool[] = [
       parameters: { type: 'object', properties: {} },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_customer_balance',
+      description: "Get a customer's ledger summary: total ordered amount, total paid, and pending balance (bakaya). Use for 'Rohit ka bakaya kitna hai' type questions.",
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Customer name or mobile number' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_order',
+      description: 'Create a new order for an EXISTING customer. Needs customer name, brick/product type, and quantity+rate or total amount. Delivery date defaults to today.',
+      parameters: {
+        type: 'object',
+        properties: {
+          customer: { type: 'string', description: 'Existing customer name or mobile number' },
+          brickType: { type: 'string', description: 'Product type, e.g. Zig Zag Grey 80mm' },
+          quantity: { type: 'number' },
+          rate: { type: 'number', description: 'Rate per piece' },
+          amount: { type: 'number', description: 'Total amount (if not quantity*rate)' },
+          deliveryDate: { type: 'string', description: 'YYYY-MM-DD delivery date' },
+          status: { type: 'string', enum: ['Pending', 'In Progress', 'Completed', 'Cancelled'] },
+        },
+        required: ['customer', 'brickType'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_bill',
+      description: 'Create a SALES invoice (NOT quotation) for a party with line items. Use when the user says bill/invoice banao. Status auto-set from paidAmount.',
+      parameters: {
+        type: 'object',
+        properties: {
+          toName: { type: 'string' },
+          toPhone: { type: 'string' },
+          toAddress: { type: 'string' },
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                description: { type: 'string' },
+                quantity: { type: 'number' },
+                unit: { type: 'string' },
+                rate: { type: 'number' },
+              },
+              required: ['description', 'quantity', 'rate'],
+            },
+          },
+          paidAmount: { type: 'number', description: 'Amount already received (0 if unpaid)' },
+          paymentMode: { type: 'string' },
+          notes: { type: 'string' },
+        },
+        required: ['toName', 'items'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_entry',
+      description: 'Update specific fields of an existing entry by ID. FIRST use get_recent_entries (with search) to find the entry and get its ID. Bills, Orders and Customers are NOT updateable here.',
+      parameters: {
+        type: 'object',
+        properties: {
+          module: { type: 'string', enum: ['dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff', 'expense', 'production'] },
+          id: { type: 'string', description: 'Entry _id exactly as returned by get_recent_entries' },
+          fields: { type: 'object', description: 'Fields to change, e.g. { "amount": 5000, "remarks": "corrected" }', additionalProperties: true },
+        },
+        required: ['module', 'id', 'fields'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_entry',
+      description: 'PERMANENTLY delete an entry by ID. ALWAYS show the entry first, ask "Pakka delete karu?" and wait for a clear yes BEFORE calling this. Bills, Orders and Customers are NOT deleteable here.',
+      parameters: {
+        type: 'object',
+        properties: {
+          module: { type: 'string', enum: ['dailySell', 'customerPayment', 'labourPayment', 'tractorPayment', 'dustPurchase', 'cementPurchase', 'hardner', 'electricity', 'factoryStuff', 'expense', 'production'] },
+          id: { type: 'string', description: 'Entry _id exactly as returned by get_recent_entries' },
+        },
+        required: ['module', 'id'],
+      },
+    },
+  },
 ]
 
 const SYSTEM_PROMPT = `You are the AI assistant for Veda Enterprises ERP — a paver block manufacturing business in India. You can perform real actions in the system using tools.
 
-YOUR CAPABILITIES:
+YOUR CAPABILITIES (FULL ACCESS):
 - Create entries in ANY module: Daily Sell, Production, Customer Payment, Labour Payment, Tractor Payment, Dust Purchase, Cement Purchase, Hardner, Electricity, Factory Stuff, Expenses
-- Create Quotations/Bills for customers
-- Search customers by name or mobile
-- View recent entries from any module
+- Create Quotations, SALES Bills (invoices), and Orders for customers
+- Search customers by name or mobile; check any customer's pending balance/bakaya (get_customer_balance)
+- View recent entries from any module — results include entry IDs
+- UPDATE entries (update_entry) and DELETE entries (delete_entry) for: dailySell, customerPayment, labourPayment, tractorPayment, dustPurchase, cementPurchase, hardner, electricity, factoryStuff, expense, production
 - Get dashboard summary (today's stats)
 
 IMPORTANT RULES:
@@ -361,13 +460,79 @@ IMPORTANT RULES:
 3. For dates: if user says "aaj/today" use today's date, "kal/yesterday" use yesterday. Always use YYYY-MM-DD format internally.
 4. For amounts in Hindi: "ek"=1, "do"=2, "teen"=3, "char"=4, "panch"=5, "chhe"=6, "saat"=7, "aath"=8, "nau"=9, "das"=10, "sau"=100, "hazaar"=1000, "lakh"=100000
 5. Be conversational and helpful. After performing an action, confirm what was done with key details.
-6. If user asks to update/delete something, tell them to use the respective module's interface for now (you can create and search).
+6. UPDATE/DELETE safety: FIRST find the entry via get_recent_entries (use the search parameter, e.g. customer name) and SHOW it to the user. If the user ALREADY gives the full 24-character entry ID, get_recent_entries(search=ID) will find it directly. For DELETE, always ask "Pakka delete karu?" and wait for a clear yes ("haan", "yes", "delete karo") BEFORE calling delete_entry — but if the user's message already contains a clear confirmation ("pakka", "delete kar do", "haan delete"), you may proceed in the same turn. NEVER invent IDs — use only IDs exactly as returned by get_recent_entries or given verbatim by the user. For UPDATE: if the user already gave the exact field+value (e.g. "amount 222 kar do"), call update_entry DIRECTLY in the same turn — no extra confirmation; only confirm when the request is ambiguous. Bills, Orders aur Customers in tools se update/delete NAHI hote — us case me user ko respective module me bhejo.
 7. Today's date is ${new Date().toISOString().slice(0, 10)}.
 8. When creating a daily sell, if the user mentions a product and rate but not quantity, calculate quantity = amount / rate. If they mention quantity and rate but not amount, calculate amount = quantity * rate.
 9. Keep responses concise but informative. Don't be overly verbose.`
 
 // ── Tool Execution Functions ───────────────────────────────────────────
 // Each function returns a string summary of what was done
+
+// ── Full-access entry registry (update/delete whitelist) ──────────────
+// Bills, Orders and Customers are deliberately EXCLUDED from update/delete —
+// they have linked records (payments sync, dispatches, order references) that
+// must go through the app's own routes to stay consistent.
+type EntryModelCfg = {
+  model: any
+  label: string
+  fields: Record<string, 'string' | 'number' | 'date'>
+  /** Derived totals recomputed from the merged doc after whitelisted edits. */
+  recompute?: (merged: Record<string, any>) => Record<string, unknown>
+}
+
+const PRODUCT_QTY_FIELDS = {
+  zigZagGrey80: 'number', zigZagRed80: 'number', zigZagYellow80: 'number',
+  zigZagGrey60: 'number', zigZagRed60: 'number', zigZagYellow60: 'number',
+  curveStone: 'number', chequreTile: 'number',
+  dumbleGrey80: 'number', dumbleRed80: 'number', dumbleYellow80: 'number',
+} as const
+
+const ENTRY_MODELS: Record<string, EntryModelCfg> = {
+  dailySell: {
+    model: DailySell, label: 'Daily Sell',
+    fields: { date: 'date', customerName: 'string', address: 'string', contactNumber: 'string', product: 'string', quantity: 'number', rate: 'number', amount: 'number', receivedAmount: 'number', remarks: 'string' },
+    recompute: (m) => ({ pendingAmount: (Number(m.amount) || 0) - (Number(m.receivedAmount) || 0) }),
+  },
+  customerPayment: { model: CustomerPayment, label: 'Customer Payment', fields: { date: 'date', name: 'string', address: 'string', amount: 'number', remarks: 'string' } },
+  labourPayment: { model: LabourPayment, label: 'Labour Payment', fields: { date: 'date', name: 'string', address: 'string', amount: 'number', remarks: 'string' } },
+  tractorPayment: {
+    model: TractorPayment, label: 'Tractor Payment',
+    fields: { date: 'date', vendorName: 'string', quantityTon: 'number', rate: 'number', paidAmount: 'number', remarks: 'string' },
+    recompute: (m) => {
+      const total = (Number(m.quantityTon) || 0) * (Number(m.rate) || 0)
+      return { totalAmount: total, remainingAmount: total - (Number(m.paidAmount) || 0) }
+    },
+  },
+  dustPurchase: {
+    model: DustPurchase, label: 'Dust Purchase',
+    fields: { date: 'date', vendorName: 'string', quantity: 'number', rate: 'number', paidAmount: 'number', transportationCharge: 'number', gst: 'number', remarks: 'string' },
+    recompute: (m) => ({ totalAmount: (Number(m.quantity) || 0) * (Number(m.rate) || 0) }),
+  },
+  cementPurchase: {
+    model: CementPurchase, label: 'Cement Purchase',
+    fields: { date: 'date', vendorName: 'string', itemName: 'string', quantity: 'number', rate: 'number', paidAmount: 'number', transportationCharge: 'number', gst: 'number', remarks: 'string' },
+    recompute: (m) => ({ totalAmount: (Number(m.quantity) || 0) * (Number(m.rate) || 0) }),
+  },
+  hardner: { model: Hardner, label: 'Hardner', fields: { date: 'date', amount: 'number' } },
+  electricity: { model: Electricity, label: 'Electricity', fields: { date: 'date', name: 'string', work: 'string', amount: 'number', remarks: 'string' } },
+  factoryStuff: { model: FactoryStuff, label: 'Factory Stuff', fields: { date: 'date', itemName: 'string', quantity: 'number', amount: 'number', remarks: 'string' } },
+  expense: { model: Expense, label: 'Expense', fields: { date: 'date', category: 'string', amount: 'number', description: 'string' } },
+  production: { model: Production, label: 'Production', fields: { date: 'date', ...PRODUCT_QTY_FIELDS } },
+}
+
+function castField(kind: 'string' | 'number' | 'date', v: unknown): unknown {
+  if (kind === 'number') return Number(v) || 0
+  if (kind === 'date') return normalizeDate(String(v)) || String(v)
+  return String(v ?? '')
+}
+
+/** Find a customer by exact name → mobile → partial name (fuzzy). */
+async function findCustomerFlexible(query: string) {
+  const esc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  let c: any = await Customer.findOne({ $or: [{ name: new RegExp(`^${esc}$`, 'i') }, { mobile: new RegExp(esc, 'i') }] }).lean()
+  if (!c) c = await Customer.findOne({ name: new RegExp(esc, 'i') }).lean()
+  return c
+}
 
 async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
   const today = new Date().toISOString().slice(0, 10)
@@ -606,52 +771,119 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
     }
 
     case 'get_recent_entries': {
-      const module = String(args.module)
+      // LLM may use singular/plural interchangeably — normalize aliases.
+      const ALIASES: Record<string, string> = {
+        expense: 'expenses', bill: 'bills', order: 'orders', dailysell: 'dailySell',
+        customerpayment: 'customerPayment', labourpayment: 'labourPayment', tractorpayment: 'tractorPayment',
+        dustpurchase: 'dustPurchase', cementpurchase: 'cementPurchase', factorystuff: 'factoryStuff',
+      }
+      const module = ALIASES[String(args.module).toLowerCase()] || String(args.module)
       const limit = Math.min(Number(args.limit) || 5, 20)
+      const search = String(args.search || '').trim()
+      const escS = search ? search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : ''
+      const rx = escS ? new RegExp(escS, 'i') : null
+      // Fast path: search is a raw ObjectId (user pasted/spoke an ID for
+      // update/delete) — match _id directly on the module model, otherwise
+      // text-only filters would miss it and the AI would think the entry
+      // doesn't exist.
+      const isId = /^[a-f\d]{24}$/i.test(search)
+      // NOTE: registry keys are singular ('expense') while list keys are
+      // plural ('expenses') — try the naive singular form too.
+      const regCfg = ENTRY_MODELS[module] || ENTRY_MODELS[module.replace(/s$/, '')]
       let results: string[]
+      if (isId && regCfg) {
+        const cfg2 = regCfg
+        const doc = await cfg2.model.findById(search).lean()
+        if (!doc) {
+          results = [`ID "${search}" se koi ${cfg2.label} entry nahi mili.`]
+        } else {
+          const d: any = doc
+          const who = d.customerName || d.name || d.vendorName || d.category || d.itemName || d.work || ''
+          const amt = Number(d.amount ?? d.totalAmount ?? 0)
+          results = [`ID: ${d._id} | ${d.date || ''} | ${who || cfg2.label} | Rs.${amt.toLocaleString()}`]
+        }
+      } else if (isId && module === 'bills') {
+        const doc = await Bill.findById(search).lean()
+        results = doc ? [`ID: ${doc._id} | ${doc.billNumber} | ${doc.billType} | ${doc.toName} | Rs.${doc.grandTotal.toLocaleString()} | ${doc.status}`] : [`ID "${search}" se koi bill nahi mila.`]
+      } else if (isId && module === 'orders') {
+        const doc = await Order.findById(search).populate('customer').lean() as any
+        results = doc ? [`ID: ${doc._id} | ${doc.orderNumber} | ${doc.customer?.name || '-'} | Rs.${doc.amount.toLocaleString()} | ${doc.status}`] : [`ID "${search}" se koi order nahi mila.`]
+      } else {
+        results = []
+      }
+      if (!results.length) {
       switch (module) {
         case 'dailySell': {
-          const docs = await DailySell.find().sort({ createdAt: -1 }).limit(limit).lean()
-          results = docs.map((d) => `${d.date} | ${d.customerName} | Rs.${d.amount.toLocaleString()} | ${d.product || '-'}`)
+          const docs = await DailySell.find(rx ? { $or: [{ customerName: rx }, { product: rx }] } : {}).sort({ createdAt: -1 }).limit(limit).lean()
+          results = docs.map((d) => `ID: ${d._id} | ${d.date} | ${d.customerName} | Rs.${d.amount.toLocaleString()} | ${d.product || '-'}`)
           break
         }
         case 'production': {
-          const docs = await Production.find().sort({ createdAt: -1 }).limit(limit).lean()
-          results = docs.map((d) => `${d.date} | Cement: ${d.cement || 0} | ZZ-Grey80: ${d.zigZagGrey80 || 0}`)
+          const docs = await Production.find(escS ? { date: { $regex: escS, $options: 'i' } } : {}).sort({ createdAt: -1 }).limit(limit).lean()
+          results = docs.map((d) => `ID: ${d._id} | ${d.date} | Cement: ${d.cement || 0} | ZZ-Grey80: ${d.zigZagGrey80 || 0}`)
           break
         }
         case 'customerPayment': {
-          const docs = await CustomerPayment.find().sort({ createdAt: -1 }).limit(limit).lean()
-          results = docs.map((d) => `${d.date} | ${d.name} | Rs.${d.amount.toLocaleString()}`)
+          const docs = await CustomerPayment.find(rx ? { $or: [{ name: rx }, { remarks: rx }] } : {}).sort({ createdAt: -1 }).limit(limit).lean()
+          results = docs.map((d) => `ID: ${d._id} | ${d.date} | ${d.name} | Rs.${d.amount.toLocaleString()}`)
           break
         }
         case 'labourPayment': {
-          const docs = await LabourPayment.find().sort({ createdAt: -1 }).limit(limit).lean()
-          results = docs.map((d) => `${d.date} | ${d.name} | Rs.${d.amount.toLocaleString()}`)
+          const docs = await LabourPayment.find(rx ? { $or: [{ name: rx }, { remarks: rx }] } : {}).sort({ createdAt: -1 }).limit(limit).lean()
+          results = docs.map((d) => `ID: ${d._id} | ${d.date} | ${d.name} | Rs.${d.amount.toLocaleString()}`)
           break
         }
         case 'tractorPayment': {
-          const docs = await TractorPayment.find().sort({ createdAt: -1 }).limit(limit).lean()
-          results = docs.map((d) => `${d.date} | ${d.vendorName} | ${d.quantityTon}T @ Rs.${d.rate} = Rs.${d.totalAmount.toLocaleString()}`)
+          const docs = await TractorPayment.find(rx ? { vendorName: rx } : {}).sort({ createdAt: -1 }).limit(limit).lean()
+          results = docs.map((d) => `ID: ${d._id} | ${d.date} | ${d.vendorName} | ${d.quantityTon}T @ Rs.${d.rate} = Rs.${d.totalAmount.toLocaleString()}`)
           break
         }
-        case 'bills': {
-          const docs = await Bill.find().sort({ createdAt: -1 }).limit(limit).lean()
-          results = docs.map((d) => `${d.billNumber} | ${d.billType} | ${d.toName} | Rs.${d.grandTotal.toLocaleString()} | ${d.status}`)
+        case 'dustPurchase': {
+          const docs = await DustPurchase.find(rx ? { $or: [{ vendorName: rx }, { cementName: rx }] } : {}).sort({ createdAt: -1 }).limit(limit).lean()
+          results = docs.map((d) => `ID: ${d._id} | ${d.date} | ${d.vendorName} | Rs.${d.totalAmount.toLocaleString()}`)
           break
         }
-        case 'orders': {
-          const docs = await Order.find().populate('customer').sort({ createdAt: -1 }).limit(limit).lean()
-          results = docs.map((d: any) => `${d.orderNumber} | ${d.customer?.name || '-'} | Rs.${d.amount.toLocaleString()} | ${d.status}`)
+        case 'cementPurchase': {
+          const docs = await CementPurchase.find(rx ? { $or: [{ vendorName: rx }, { itemName: rx }] } : {}).sort({ createdAt: -1 }).limit(limit).lean()
+          results = docs.map((d) => `ID: ${d._id} | ${d.date} | ${d.vendorName} | ${d.itemName || '-'} | Rs.${d.totalAmount.toLocaleString()}`)
+          break
+        }
+        case 'hardner': {
+          const docs = await Hardner.find({}).sort({ createdAt: -1 }).limit(limit).lean()
+          results = docs.map((d) => `ID: ${d._id} | ${d.date} | Rs.${d.amount.toLocaleString()}`)
+          break
+        }
+        case 'electricity': {
+          const docs = await Electricity.find(rx ? { $or: [{ name: rx }, { work: rx }] } : {}).sort({ createdAt: -1 }).limit(limit).lean()
+          results = docs.map((d) => `ID: ${d._id} | ${d.date} | ${d.name || '-'} | ${d.work || '-'} | Rs.${d.amount.toLocaleString()}`)
+          break
+        }
+        case 'factoryStuff': {
+          const docs = await FactoryStuff.find(rx ? { itemName: rx } : {}).sort({ createdAt: -1 }).limit(limit).lean()
+          results = docs.map((d) => `ID: ${d._id} | ${d.date} | ${d.itemName} | Rs.${d.amount.toLocaleString()}`)
           break
         }
         case 'expenses': {
-          const docs = await Expense.find().sort({ createdAt: -1 }).limit(limit).lean()
-          results = docs.map((d) => `${d.date} | ${d.category} | Rs.${d.amount.toLocaleString()}`)
+          const filter = rx ? { $or: [{ category: rx }, { description: rx }] } : {}
+          const docs = await Expense.find(filter).sort({ createdAt: -1 }).limit(limit).lean()
+          results = docs.map((d) => `ID: ${d._id} | ${d.date} | ${d.category} | Rs.${d.amount.toLocaleString()}`)
+          break
+        }
+        case 'bills': {
+          const docs = await Bill.find(rx ? { $or: [{ toName: rx }, { billNumber: rx }] } : {}).sort({ createdAt: -1 }).limit(limit).lean()
+          results = docs.map((d) => `ID: ${d._id} | ${d.billNumber} | ${d.billType} | ${d.toName} | Rs.${d.grandTotal.toLocaleString()} | ${d.status}`)
+          break
+        }
+        case 'orders': {
+          const docs = await Order.find({}).populate('customer').sort({ createdAt: -1 }).limit(limit).lean()
+          let list = docs.map((d: any) => `ID: ${d._id} | ${d.orderNumber} | ${d.customer?.name || '-'} | Rs.${d.amount.toLocaleString()} | ${d.status}`)
+          if (rx) list = list.filter((l) => rx.test(l))
+          results = list
           break
         }
         default:
           results = [`Module "${module}" ke liye recent entries abhi available nahi hai.`]
+      }
       }
       return `Recent ${module} entries (last ${limit}):\n${results.join('\n')}`
     }
@@ -668,6 +900,124 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       const pendingOrders = await Order.countDocuments({ status: 'Pending' })
       const totalSales = todaySells.reduce((sum: number, s: any) => sum + (s.amount || 0), 0)
       return `Dashboard Summary (${todayStr}):\n- Aaj ki Production: ${totalProduction.toLocaleString()} pieces\n- Aaj ki Sales: Rs.${totalSales.toLocaleString()} (${todaySells.length} transactions)\n- Pending Orders: ${pendingOrders}`
+    }
+
+    case 'get_customer_balance': {
+      const query = String(args.query || '').trim()
+      const customer = await findCustomerFlexible(query)
+      if (!customer) return `Koi customer nahi mila "${query}" se.`
+      const cname = String(customer.name || '').trim()
+      const [orders, payments, customerPayments] = await Promise.all([
+        Order.find({ customerId: customer._id }).lean(),
+        Payment.find({ customerId: customer._id }).lean(),
+        CustomerPayment.find({ name: cname }).lean(),
+      ])
+      const totalOrdered = orders.reduce((s, o) => s + (Number(o.amount) || 0), 0)
+      const totalPaid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+        + customerPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+      const balance = totalOrdered - totalPaid
+      const recent = [...customerPayments].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 3)
+        .map((p) => `  - ${p.date}: Rs.${(Number(p.amount) || 0).toLocaleString()}`).join('\n')
+      return `Customer: ${cname} | Mobile: ${customer.mobile}\nTotal Ordered: Rs.${totalOrdered.toLocaleString()}\nTotal Paid: Rs.${totalPaid.toLocaleString()}\nBakaya (Balance): Rs.${balance.toLocaleString()}${recent ? `\nRecent payments:\n${recent}` : ''}`
+    }
+
+    case 'create_order': {
+      const customer = await findCustomerFlexible(String(args.customer || ''))
+      if (!customer) return `Customer "${args.customer}" nahi mila. Pehle search_customers se sahi naam confirm karo.`
+      const quantity = Number(args.quantity) || 0
+      const rate = Number(args.rate) || 0
+      const amount = Number(args.amount) || quantity * rate
+      if (!amount) return 'Order ke liye amount ya quantity+rate chahiye.'
+      const { Company } = await import('@/lib/models')
+      const company = await Company.findOne({}).lean() as Record<string, unknown> | null
+      const count = await Order.countDocuments({})
+      const prefix = String(company?.orderPrefix || 'ORD')
+      const doc = await Order.create({
+        orderNumber: `${prefix}-${String(count + 1).padStart(4, '0')}`,
+        customerId: customer._id,
+        brickType: String(args.brickType || ''),
+        quantity,
+        rate,
+        amount,
+        deliveryDate: normalizeDate(args.deliveryDate) || today,
+        status: String(args.status || 'Pending'),
+      })
+      return `Order created! ${doc.orderNumber} | ${customer.name} | ${doc.brickType} | ${doc.quantity} qty @ Rs.${doc.rate} = Rs.${doc.amount.toLocaleString()} | Delivery: ${doc.deliveryDate} | Status: ${doc.status}`
+    }
+
+    case 'create_bill': {
+      const items = (args.items as Array<{ description: string; quantity: number; rate: number; unit?: string }>) || []
+      if (items.length === 0) return 'Bill mein kam se kam 1 item hona chahiye.'
+      const billItems = items.map((item) => ({
+        description: String(item.description),
+        quantity: Number(item.quantity) || 1,
+        unit: String(item.unit || 'pcs'),
+        rate: Number(item.rate) || 0,
+        amount: (Number(item.quantity) || 1) * (Number(item.rate) || 0),
+      }))
+      const subTotal = billItems.reduce((sum, item) => sum + item.amount, 0)
+      const grandTotal = Math.round(subTotal)
+      const paid = Number(args.paidAmount) || 0
+      const company = await (await import('@/lib/models')).Company.findOne().lean() as Record<string, unknown> | null
+      const now = new Date()
+      const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
+      const count = await Bill.countDocuments({ billType: { $ne: 'quotation' } })
+      const doc = await Bill.create({
+        billNumber: `BILL-${yyyymm}-${String(count + 1).padStart(4, '0')}`,
+        billType: 'sales',
+        date: today,
+        toName: String(args.toName),
+        toAddress: String(args.toAddress || ''),
+        toPhone: String(args.toPhone || ''),
+        fromName: String(company?.name || ''),
+        fromAddress: String(company?.address || ''),
+        fromGst: String(company?.gstNumber || ''),
+        fromPhone: String(company?.phone || ''),
+        items: billItems,
+        subTotal,
+        grandTotal,
+        paidAmount: paid,
+        balanceAmount: grandTotal - paid,
+        paymentMode: String(args.paymentMode || 'Cash'),
+        notes: String(args.notes || ''),
+        status: paid >= grandTotal && grandTotal > 0 ? 'paid' : paid > 0 ? 'partial' : 'sent',
+      })
+      const itemLines = billItems.map((it) => `  - ${it.description}: ${it.quantity} ${it.unit} x Rs.${it.rate} = Rs.${it.amount.toLocaleString()}`).join('\n')
+      return `Sales bill created!\nBill No: ${doc.billNumber}\nParty: ${doc.toName}\nItems:\n${itemLines}\nTotal: Rs.${doc.grandTotal.toLocaleString()} | Paid: Rs.${paid.toLocaleString()} | Balance: Rs.${doc.balanceAmount.toLocaleString()}`
+    }
+
+    case 'update_entry': {
+      const cfg = ENTRY_MODELS[String(args.module)]
+      if (!cfg) return `Module "${args.module}" update ke liye allowed nahi hai. Allowed: ${Object.keys(ENTRY_MODELS).join(', ')}. Bills/Orders/Customers app ke module se update karo.`
+      const id = String(args.id || '')
+      if (!/^[a-f\d]{24}$/i.test(id)) return 'Invalid entry ID. Pehle get_recent_entries se entry dhundo aur uska exact ID lo.'
+      const fields = (args.fields as Record<string, unknown>) || {}
+      if (Object.keys(fields).length === 0) return 'Koi field nahi di gayi update karne ke liye.'
+      const existing = await cfg.model.findById(id).lean()
+      if (!existing) return `${cfg.label} entry ID ${id} nahi mili.`
+      const update: Record<string, unknown> = {}
+      const skipped: string[] = []
+      for (const [k, v] of Object.entries(fields)) {
+        const kind = cfg.fields[k]
+        if (!kind) { skipped.push(k); continue }
+        update[k] = castField(kind, v)
+      }
+      if (Object.keys(update).length === 0) return `Ye fields update nahi ho sakti: ${skipped.join(', ')}. Allowed: ${Object.keys(cfg.fields).join(', ')}.`
+      const merged = { ...(existing as Record<string, any>), ...update }
+      if (cfg.recompute) Object.assign(update, cfg.recompute(merged))
+      await cfg.model.findByIdAndUpdate(id, update)
+      return `${cfg.label} entry updated! ID: ${id} | Changed: ${Object.entries(update).map(([k, v]) => `${k}=${String(v)}`).join(', ')}`
+    }
+
+    case 'delete_entry': {
+      const cfg = ENTRY_MODELS[String(args.module)]
+      if (!cfg) return `Module "${args.module}" delete ke liye allowed nahi hai. Bills, Orders aur Customers app ke module se hi delete karo (linked records safe rete hain).`
+      const id = String(args.id || '')
+      if (!/^[a-f\d]{24}$/i.test(id)) return 'Invalid entry ID. Pehle get_recent_entries se entry dhundo aur uska exact ID lo.'
+      const doc = await cfg.model.findById(id).lean()
+      if (!doc) return `${cfg.label} entry ID ${id} nahi mili (shayad pehle hi delete ho chuki hai).`
+      await cfg.model.findByIdAndDelete(id)
+      return `${cfg.label} entry DELETED! ID: ${id}`
     }
 
     default:
