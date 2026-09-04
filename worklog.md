@@ -210,3 +210,22 @@ Stage Summary:
 - Whisper now sees the shop's REAL product/customer names in its prompt — biggest single accuracy lever for domain vocabulary
 - Fuzzy customer search absorbs residual transcript noise at the agent layer
 - v3.13 pushed; user needs Vercel Redeploy
+
+---
+Task ID: R10
+Agent: Super Z (main)
+Task: "ai ko full access nhi h kya" — full access for the AI agent
+
+Work Log:
+- Added 5 new agent tools: get_customer_balance (orders total - payments via legacy Payment + CustomerPayment, same formula as customer-history), create_order (company.orderPrefix, customer auto-find), create_bill (BILL-YYYYMM-NNNN, status auto from paidAmount: paid/partial/sent), update_entry + delete_entry
+- ENTRY_MODELS registry: 11 modules whitelisted for update/delete with typed field casts + derived recompute (dailySell pendingAmount, tractorPayment total/remaining, purchases totalAmount). Bills/Orders/Customers deliberately EXCLUDED (linked records must go through app routes)
+- get_recent_entries: now returns entry IDs (needed for update/delete), added search param (regex on name-ish fields per module), added hardner/electricity/factoryStuff cases, module alias map (expense->expenses etc.)
+- ID fast-path: search that is a 24-hex ObjectId does findById directly. CRITICAL BUG FOUND & FIXED: registry keys singular ('expense') vs list keys plural ('expenses') — fast path missed until regCfg fallback added
+- SYSTEM_PROMPT: FULL ACCESS capabilities, rule 6 rewritten (delete needs explicit yes; update with exact field+value runs directly same-turn)
+- MultiEdit tool is NOT atomic in this env — partially applied edits once; verify after each batch
+- Groq AND ZAI both 429'd during heavy testing (both engines rate-limited simultaneously); 3-min wait cleared it. Product fine — test volume issue
+- Version v3.13->v3.14, SW v16->v17; build OK; test-full-access.js: 12 PASS / 0 WARN / 0 FAIL (update verified in DB, delete zero residue, ZTEST cleanup done); pushed c4cb498
+
+Stage Summary:
+- AI agent now: create anything, create orders/bills, check per-customer bakaya, update/delete 11 modules with confirmation policy, all entries addressable by ID
+- v3.14 pushed; user needs Vercel Redeploy
