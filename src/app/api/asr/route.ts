@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
 import { requireSession } from '@/lib/auth'
-import { AiConfig } from '@/lib/models'
+import { AiConfig, Customer, DailySell } from '@/lib/models'
 import { connectDB } from '@/lib/db'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
@@ -122,13 +122,15 @@ export async function POST(request: NextRequest) {
     // ── Attempt 1: Groq Whisper FIRST (primary engine). On Vercel the ZAI
     // engine has no credentials, so the old ZAI-first order wasted seconds on
     // doomed attempts before the engine that actually works even started.
-    const groqKey = await resolveGroqKey()
+    // Vocabulary suffix is built in parallel (DB-cached, failure-safe).
+    const [groqKey, vocabSuffix] = await Promise.all([resolveGroqKey(), buildVocabSuffix()])
+    const asrPrompt = ERP_ASR_PROMPT + vocabSuffix
     if (!groqKey) groqErr = 'no-groq-key'
     if (groqKey) {
       try {
         const wav = await getTrimmedWav()
         const audio = wav || bin
-        let best = await tryGroqAsr(audio, forced || undefined, groqKey)
+        let best = await tryGroqAsr(audio, forced || undefined, groqKey, asrPrompt)
         let g = cleanTranscript(best.text)
         // Whisper auto-detect often mishears short Hindi/Hinglish clips as
         // some other language ("bolta kuchh hu sunta kuchh aur"). When no
@@ -138,7 +140,7 @@ export async function POST(request: NextRequest) {
         if (!forced && g && best.meanLogprob !== null && best.meanLogprob < -1.0) {
           console.log(`[ASR] weak confidence (avg_logprob ${best.meanLogprob.toFixed(2)}), retrying with language=hi`)
           try {
-            const r2 = await tryGroqAsr(audio, 'hi', groqKey)
+            const r2 = await tryGroqAsr(audio, 'hi', groqKey, asrPrompt)
             const g2 = cleanTranscript(r2.text)
             if (g2 && (r2.meanLogprob ?? -9) > (best.meanLogprob ?? -9)) {
               best = r2
@@ -274,7 +276,69 @@ export async function POST(request: NextRequest) {
  * short commands. Prompt must stay under Whisper's 224-token limit.
  */
 const ERP_ASR_PROMPT =
-  'Veda Enterprises ERP voice command. Hindi business words: बिल बनाओ, पेमेंट, कस्टमर, ग्राहक, नाम, मोबाइल नंबर, रुपये, रकम, जमा, बाकी, बकाया, टोटल बैलेंस, ऑर्डर, प्रोडक्ट, सामान, कील, पेच, सीमेंट, तार, वेतन, किराया, बिजली, खर्च, आज का, कल का, नया कस्टमर जोड़ो, दिखाओ, बताओ. English: customer, bill, payment, balance, order, product, total, amount, rupees.'
+  'Veda ERP voice command. Hindi: बिल बनाओ, पेमेंट, कस्टमर, ग्राहक, मोबाइल, रुपये, रकम, जमा, बाकी, बकाया, टोटल, ऑर्डर, प्रोडक्ट, सामान, कील, पेच, सीमेंट, तार, वेतन, किराया, बिजली, खर्च, नया ग्राहक जोड़ो, दिखाओ, बताओ, कितना, हज़ार, लाख, आज, कल.'
+
+// ── Dynamic vocabulary (the "perfect sun rha" upgrade) ───────────────────
+// Whisper strongly biases toward words present in its prompt. A static list
+// can't know "Zig Zag Grey 80mm" or the shop's customer names — so we pull
+// REAL product + customer vocabulary from the DB and append it. Cached 5 min
+// so a voice command never waits on extra queries; any DB failure falls back
+// to the static prompt only (can never break ASR).
+const VOCAB_TTL = 5 * 60_000
+const VOCAB_MAX_CHARS = 360 // ≈90 Latin tokens — keeps total under Whisper's 224-token prompt limit
+let vocabCache: { suffix: string; ts: number } | null = null
+
+async function buildVocabSuffix(): Promise<string> {
+  if (vocabCache && Date.now() - vocabCache.ts < VOCAB_TTL) return vocabCache.suffix
+  try {
+    await connectDB()
+    const [rawProducts, rawCustomers] = await Promise.all([
+      DailySell.distinct('product').catch(() => [] as string[]),
+      Customer.find().sort({ createdAt: -1 }).limit(12).select('name').lean(),
+    ])
+    const seen = new Set<string>()
+    const products: string[] = []
+    for (const p of rawProducts as string[]) {
+      const s = String(p || '').trim()
+      if (!s || s.length > 30 || seen.has(s.toLowerCase())) continue
+      seen.add(s.toLowerCase())
+      products.push(s)
+    }
+    const customers: string[] = []
+    for (const c of rawCustomers as Array<{ name?: string }>) {
+      const s = String(c?.name || '').trim()
+      if (!s || s.length > 25 || seen.has(s.toLowerCase())) continue
+      seen.add(s.toLowerCase())
+      customers.push(s)
+    }
+    // Greedy fill: products first (spoken most), then customers, char-capped.
+    let len = 0
+    const pParts: string[] = []
+    for (const p of products) {
+      if (len + p.length + 2 > VOCAB_MAX_CHARS) break
+      pParts.push(p)
+      len += p.length + 2
+    }
+    let suffix = pParts.length ? ` Products: ${pParts.join(', ')}.` : ''
+    const cParts: string[] = []
+    for (const c of customers) {
+      if (len + c.length + 2 > VOCAB_MAX_CHARS) break
+      cParts.push(c)
+      len += c.length + 2
+    }
+    if (cParts.length) suffix += ` Customers: ${cParts.join(', ')}.`
+    if (suffix) {
+      console.log(`[ASR] vocab suffix: ${suffix.length} chars (${pParts.length} products, ${cParts.length} customers)`)
+    }
+    vocabCache = { suffix, ts: Date.now() }
+    return suffix
+  } catch (e: any) {
+    console.warn('[ASR] vocab build failed (static prompt only):', e?.message || e)
+    // brief negative cache so a DB outage doesn't get hammered per command
+    vocabCache = { suffix: '', ts: Date.now() - VOCAB_TTL + 30_000 }
+    return ''
+  }
+}
 
 /** Resolve the Groq key ONCE per request: env var first, then DB AiConfig
  *  (provider='groq' && enabled) — settable from the app's AI Settings page. */
@@ -296,7 +360,8 @@ async function resolveGroqKey(): Promise<string> {
 async function tryGroqAsr(
   bin: Buffer,
   language: string | undefined,
-  key: string
+  key: string,
+  prompt: string
 ): Promise<{ text: string; meanLogprob: number | null; detectedLanguage: string }> {
   if (!key) throw new Error('no-groq-key')
 
@@ -311,7 +376,7 @@ async function tryGroqAsr(
   form.append('model', 'whisper-large-v3')
   form.append('response_format', 'verbose_json')
   form.append('temperature', '0')
-  form.append('prompt', ERP_ASR_PROMPT)
+  form.append('prompt', prompt)
   if (language) form.append('language', language)
 
   const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {

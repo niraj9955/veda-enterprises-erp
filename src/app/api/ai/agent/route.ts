@@ -374,11 +374,22 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
 
   switch (name) {
     case 'search_customers': {
-      const query = String(args.query || '')
-      const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
-      const customers = await Customer.find({
-        $or: [{ name: regex }, { mobile: regex }],
+      const query = String(args.query || '').trim()
+      const esc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      let customers = await Customer.find({
+        $or: [{ name: new RegExp(esc, 'i') }, { mobile: new RegExp(esc, 'i') }],
       }).sort({ createdAt: -1 }).limit(10).lean()
+      // Fuzzy fallback — voice transcripts are noisy ("rohit kumar" vs stored
+      // "Rohit", extra filler words). Match customers whose name contains
+      // EVERY query token so partial/multi-word spoken names still hit.
+      if (customers.length === 0 && query.includes(' ')) {
+        const tokens = query.split(/\s+/).filter((t) => t.length >= 2)
+        if (tokens.length > 1) {
+          customers = await Customer.find({
+            $and: tokens.map((t) => ({ name: new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') })),
+          }).sort({ createdAt: -1 }).limit(10).lean()
+        }
+      }
       if (customers.length === 0) return `Koi customer nahi mila "${query}" se.`
       return customers.map((c) => `  - ${c.name} | Mobile: ${c.mobile} | ID: ${c._id}`).join('\n')
     }
