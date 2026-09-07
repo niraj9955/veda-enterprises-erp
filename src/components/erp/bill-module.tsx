@@ -854,19 +854,20 @@ function BillCreatePage({
               </Button>
             </CardHeader>
             <CardContent className="space-y-2">
-              <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-muted-foreground px-2">
-                <div className="col-span-4">Description</div>
+              {/* 13-col grid: Qty & Unit get 2 cols each (matches quotation form) */}
+              <div className="hidden md:grid grid-cols-13 gap-2 text-xs font-semibold text-muted-foreground px-2">
+                <div className="col-span-3">Description</div>
                 <div className="col-span-1">HSN</div>
-                <div className="col-span-1">Qty</div>
-                <div className="col-span-1">Unit</div>
+                <div className="col-span-2">Qty</div>
+                <div className="col-span-2">Unit</div>
                 <div className="col-span-2">Rate</div>
                 <div className="col-span-2">Amount</div>
                 <div className="col-span-1"></div>
               </div>
               {items.map((item, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-start">
+                <div key={idx} className="grid grid-cols-13 gap-2 items-start">
                   <ProductSuggestInput
-                    className="col-span-12 md:col-span-4"
+                    className="col-span-12 md:col-span-3"
                     placeholder="Item description"
                     ariaLabel={`Item description ${idx + 1}`}
                     value={item.description}
@@ -881,13 +882,13 @@ function BillCreatePage({
                   />
                   <Input
                     type="number"
-                    className="col-span-4 md:col-span-1"
+                    className="col-span-4 md:col-span-2"
                     placeholder="Qty"
                     value={item.quantity}
                     onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
                   />
                   <ItemUnitInput
-                    className="col-span-4 md:col-span-1"
+                    className="col-span-4 md:col-span-2"
                     ariaLabel={`Unit ${idx + 1}`}
                     value={item.unit || ''}
                     onChange={(v) => updateItem(idx, 'unit', v)}
@@ -1510,8 +1511,27 @@ function CustomerHistoryPanel({
 // PRINT BILL COMPONENT
 // ════════════════════════════════════════════════════════════════════════════
 function PrintBill({ bill, onClose }: { bill: Bill; onClose: () => void }) {
+  const [logoUrl, setLogoUrl] = useState('')
   useEffect(() => {
-    setTimeout(() => window.print(), 300)
+    // Print only after (a) the 300ms render settle AND (b) the logo fetch has
+    // settled (capped at 2s so a slow network can't block printing).
+    let cancelled = false
+    const minDelay = new Promise<void>((res) => setTimeout(res, 300))
+    const logoFetch = Promise.race([
+      fetch('/api/company')
+        .then((r) => r.json())
+        .then((d: { company?: { logoUrl?: string } }) => {
+          if (!cancelled && d?.company?.logoUrl) setLogoUrl(d.company.logoUrl)
+        })
+        .catch(() => {}),
+      new Promise<void>((res) => setTimeout(res, 2000)),
+    ])
+    Promise.all([minDelay, logoFetch]).then(() => {
+      if (!cancelled) window.print()
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return (
@@ -1522,6 +1542,13 @@ function PrintBill({ bill, onClose }: { bill: Bill; onClose: () => void }) {
       </div>
 
       <div className="bg-white text-black p-8 shadow-lg print:shadow-none print:p-0 max-w-4xl mx-auto" id="print-area">
+        {/* Small centered logo at the very top (only when a logo is uploaded) */}
+        {logoUrl && (
+          <div className="flex justify-center mb-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={logoUrl} alt="Company Logo" className="h-16 w-16 object-contain" />
+          </div>
+        )}
         {/* Header */}
         <div className="flex justify-between items-start border-b-2 border-emerald-600 pb-4 mb-6">
           <div>

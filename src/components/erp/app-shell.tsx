@@ -42,7 +42,6 @@ import {
   MapPin,
 } from 'lucide-react'
 import { AiChatWidget } from '@/components/ui/ai-chat-widget'
-import { SectionBackButton } from '@/components/erp/section-back-button'
 import { InstallAppButton } from '@/components/pwa/install-app-button'
 
 // Navigation structure with collapsible sections
@@ -499,10 +498,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {/* Page content - scrollable */}
         <main className="flex-1 overflow-auto">
           <div className="p-4 md:p-6 max-w-7xl mx-auto">
-            {/* Back button — shown on every section except Dashboard.
-                Sticky at the top of the scrollable content area so it's
-                always reachable without scrolling back up. */}
-            <SectionBackButton />
             {children}
           </div>
 

@@ -236,6 +236,17 @@
   aside,
   /* Hide the top app header bar */
   header,
+  /* Hide the marketing footer (logo/description/CONTACT block) — it added a
+     full extra page to every print and duplicated the document branding.
+     Printed documents carry their own small logo in the header instead. */
+  footer,
+  /* Fixed-position UI (AI chat FAB, popovers) and toast/sonner viewport
+     regions: fixed elements bleed past page 1 and produce BLANK trailing
+     pages in the print output */
+  .fixed,
+  [data-sonner-toaster],
+  section[aria-label*="Notifications"],
+  [data-radix-popper-content-wrapper],
   /* Hide any Sheet/mobile menu leftovers */
   [data-state="open"][role="dialog"] {
     display: none !important;
@@ -248,6 +259,18 @@
     padding: 0 !important;
     margin: 0 !important;
     overflow: visible !important;
+  }
+
+  /* Viewport-height containers (the h-screen app shell) resolve 100vh to the
+     FULL page box in print; add the body padding on top and the content
+     overflows by ~20mm, producing a blank trailing page. Reset all
+     viewport-based heights for print. */
+  html, body,
+  .h-screen, .min-h-screen,
+  .h-dvh, .min-h-dvh,
+  .h-svh, .min-h-svh {
+    height: auto !important;
+    min-height: 0 !important;
   }
 
   /* Force black-on-white for ink-friendliness */
