@@ -248,3 +248,24 @@ Stage Summary:
 - v3.15 (SW v18) = print round ONLY: no browser headers/footers, no back button/QUOTATIONS on paper, unit selector live
 - Voice v3.15 work (speechnorm boost, autoGainControl, DB fuzzy transcript correction 11/11 unit tests) is COMPLETE but UNPUSHED — restore from 73e8666 or /tmp/voice-backup/ next round, bump to v3.16/SW v19
 - User must Vercel Redeploy + check v3.15 badge; then print test: date/time, title, URL, page#, back button, QUOTATIONS label should ALL be gone from paper
+
+---
+Task ID: 4
+Agent: Super Z (main)
+Task: Print 2-page fix + footer/logo removal (small logo top-center) + Qty/Unit box size + back button/QUOTATIONS removal from screen
+
+Work Log:
+- globals.css print block: footer added to hidden list (marketing footer/CONTACT gone from all prints)
+- globals.css print block: .fixed + sonner/toast regions hidden (AI chat FAB was leaking into print)
+- globals.css print block: h-screen/min-h-screen/dvh/svh height reset — root cause of blank trailing page (100vh shell + body padding overflowed page box)
+- app-shell.tsx: SectionBackButton render + import removed (back arrow + QUOTATIONS pill now gone from screen, was print-only before)
+- quotation-module.tsx + bill-module.tsx: PrintBill/PrintQuotation now fetch /api/company, render small (h-16) centered logo at top of document only when logo exists; window.print() waits for logo fetch (2s cap)
+- quotation + bill item forms: grid 12 -> 13 cols (Tailwind v4 dynamic), Description 4->3, Qty 1->2, Unit 1->2 — boxes doubled
+- version.ts v3.15 -> v3.16, sw.js veda-erp-v18 -> v19
+- Verified via agent-browser: quotations screen (no back/pill), print PDF = exactly 1 clean page with top-center logo
+- Build OK, server restarted on :3000, committed 2a19d6e, pushed origin main (28408f3..2a19d6e)
+
+Stage Summary:
+- Deliverable: v3.16 pushed; user needs to Redeploy on Vercel and check v3.16 badge
+- Print output: single A4 page, small logo top-center, no footer/CONTACT/date-time
+- Voice work untouched (withheld per user instruction)
