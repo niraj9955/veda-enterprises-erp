@@ -269,3 +269,19 @@ Stage Summary:
 - Deliverable: v3.16 pushed; user needs to Redeploy on Vercel and check v3.16 badge
 - Print output: single A4 page, small logo top-center, no footer/CONTACT/date-time
 - Voice work untouched (withheld per user instruction)
+
+---
+Task ID: 5
+Agent: Super Z (main)
+Task: Fix logo vanishing from saved print PDFs (visible in preview, missing in saved file)
+
+Work Log:
+- Root cause: window.print() fired when the /api/company fetch resolved, but the logo <img> bitmap was not yet loaded+decoded — print snapshot generated without the logo; screen preview painted it later (looked fine on screen)
+- New hook src/components/erp/use-print-logo.ts: fetch → new Image() preload → img.decode() → 2 rAF frames → window.print(); 2s hard cap; broken logo never blocks printing
+- PrintQuotation + PrintBill refactored to the hook; manual Print button uses printNow; img gets decoding="sync"
+- version v3.16 -> v3.17, sw veda-erp-v19 -> v20; build OK; server restarted
+- Verified: print view img complete=true naturalW=200; exported PDF shows VEDA logo top-center, single clean page
+- Committed 17c0c62, pushed origin main (2a19d6e..17c0c62)
+
+Stage Summary:
+- v3.17 pushed; user should Redeploy on Vercel, re-print a quotation, save as PDF and confirm logo persists in the saved file
