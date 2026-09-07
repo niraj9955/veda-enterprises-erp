@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { ProductSuggestInput } from '@/components/ui/product-suggest-input'
 import { ItemUnitInput } from '@/components/erp/item-unit-input'
+import { usePrintLogo } from '@/components/erp/use-print-logo'
 import { toast } from '@/hooks/use-toast'
 import {
   Plus, Trash2, Edit, Printer, FileText, Search, UserCheck, X,
@@ -1511,33 +1512,14 @@ function CustomerHistoryPanel({
 // PRINT BILL COMPONENT
 // ════════════════════════════════════════════════════════════════════════════
 function PrintBill({ bill, onClose }: { bill: Bill; onClose: () => void }) {
-  const [logoUrl, setLogoUrl] = useState('')
-  useEffect(() => {
-    // Print only after (a) the 300ms render settle AND (b) the logo fetch has
-    // settled (capped at 2s so a slow network can't block printing).
-    let cancelled = false
-    const minDelay = new Promise<void>((res) => setTimeout(res, 300))
-    const logoFetch = Promise.race([
-      fetch('/api/company')
-        .then((r) => r.json())
-        .then((d: { company?: { logoUrl?: string } }) => {
-          if (!cancelled && d?.company?.logoUrl) setLogoUrl(d.company.logoUrl)
-        })
-        .catch(() => {}),
-      new Promise<void>((res) => setTimeout(res, 2000)),
-    ])
-    Promise.all([minDelay, logoFetch]).then(() => {
-      if (!cancelled) window.print()
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  // Fetches the logo AND waits for full bitmap decode before auto-printing —
+  // otherwise saved PDFs can end up without the logo (see use-print-logo.ts).
+  const [logoUrl, printNow] = usePrintLogo()
 
   return (
     <div className="space-y-4">
       <div className="flex justify-end gap-2 print:hidden">
-        <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-2" /> Print</Button>
+        <Button variant="outline" onClick={printNow}><Printer className="h-4 w-4 mr-2" /> Print</Button>
         <Button variant="ghost" onClick={onClose}>Close</Button>
       </div>
 
@@ -1546,7 +1528,7 @@ function PrintBill({ bill, onClose }: { bill: Bill; onClose: () => void }) {
         {logoUrl && (
           <div className="flex justify-center mb-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={logoUrl} alt="Company Logo" className="h-16 w-16 object-contain" />
+            <img src={logoUrl} alt="Company Logo" decoding="sync" className="h-16 w-16 object-contain" />
           </div>
         )}
         {/* Header */}
