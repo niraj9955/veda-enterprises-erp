@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { ProductSuggestInput } from '@/components/ui/product-suggest-input'
+import { ItemUnitInput } from '@/components/erp/item-unit-input'
 import { toast } from '@/hooks/use-toast'
 import {
   Plus, Trash2, Edit, Printer, FileText, Search, UserCheck, X,
@@ -829,10 +830,11 @@ function QuotationCreatePage({
             <CardContent className="space-y-2">
               <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-muted-foreground px-2">
                 <div className="col-span-4">Description</div>
-                <div className="col-span-2">HSN</div>
-                <div className="col-span-2">Qty</div>
+                <div className="col-span-1">HSN</div>
+                <div className="col-span-1">Qty</div>
+                <div className="col-span-1">Unit</div>
                 <div className="col-span-2">Rate</div>
-                <div className="col-span-1">Amount</div>
+                <div className="col-span-2">Amount</div>
                 <div className="col-span-1"></div>
               </div>
               {items.map((item, idx) => (
@@ -846,33 +848,39 @@ function QuotationCreatePage({
                     options={PRODUCT_PRESETS}
                   />
                   <Input
-                    className="col-span-4 md:col-span-2"
+                    className="col-span-4 md:col-span-1"
                     placeholder="HSN"
                     value={item.hsn}
                     onChange={(e) => updateItem(idx, 'hsn', e.target.value)}
                   />
                   <Input
                     type="number"
-                    className="col-span-3 md:col-span-2"
+                    className="col-span-4 md:col-span-1"
                     placeholder="Qty"
                     value={item.quantity}
                     onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
                   />
+                  <ItemUnitInput
+                    className="col-span-4 md:col-span-1"
+                    ariaLabel={`Unit ${idx + 1}`}
+                    value={item.unit || ''}
+                    onChange={(v) => updateItem(idx, 'unit', v)}
+                  />
                   <Input
                     type="number"
-                    className="col-span-3 md:col-span-2"
+                    className="col-span-4 md:col-span-2"
                     placeholder="Rate"
                     value={item.rate}
                     onChange={(e) => updateItem(idx, 'rate', e.target.value)}
                   />
-                  <div className="col-span-2 md:col-span-1 flex items-center h-9 text-sm font-medium">
+                  <div className="col-span-6 md:col-span-2 flex items-center h-9 text-sm font-medium">
                     ₹{(item.amount || 0).toLocaleString('en-IN')}
                   </div>
                   <Button
                     type="button"
                     size="icon"
                     variant="ghost"
-                    className="col-span-1 h-9 w-9 text-destructive"
+                    className="col-span-2 md:col-span-1 h-9 w-9 text-destructive"
                     onClick={() => removeItem(idx)}
                     disabled={items.length === 1}
                   >

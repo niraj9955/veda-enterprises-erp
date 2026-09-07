@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { api } from '@/lib/api'
 import { toast } from '@/hooks/use-toast'
+import { ItemUnitInput } from '@/components/erp/item-unit-input'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -578,11 +579,10 @@ export function OrderModule() {
                         value={item.quantity}
                         onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
                       />
-                      <Input
+                      <ItemUnitInput
                         className="col-span-4 md:col-span-2"
-                        placeholder="Unit"
-                        value={item.unit}
-                        onChange={(e) => updateItem(idx, 'unit', e.target.value)}
+                        value={item.unit || ''}
+                        onChange={(v) => updateItem(idx, 'unit', v)}
                       />
                       <Input
                         type="number"

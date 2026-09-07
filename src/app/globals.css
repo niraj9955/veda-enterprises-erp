@@ -257,10 +257,18 @@
     box-shadow: none !important;
   }
 
-  /* Page setup */
+  /* Page setup — @page margin MUST be 0: the browser draws the date/time,
+     page title ("Veda Enterprises ERP - Management System"), URL and page
+     numbers INSIDE the @page margin box. With margin 0 those header/footer
+     texts disappear completely. Paper margins are instead provided by the
+     body padding below (works on every page-1 print and PDF export). */
   @page {
     size: A4 portrait;
-    margin: 12mm;
+    margin: 0;
+  }
+
+  body {
+    padding: 9mm 9mm 11mm !important;
   }
 }
 

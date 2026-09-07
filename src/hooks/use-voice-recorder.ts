@@ -241,7 +241,15 @@ export function useVoiceRecorder({
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          // v3.15: auto-gain lifts quiet speakers to a healthy recording
+          // level (crucial on phone mics in a noisy shop) and mono keeps
+          // the file small + ASR-friendly.
+          autoGainControl: true,
+          channelCount: 1,
+        },
       })
     } catch (err: any) {
       console.warn('[VoiceRecorder] getUserMedia failed:', err?.name, err?.message)

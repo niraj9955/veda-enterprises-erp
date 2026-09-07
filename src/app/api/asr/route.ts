@@ -520,8 +520,25 @@ function detectFormat(buf: Buffer): 'wav' | 'webm' | 'ogg' | 'other' {
  *  Also trims leading/trailing silence (keeping a 0.3s lead-in and 0.15s
  *  tail) — trailing VAD silence padding is the main trigger for Whisper
  *  hallucinations on short commands. If trimming collapses the clip
- *  (all-silence input), returns null so callers fall back to raw bytes. */
+ *  (all-silence input), returns null so callers fall back to raw bytes.
+ *
+ *  v3.15: after trimming, `speechnorm` lifts quiet speech to a healthy level
+ *  (phone mics in a noisy shop record FAR below Whisper's comfort zone —
+ *  this alone fixes a big chunk of "awaaz hi nahi pahunchi" mishearings).
+ *  If the boosted pipeline fails (older ffmpeg), we silently retry with the
+ *  trim-only chain so behavior never regresses below the old floor. */
+const TRIM_FILTER =
+  'silenceremove=start_periods=1:start_threshold=-40dB:start_silence=0.3,areverse,silenceremove=start_periods=1:start_threshold=-40dB:start_silence=0.15,areverse'
+const BOOST_FILTER = `${TRIM_FILTER},speechnorm=e=6.25:r=0.00001:l=1`
+
 async function convertToWav(bin: Buffer): Promise<Buffer | null> {
+  const boosted = await runFfmpegWav(bin, BOOST_FILTER)
+  if (boosted) return boosted
+  console.log('[ASR] boosted convert failed/unusable, retrying trim-only')
+  return runFfmpegWav(bin, TRIM_FILTER)
+}
+
+async function runFfmpegWav(bin: Buffer, filter: string): Promise<Buffer | null> {
   const id = crypto.randomUUID()
   const inPath = path.join(tmpdir(), `asr-${id}.bin`)
   const outPath = path.join(tmpdir(), `asr-${id}.wav`)
@@ -532,8 +549,7 @@ async function convertToWav(bin: Buffer): Promise<Buffer | null> {
       [
         '-y', '-loglevel', 'error', '-i', inPath,
         '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le',
-        '-af',
-        'silenceremove=start_periods=1:start_threshold=-40dB:start_silence=0.3,areverse,silenceremove=start_periods=1:start_threshold=-40dB:start_silence=0.15,areverse',
+        '-af', filter,
         outPath,
       ],
       { timeout: 20000 }
@@ -542,7 +558,7 @@ async function convertToWav(bin: Buffer): Promise<Buffer | null> {
     // WAV header is 44 bytes; anything under ~1.5KB of PCM after trimming is
     // effectively an all-silence clip — fall back to the raw original.
     if (out.length < 1536) {
-      console.log('[ASR] trimmed WAV too small (all silence?), falling back to untrimmed')
+      console.log('[ASR] trimmed WAV too small (all silence?)')
       return null
     }
     return out
