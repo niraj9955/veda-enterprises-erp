@@ -92,9 +92,7 @@ export function MicTest() {
 
     let stream: MediaStream
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
-      })
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
     } catch (err) {
       setErrorMsg(classifyError(err))
       setState('error')

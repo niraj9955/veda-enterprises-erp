@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
 import { requireSession } from '@/lib/auth'
-import { correctTranscriptWithVocab } from '@/lib/voice-correct'
 import { AiConfig, Customer, DailySell } from '@/lib/models'
 import { connectDB } from '@/lib/db'
 import { execFile } from 'child_process'
@@ -124,23 +123,8 @@ export async function POST(request: NextRequest) {
     // engine has no credentials, so the old ZAI-first order wasted seconds on
     // doomed attempts before the engine that actually works even started.
     // Vocabulary suffix is built in parallel (DB-cached, failure-safe).
-    const [groqKey, vocab] = await Promise.all([resolveGroqKey(), getVocab()])
-    const asrPrompt = ERP_ASR_PROMPT + vocab.suffix
-
-    /** Post-ASR correction: swap near-miss words for the shop's REAL
-     *  product/customer names ("panchvati stell" → "Panchvati Steel").
-     *  Deterministic string matching — zero latency cost. */
-    const applyVocabCorrection = (t: string): string => {
-      if (!t || vocab.list.length === 0) return t
-      const r = correctTranscriptWithVocab(t, vocab.list)
-      if (r.corrections.length) {
-        console.log(
-          `[ASR] vocab corrections: ${r.corrections.map((c) => `"${c.from}"→"${c.to}" (${c.sim.toFixed(2)})`).join(', ')}`
-        )
-        return r.text
-      }
-      return t
-    }
+    const [groqKey, vocabSuffix] = await Promise.all([resolveGroqKey(), buildVocabSuffix()])
+    const asrPrompt = ERP_ASR_PROMPT + vocabSuffix
     if (!groqKey) groqErr = 'no-groq-key'
     if (groqKey) {
       try {
@@ -167,7 +151,7 @@ export async function POST(request: NextRequest) {
             console.warn('[ASR] hi-retry failed (keeping first pass):', e2?.message || e2)
           }
         }
-        text = applyVocabCorrection(g)
+        text = g
         if (text) {
           usedEngine = 'groq'
           groqLanguage = best.detectedLanguage || ''
@@ -193,7 +177,7 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        text = applyVocabCorrection(await tryAsr(firstBase64))
+        text = await tryAsr(firstBase64)
       } catch (err: any) {
         lastErr = err
         zaiFailed = true
@@ -208,7 +192,7 @@ export async function POST(request: NextRequest) {
           const wav = await getTrimmedWav()
           if (wav) {
             console.log(`[ASR] zai retry with normalized WAV (${wav.length} bytes)`)
-            text = applyVocabCorrection(await tryAsr(wav.toString('base64')))
+            text = await tryAsr(wav.toString('base64'))
           }
         } catch (err: any) {
           lastErr = err
@@ -302,22 +286,15 @@ const ERP_ASR_PROMPT =
 // to the static prompt only (can never break ASR).
 const VOCAB_TTL = 5 * 60_000
 const VOCAB_MAX_CHARS = 360 // ≈90 Latin tokens — keeps total under Whisper's 224-token prompt limit
-const VOCAB_LIST_PRODUCTS = 60 // correction list is local-only — can be larger than the prompt suffix
-const VOCAB_LIST_CUSTOMERS = 40
-let vocabCache: { suffix: string; list: string[]; ts: number } | null = null
+let vocabCache: { suffix: string; ts: number } | null = null
 
-/** DB vocabulary in TWO shapes from ONE cached fetch:
- *  - suffix: char-capped string appended to the Whisper prompt (decode bias)
- *  - list:   larger plain list used by the post-ASR fuzzy corrector */
-async function getVocab(): Promise<{ suffix: string; list: string[] }> {
-  if (vocabCache && Date.now() - vocabCache.ts < VOCAB_TTL) {
-    return { suffix: vocabCache.suffix, list: vocabCache.list }
-  }
+async function buildVocabSuffix(): Promise<string> {
+  if (vocabCache && Date.now() - vocabCache.ts < VOCAB_TTL) return vocabCache.suffix
   try {
     await connectDB()
     const [rawProducts, rawCustomers] = await Promise.all([
       DailySell.distinct('product').catch(() => [] as string[]),
-      Customer.find().sort({ createdAt: -1 }).limit(40).select('name').lean(),
+      Customer.find().sort({ createdAt: -1 }).limit(12).select('name').lean(),
     ])
     const seen = new Set<string>()
     const products: string[] = []
@@ -326,7 +303,6 @@ async function getVocab(): Promise<{ suffix: string; list: string[] }> {
       if (!s || s.length > 30 || seen.has(s.toLowerCase())) continue
       seen.add(s.toLowerCase())
       products.push(s)
-      if (products.length >= VOCAB_LIST_PRODUCTS) break
     }
     const customers: string[] = []
     for (const c of rawCustomers as Array<{ name?: string }>) {
@@ -334,9 +310,8 @@ async function getVocab(): Promise<{ suffix: string; list: string[] }> {
       if (!s || s.length > 25 || seen.has(s.toLowerCase())) continue
       seen.add(s.toLowerCase())
       customers.push(s)
-      if (customers.length >= VOCAB_LIST_CUSTOMERS) break
     }
-    // Prompt suffix: greedy fill — products first (spoken most), then customers.
+    // Greedy fill: products first (spoken most), then customers, char-capped.
     let len = 0
     const pParts: string[] = []
     for (const p of products) {
@@ -355,14 +330,13 @@ async function getVocab(): Promise<{ suffix: string; list: string[] }> {
     if (suffix) {
       console.log(`[ASR] vocab suffix: ${suffix.length} chars (${pParts.length} products, ${cParts.length} customers)`)
     }
-    const list = [...products, ...customers]
-    vocabCache = { suffix, list, ts: Date.now() }
-    return { suffix, list }
+    vocabCache = { suffix, ts: Date.now() }
+    return suffix
   } catch (e: any) {
     console.warn('[ASR] vocab build failed (static prompt only):', e?.message || e)
     // brief negative cache so a DB outage doesn't get hammered per command
-    vocabCache = { suffix: '', list: [], ts: Date.now() - VOCAB_TTL + 30_000 }
-    return { suffix: '', list: [] }
+    vocabCache = { suffix: '', ts: Date.now() - VOCAB_TTL + 30_000 }
+    return ''
   }
 }
 
@@ -520,25 +494,8 @@ function detectFormat(buf: Buffer): 'wav' | 'webm' | 'ogg' | 'other' {
  *  Also trims leading/trailing silence (keeping a 0.3s lead-in and 0.15s
  *  tail) — trailing VAD silence padding is the main trigger for Whisper
  *  hallucinations on short commands. If trimming collapses the clip
- *  (all-silence input), returns null so callers fall back to raw bytes.
- *
- *  v3.15: after trimming, `speechnorm` lifts quiet speech to a healthy level
- *  (phone mics in a noisy shop record FAR below Whisper's comfort zone —
- *  this alone fixes a big chunk of "awaaz hi nahi pahunchi" mishearings).
- *  If the boosted pipeline fails (older ffmpeg), we silently retry with the
- *  trim-only chain so behavior never regresses below the old floor. */
-const TRIM_FILTER =
-  'silenceremove=start_periods=1:start_threshold=-40dB:start_silence=0.3,areverse,silenceremove=start_periods=1:start_threshold=-40dB:start_silence=0.15,areverse'
-const BOOST_FILTER = `${TRIM_FILTER},speechnorm=e=6.25:r=0.00001:l=1`
-
+ *  (all-silence input), returns null so callers fall back to raw bytes. */
 async function convertToWav(bin: Buffer): Promise<Buffer | null> {
-  const boosted = await runFfmpegWav(bin, BOOST_FILTER)
-  if (boosted) return boosted
-  console.log('[ASR] boosted convert failed/unusable, retrying trim-only')
-  return runFfmpegWav(bin, TRIM_FILTER)
-}
-
-async function runFfmpegWav(bin: Buffer, filter: string): Promise<Buffer | null> {
   const id = crypto.randomUUID()
   const inPath = path.join(tmpdir(), `asr-${id}.bin`)
   const outPath = path.join(tmpdir(), `asr-${id}.wav`)
@@ -549,7 +506,8 @@ async function runFfmpegWav(bin: Buffer, filter: string): Promise<Buffer | null>
       [
         '-y', '-loglevel', 'error', '-i', inPath,
         '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le',
-        '-af', filter,
+        '-af',
+        'silenceremove=start_periods=1:start_threshold=-40dB:start_silence=0.3,areverse,silenceremove=start_periods=1:start_threshold=-40dB:start_silence=0.15,areverse',
         outPath,
       ],
       { timeout: 20000 }
@@ -558,7 +516,7 @@ async function runFfmpegWav(bin: Buffer, filter: string): Promise<Buffer | null>
     // WAV header is 44 bytes; anything under ~1.5KB of PCM after trimming is
     // effectively an all-silence clip — fall back to the raw original.
     if (out.length < 1536) {
-      console.log('[ASR] trimmed WAV too small (all silence?)')
+      console.log('[ASR] trimmed WAV too small (all silence?), falling back to untrimmed')
       return null
     }
     return out
