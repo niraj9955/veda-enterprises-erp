@@ -285,3 +285,26 @@ Work Log:
 
 Stage Summary:
 - v3.17 pushed; user should Redeploy on Vercel, re-print a quotation, save as PDF and confirm logo persists in the saved file
+
+---
+Task ID: 6
+Agent: Super Z (main)
+Task: "ai to kaam kr rha but kuchh bolta nhi" — AI talking system: AI replies with VOICE (define first, then build — user approved with "ok staart kro")
+
+Work Log:
+- Definition presented: mic→ASR (existing) → agent (existing) → NEW TTS out-path; user approved
+- NEW src/app/api/tts/route.ts: text→WAV. Engine chain mirrors ASR: Groq PlayAI TTS (model=playai-tts, voice=Celeste-PlayAI, key = env GROQ_API_KEY → DB AiConfig) FIRST (Vercel-optimized — user's Groq key works there) → built-in ZAI TTS (tongtong) fallback (sandbox; Groq IP-blocked here, fallback verified live). CRITICAL: ZAI SDK returns HEADERLESS raw PCM → server detects missing RIFF magic and wraps 44-byte WAV header @16kHz mono 16-bit (24kHz known-garbage from v3.15 era; RIFF passthrough if SDK ever returns real WAV). Text hygiene before synthesis: markdown/code/URLs/emojis stripped, ₹ & Rs. → "rupaye", whitespace collapsed, 950-char cap at last sentence boundary (SDK limit 1024). Speed param clamped 0.5–2.0. Error contract JSON {error, kind}: no-provider / tts-fail / bad-request; auth via requireSession (401 verified)
+- NEW src/hooks/use-speech-out.ts: speak(text)→fetch→blob→Audio.play; module-level blob-URL cache (8 entries, repeat replies instant); supersede semantics (new speak stops old via seq counter — barge-in safe); enabled persisted in localStorage 'veda-ai-voice-out'; onError surfaces engine failures as Hinglish notes
+- voice-input.tsx: forwardRef + VoiceInputHandle (start/stop) so widget can auto-start listening after AI finishes speaking (hands-free loop)
+- ai-chat-widget.tsx: header Voice toggle (Volume2/VolumeX, highlighted when ON) + Hands-free toggle (Repeat, only when voice ON, persisted 'veda-ai-hands-free'); speakReply() after every successful agent reply; sky-blue "AI bol raha hai..." banner with Roko stop button; barge-in (mic tap while speaking → voice stops instantly); hands-free auto-listen after playback ends; amber voiceNote banner for TTS errors; 2 consecutive mic errors auto-break hands-free loop; widget close/FAB close silences AI
+- Version v3.17→v3.18, SW veda-erp-v20→v21
+- .env CORRUPTED AGAIN (MONGODB_URI flipped to localhost:27017 — same as R3; daemon guard only checks existence not Atlas) → sed-restored Atlas URI + restarted; ECONNREFUSED 27017 on login/agent was this
+- NEW scripts/test-talking-system.js (scripts/ is gitignored — kept local): 10 PASS / 1 WARN / 0 FAIL — auth 401, empty 400, TTS 200 audio/wav RIFF+ffprobe-truthful (engine=zai-tongtong in sandbox), ASR ROUND-TRIP intelligible ("namaste... twelve customers... total sale forty five..." = 4 keyword hits — proves 16kHz wrap correct), speed 1.2, long-text cap, real agent reply→voice (1.7MB/9.5s). WARN: 2700-char repeat text → 122s audio (client caps 900 chars; agent replies are shorter; Roko exists)
+- Browser verified: v3.18 badge, both toggles, localStorage persistence, voice-off hides hands-free, quick action → agent reply → speaking banner + Roko → stop works; zero console errors; screenshot download/talking-system-chat.png
+- test-voice-speed.js lost again in sandbox reset (scripts/ gitignored) — test-talking-system.js now covers the voice chain
+- Commit 40e140c pushed (17c0c62..40e140c)
+
+Stage Summary:
+- v3.18 = AI ab BOL kar jawab deta hai: 🔊 toggle in chat header (ON default), text bhi screen pe, barge-in + Roko, optional hands-free phone-call loop
+- On Vercel TTS uses Groq PlayAI (English-accented Hinglish; Hindi quality weaker than ZAI tongtong — if terms not accepted on Groq console it 403s → chat falls back to text-only with amber note)
+- USER ACTION: Vercel Redeploy → verify v3.18 badge → chat me jawab sunna (speaker ON) → mic ke saath hands-free baat-cheet try
