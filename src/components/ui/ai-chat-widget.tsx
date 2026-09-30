@@ -181,7 +181,8 @@ export function AiChatWidget() {
         onClick={() => {
           const next = !open
           setOpen(next)
-          if (!next) speechOut.stop() // closing the widget silences the AI
+          if (next) speechOut.unlock() // prime mobile autoplay inside this gesture
+          else speechOut.stop() // closing the widget silences the AI
         }}
         className={cn(
           'fixed bottom-5 right-5 z-50 size-14 rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 flex items-center justify-center transition-all duration-200 hover:bg-emerald-700 hover:scale-105 active:scale-95',
@@ -354,8 +355,10 @@ export function AiChatWidget() {
             </div>
           )}
 
-          {/* Input Area */}
-          <div className="border-t border-border bg-white dark:bg-zinc-900 p-2 flex items-end gap-1.5 shrink-0">
+          {/* Input Area — onPointerDownCapture: every tap here (mic/send/textarea)
+              primes mobile audio autoplay (unlock) inside a real user gesture,
+              so the AI's voice reply plays even on strict Android/iOS browsers */}
+          <div className="border-t border-border bg-white dark:bg-zinc-900 p-2 flex items-end gap-1.5 shrink-0" onPointerDownCapture={speechOut.unlock}>
             <textarea
               value={displayInput}
               onChange={(e) => setInput(e.target.value)}

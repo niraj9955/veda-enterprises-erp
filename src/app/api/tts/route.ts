@@ -188,6 +188,7 @@ export async function POST(request: NextRequest) {
     console.log(`[TTS] request: ${rawText.length} chars raw → ${text.length} chars clean, speed=${speed}`)
 
     // Engine 1: Groq PlayAI (primary on Vercel — clean IPs + user's key live there)
+    let groqAuthFailed = false
     const groqKey = await resolveGroqKey()
     if (groqKey) {
       try {
@@ -199,6 +200,7 @@ export async function POST(request: NextRequest) {
         })
       } catch (err: any) {
         const auth = err?.isAuth || /401|403/.test(String(err?.message))
+        if (auth) groqAuthFailed = true
         console.warn(`[TTS] groq attempt failed${auth ? ' (auth)' : ''}: ${err?.message || err}`)
         if (err?.name === 'AbortError') console.warn('[TTS] groq timeout after 30s')
         // fall through to ZAI
@@ -219,9 +221,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: noProvider
-            ? 'Awaaz engine server par available nahi hai (na Groq key, na built-in engine). Jawab text me dikh raha hai.'
-            : 'Awaaz banane me problem aayi (dono engines fail). Jawab text me dikh raha hai.',
-          kind: noProvider ? 'no-provider' : 'tts-fail',
+            ? 'Awaaz engine server par available nahi hai (na Groq key, na built-in engine).'
+            : groqAuthFailed
+              ? 'Groq voice engine ne request reject ki (PlayAI terms accept nahi hain — console.groq.com/playai par accept karo).'
+              : 'Awaaz banane me problem aayi (dono engines fail).',
+          kind: noProvider ? 'no-provider' : groqAuthFailed ? 'groq-auth' : 'tts-fail',
         },
         { status: 503 }
       )
