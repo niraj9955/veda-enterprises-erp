@@ -21,6 +21,14 @@ interface VoiceInputProps {
   className?: string
 }
 
+/** Imperative handle — lets the AI chat widget auto-start listening after it
+ *  finishes speaking a reply (hands-free conversation loop) without hacky
+ *  DOM querying. start() is a no-op while busy/disabled. */
+export interface VoiceInputHandle {
+  start: () => void
+  stop: () => void
+}
+
 let _voiceInputIdCounter = 0
 function nextVoiceInputId(): string {
   _voiceInputIdCounter += 1
@@ -43,7 +51,7 @@ function LevelBars({ level }: { level: number }) {
   )
 }
 
-export function VoiceInput({
+export const VoiceInput = React.forwardRef<VoiceInputHandle, VoiceInputProps>(function VoiceInput({
   onResult,
   onInterim,
   onError,
@@ -51,7 +59,7 @@ export function VoiceInput({
   disabled,
   language = 'en-IN',
   className,
-}: VoiceInputProps) {
+}, ref) {
   const instanceIdRef = React.useRef<string>(nextVoiceInputId())
   const onInterimRef = React.useRef(onInterim)
   const onListeningChangeRef = React.useRef(onListeningChange)
@@ -120,6 +128,16 @@ export function VoiceInput({
     else void start()
   }
 
+  // Expose imperative start/stop for the hands-free conversation loop
+  React.useImperativeHandle(
+    ref,
+    () => ({
+      start: () => { if (!disabled && !isBusy && !isRecording) void start() },
+      stop: () => { if (isRecording) stop() },
+    }),
+    [disabled, isBusy, isRecording, start, stop]
+  )
+
   const listening = isRecording
   // Mic pulse scale follows live loudness (subtle 1.0–1.15x)
   const pulse = listening ? 1 + Math.min(0.15, level * 0.0015) : 1
@@ -164,6 +182,7 @@ export function VoiceInput({
       </Button>
     </div>
   )
-}
+})
 
 export default VoiceInput
+

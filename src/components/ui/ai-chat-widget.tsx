@@ -1,8 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import { VoiceInput } from '@/components/ui/voice-input'
-import { Sparkles, X, Loader2, Send, Bot, User, Zap, Trash2, Mic, MicOff, RefreshCw, AlertTriangle } from 'lucide-react'
+import { Sparkles, X, Loader2, Send, Bot, User, Zap, Trash2, Mic, MicOff, RefreshCw, AlertTriangle, Volume2, VolumeX, Square, Repeat } from 'lucide-react'
+import { VoiceInput, type VoiceInputHandle } from '@/components/ui/voice-input'
+import { useSpeechOut } from '@/hooks/use-speech-out'
 import { useAiConfig } from '@/hooks/use-ai-config'
 import { APP_VERSION } from '@/lib/version'
 import { cn } from '@/lib/utils'
@@ -48,6 +49,15 @@ export function AiChatWidget() {
   const [voiceSupported, setVoiceSupported] = React.useState(true)
   const [voiceListening, setVoiceListening] = React.useState(false)
   const [micError, setMicError] = React.useState('')
+  // ── Talking system (v3.18): AI bol kar jawab deta hai (TTS) + optional
+  // hands-free loop (jawab khatam → mic apne aap on). See /api/tts +
+  // use-speech-out.ts for the audio pipeline.
+  const [voiceNote, setVoiceNote] = React.useState('')
+  const [handsFree, setHandsFree] = React.useState(false)
+  const speechOut = useSpeechOut({ onError: (msg) => setVoiceNote(msg) })
+  const voiceInputRef = React.useRef<VoiceInputHandle | null>(null)
+  const handsFreeRef = React.useRef(false)
+  const noSpeechStreakRef = React.useRef(0)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
 
   React.useEffect(() => {
@@ -62,10 +72,44 @@ export function AiChatWidget() {
     console.log('[AI Chat] SpeechRecognition supported:', hasSupport, '| Browser:', navigator.userAgent)
   }, [])
 
+  // Hands-free loop toggle — persisted
+  React.useEffect(() => {
+    try { setHandsFree(localStorage.getItem('veda-ai-hands-free') === '1') } catch { /* ignore */ }
+  }, [])
+  React.useEffect(() => {
+    handsFreeRef.current = handsFree
+  }, [handsFree])
+
+  // Barge-in: mic tap while the AI is speaking → cut the voice instantly
+  React.useEffect(() => {
+    if (voiceListening) speechOut.stop()
+  }, [voiceListening, speechOut.stop])
+
   if (configLoading) return null
   if (!isEnabled) return null
 
   const displayInput = input + (interim ? (input.endsWith(' ') || !input ? '' : ' ') + interim : '')
+
+  // ── Talking system: speak the agent's reply, then (if hands-free ON)
+  // auto-start listening — continuous baat-cheet, jaise phone call.
+  // speak() resolves false on error (voiceNote already shown) or when the
+  // user stopped it (barge-in) — in both cases we do NOT auto-listen.
+  const speakReply = async (reply: string) => {
+    if (!speechOut.enabled) return
+    const ok = await speechOut.speak(reply)
+    if (!ok) return
+    if (handsFreeRef.current) voiceInputRef.current?.start()
+  }
+
+  const toggleHandsFree = () => {
+    noSpeechStreakRef.current = 0
+    setVoiceNote('')
+    setHandsFree((v) => {
+      const next = !v
+      try { localStorage.setItem('veda-ai-hands-free', next ? '1' : '0') } catch { /* ignore */ }
+      return next
+    })
+  }
 
   const handleSend = async (overrideText?: string) => {
     const text = (overrideText || input).trim()
@@ -87,6 +131,7 @@ export function AiChatWidget() {
       }
       setConversationId(data.conversationId)
       setMessages((prev) => [...prev, { role: 'assistant', content: data.reply, action: data.action || undefined }])
+      void speakReply(data.reply)
     } catch {
       setMessages((prev) => [...prev, { role: 'assistant', content: 'Network error. Internet connection check karein.' }])
     } finally {
@@ -95,6 +140,9 @@ export function AiChatWidget() {
   }
 
   const handleClear = () => {
+    speechOut.stop()
+    setVoiceNote('')
+    noSpeechStreakRef.current = 0
     setMessages([{ role: 'assistant', content: 'Namaste! Main Veda ERP AI assistant hoon. Mujhse kuch bhi poochein ya bol dein - main kar dunga!' }])
     setConversationId('')
   }
@@ -106,8 +154,23 @@ export function AiChatWidget() {
     setMicError('')
     setInterim('')
     setVoiceListening(false)
+    noSpeechStreakRef.current = 0
     const text = finalText.trim()
     if (text) void handleSend(text)
+  }
+
+  // Mic error during (possibly hands-free auto) listening — 2 consecutive
+  // failures break the auto-listen loop so a bad mic never loops forever.
+  const handleMicError = (err: string) => {
+    setVoiceListening(false)
+    setInterim('')
+    setMicError(err)
+    noSpeechStreakRef.current += 1
+    if (noSpeechStreakRef.current >= 2 && handsFreeRef.current) {
+      setHandsFree(false)
+      try { localStorage.setItem('veda-ai-hands-free', '0') } catch { /* ignore */ }
+      setVoiceNote('2 baar awaz samajh nahi aayi — hands-free band kar diya. Mic button daba ke manually bolo.')
+    }
   }
 
   const showQuick = messages.length < 2 && !loading
@@ -115,7 +178,11 @@ export function AiChatWidget() {
   return (
     <>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          const next = !open
+          setOpen(next)
+          if (!next) speechOut.stop() // closing the widget silences the AI
+        }}
         className={cn(
           'fixed bottom-5 right-5 z-50 size-14 rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 flex items-center justify-center transition-all duration-200 hover:bg-emerald-700 hover:scale-105 active:scale-95',
           open && 'rotate-0',
@@ -143,10 +210,32 @@ export function AiChatWidget() {
               </div>
             </div>
             <div className="flex items-center gap-1">
+              {/* Voice mode: AI bol kar jawab dega (talking system) */}
+              <button
+                onClick={() => speechOut.setEnabled(!speechOut.enabled)}
+                className={cn('p-1.5 rounded-lg transition-colors', speechOut.enabled ? 'text-white bg-white/20 hover:bg-white/30' : 'text-white/70 hover:text-white hover:bg-white/10')}
+                title={speechOut.enabled ? 'Awaaz ON — jawab bol kar milega (band karne ke liye dabao)' : 'Awaaz OFF — jawab bol kar sunne ke liye dabao'}
+              >
+                {speechOut.enabled ? <Volume2 className="size-3.5" /> : <VolumeX className="size-3.5" />}
+              </button>
+              {/* Hands-free loop: reply khatam → mic apne aap on */}
+              {speechOut.enabled && (
+                <button
+                  onClick={toggleHandsFree}
+                  className={cn('p-1.5 rounded-lg transition-colors', handsFree ? 'text-white bg-white/20 hover:bg-white/30' : 'text-white/70 hover:text-white hover:bg-white/10')}
+                  title={handsFree ? 'Hands-free ON — jawab ke baad apne aap sunna shuru (band karne ke liye dabao)' : 'Hands-free OFF — jawab ke baad apne aap sunne ke liye dabao (phone-call jaisa mode)'}
+                >
+                  <Repeat className="size-3.5" />
+                </button>
+              )}
               <button onClick={handleClear} className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors" title="Clear chat">
                 <Trash2 className="size-3.5" />
               </button>
-              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors" aria-label="Close">
+              <button
+                onClick={() => { setOpen(false); speechOut.stop() }}
+                className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                aria-label="Close"
+              >
                 <X className="size-4" />
               </button>
             </div>
@@ -229,9 +318,39 @@ export function AiChatWidget() {
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
                 </span>
                 <span className="text-[11px] font-medium text-red-700 dark:text-red-400">
-                  {interim ? interim : 'Sun raha hoon... bolo, chup hone par apne aap send ho jayega'}
+                  {interim ? interim : handsFree ? 'Sun raha hoon (hands-free)... bolo, chup hone par send + jawab sunega' : 'Sun raha hoon... bolo, chup hone par apne aap send ho jayega'}
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* Speaking Banner — AI bol raha hai (barge-in: mic dabao ya Roko dabao) */}
+          {speechOut.speaking && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-sky-50 dark:bg-sky-950/40 border-t border-sky-200 dark:border-sky-800/40">
+              <Volume2 className="size-3.5 text-sky-600 dark:text-sky-400 animate-pulse shrink-0" />
+              <span className="flex-1 text-[11px] font-medium text-sky-700 dark:text-sky-300">AI bol raha hai... (mic dabao to chup ho jayega)</span>
+              <button
+                onClick={speechOut.stop}
+                className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-sky-600 text-white hover:bg-sky-700 transition-colors"
+                title="AI ko chup karao"
+              >
+                <Square className="size-3" /> Roko
+              </button>
+            </div>
+          )}
+
+          {/* Voice note — TTS engine errors (jawab text me to hamesha dikhta hai) */}
+          {voiceNote && !speechOut.speaking && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/40 border-t border-amber-200 dark:border-amber-800/40">
+              <AlertTriangle className="size-4 text-amber-600 shrink-0" />
+              <p className="flex-1 text-[11px] text-amber-800 dark:text-amber-300 leading-snug">{voiceNote}</p>
+              <button
+                onClick={() => setVoiceNote('')}
+                className="shrink-0 p-1 rounded text-amber-400 hover:text-amber-600 transition-colors"
+                title="Dismiss"
+              >
+                <X className="size-3.5" />
+              </button>
             </div>
           )}
 
@@ -248,13 +367,10 @@ export function AiChatWidget() {
             />
             {voiceSupported ? (
               <VoiceInput
+                ref={voiceInputRef}
                 onResult={handleVoiceResult}
                 onInterim={setInterim}
-                onError={(err) => {
-                  setVoiceListening(false)
-                  setInterim('')
-                  setMicError(err)
-                }}
+                onError={handleMicError}
                 onListeningChange={setVoiceListening}
                 disabled={loading}
                 language="hi-IN"
